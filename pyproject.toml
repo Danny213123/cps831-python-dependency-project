@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "agentic-python-dependency"
 version = "0.1.0"
-description = "Starter scaffold for a Python project."
+description = "PLLM-inspired agentic Python dependency resolver."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -18,7 +18,17 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
-dependencies = []
+dependencies = [
+  "duckdb>=1.1,<2",
+  "langchain>=0.3,<0.4",
+  "langchain-core>=0.3,<0.4",
+  "langchain-ollama>=0.3,<0.4",
+  "langgraph>=0.3,<0.4",
+  "packaging>=24,<26",
+]
+
+[project.scripts]
+apd = "agentic_python_dependency.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -26,6 +36,7 @@ dev = [
   "commitizen>=4,<5",
   "pre-commit>=4,<5",
   "pytest>=8,<10",
+  "pytest-mock>=3.14,<4",
   "ruff>=0.9,<1",
 ]
 
@@ -38,6 +49,7 @@ packages = ["src/agentic_python_dependency"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100

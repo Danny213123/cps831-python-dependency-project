@@ -1,0 +1,6 @@
+You are given a list of Python packages and their available versions from PyPI. Determine the most appropriate version for each package to ensure compatibility and successful execution. Only consider the versions explicitly listed.
+
+Return the result as a plain list using the format package_name==version, with no additional explanation or formatting.
+
+Packages and versions:
+{package_versions}

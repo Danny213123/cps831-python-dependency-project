@@ -1,6 +1,7 @@
 from agentic_python_dependency.tools.import_extractor import (
     extract_import_roots_from_code,
     filter_third_party_imports,
+    looks_like_package_name,
     normalize_candidate_packages,
 )
 
@@ -44,3 +45,18 @@ print 'No access key is available.'
     roots = extract_import_roots_from_code(code)
 
     assert roots == ["boto", "dateutil"]
+
+
+def test_normalize_candidate_packages_rejects_prose_and_invalid_names() -> None:
+    normalized = normalize_candidate_packages(
+        [
+            "__main__ function implied because the code suggests a main routine",
+            "requests",
+            "this-package-name-is-valid",
+            "contains/slash",
+        ]
+    )
+
+    assert normalized == ["requests", "this-package-name-is-valid"]
+    assert looks_like_package_name("requests") is True
+    assert looks_like_package_name("contains/slash") is False

@@ -1,3 +1,5 @@
+import time
+import warnings
 from pathlib import Path
 
 from agentic_python_dependency.cli import (
@@ -6,6 +8,7 @@ from agentic_python_dependency.cli import (
     collect_doctor_report,
     format_elapsed,
     format_progress_bar,
+    redirect_runtime_warnings,
 )
 from agentic_python_dependency.config import Settings
 
@@ -114,3 +117,28 @@ def test_benchmark_progress_line_contains_run_id_and_counts(monkeypatch) -> None
     assert "4/10" in line
     assert "40.0%" in line
     assert "elapsed 00:01:05" in line
+
+
+def test_benchmark_progress_refresh_thread_starts_and_stops(monkeypatch) -> None:
+    progress = BenchmarkProgress("run123", total=10, refresh_interval=0.01)
+    monkeypatch.setattr(progress, "_isatty", True)
+
+    progress.start()
+    time.sleep(0.03)
+    progress.finish()
+
+    assert progress._thread is not None
+    assert not progress._thread.is_alive()
+
+
+def test_redirect_runtime_warnings_writes_warning_to_file(tmp_path: Path) -> None:
+    warning_path = tmp_path / "warnings.log"
+
+    with redirect_runtime_warnings(warning_path):
+        with warnings.catch_warnings():
+            warnings.simplefilter("always")
+            warnings.warn(r"invalid escape sequence '\s'", SyntaxWarning)
+
+    contents = warning_path.read_text(encoding="utf-8")
+    assert "SyntaxWarning" in contents
+    assert "invalid escape sequence" in contents

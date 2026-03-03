@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import ssl
 import threading
@@ -30,6 +31,7 @@ class PyPIReleaseRecord:
 
 class PyPIMetadataStore:
     _global_lock = threading.RLock()
+    _MAX_CACHE_STEM = 80
 
     def __init__(self, cache_dir: Path):
         self.cache_dir = cache_dir
@@ -60,6 +62,9 @@ class PyPIMetadataStore:
         }
         if candidate.lower() in reserved:
             candidate = f"pkg_{candidate}"
+        if len(candidate) > PyPIMetadataStore._MAX_CACHE_STEM:
+            digest = hashlib.sha256(package.encode("utf-8")).hexdigest()[:16]
+            candidate = f"{candidate[:PyPIMetadataStore._MAX_CACHE_STEM - 17]}-{digest}"
         return candidate
 
     def _connect(self):

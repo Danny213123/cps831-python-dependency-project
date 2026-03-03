@@ -328,6 +328,42 @@ def test_workflow_uses_single_version_fast_path(tmp_path: Path) -> None:
     assert final_state["final_result"]["dependencies"] == ["PyYAML==6.0.2"]
 
 
+def test_workflow_marks_skipped_prompt_b_for_stdlib_only_project(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    project_root = write_project(tmp_path, "import argparse\nimport os\nprint('ok')\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner(
+            {
+                "extract": ["argparse\nos"],
+                "version": [],
+                "repair": [],
+                "adjudicate": [],
+            }
+        ),
+        pypi_store=FakePyPIStore({}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["prompt_history"]["prompt_b"].startswith("# skipped:")
+    assert final_state["generated_requirements"] == "# no inferred third-party dependencies\n"
+    assert final_state["final_result"]["success"] is True
+
+
 def test_workflow_stops_on_syntax_error(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     project_root = write_project(tmp_path, "print('hello')\n")

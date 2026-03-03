@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import json
@@ -25,6 +26,30 @@ def _notify_path(label: str, path: Path) -> None:
     print(f"{label}: {path}", file=sys.stderr)
 
 
+@contextlib.contextmanager
+def redirect_runtime_warnings(output_path: Path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    original_showwarning = warnings.showwarning
+    with output_path.open("a", encoding="utf-8", buffering=1) as handle:
+        def _showwarning(
+            message: warnings.WarningMessage | str,
+            category: type[Warning],
+            filename: str,
+            lineno: int,
+            file=None,
+            line: str | None = None,
+        ) -> None:
+            handle.write(warnings.formatwarning(message, category, filename, lineno, line))
+            handle.flush()
+
+        warnings.showwarning = _showwarning
+        with contextlib.redirect_stderr(handle):
+            try:
+                yield output_path
+            finally:
+                warnings.showwarning = original_showwarning
+
+
 def format_progress_bar(completed: int, total: int, width: int = 24) -> str:
     if total <= 0:
         return "[" + ("#" * width) + "]"
@@ -41,13 +66,16 @@ def format_elapsed(seconds: float) -> str:
 
 
 class BenchmarkProgress:
-    def __init__(self, run_id: str, total: int, completed: int = 0):
+    def __init__(self, run_id: str, total: int, completed: int = 0, refresh_interval: float = 1.0):
         self.run_id = run_id
         self.total = total
         self.completed = completed
         self.started_at = time.monotonic()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._isatty = sys.stdout.isatty()
+        self._refresh_interval = refresh_interval
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
 
     def _line(self) -> str:
         bar = format_progress_bar(self.completed, self.total)
@@ -59,11 +87,23 @@ class BenchmarkProgress:
         )
 
     def render(self) -> None:
-        line = self._line()
-        if self._isatty:
-            print(f"\r{line}", end="", file=sys.stdout, flush=True)
-        else:
-            print(line, file=sys.stdout, flush=True)
+        with self._lock:
+            line = self._line()
+            if self._isatty:
+                print(f"\r{line}", end="", file=sys.stdout, flush=True)
+            else:
+                print(line, file=sys.stdout, flush=True)
+
+    def start(self) -> None:
+        if not self._isatty or self._thread is not None:
+            return
+
+        def _refresh_loop() -> None:
+            while not self._stop_event.wait(self._refresh_interval):
+                self.render()
+
+        self._thread = threading.Thread(target=_refresh_loop, name="benchmark-progress", daemon=True)
+        self._thread.start()
 
     def advance(self, count: int = 1) -> None:
         with self._lock:
@@ -71,11 +111,17 @@ class BenchmarkProgress:
             self.render()
 
     def finish(self) -> None:
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=self._refresh_interval + 0.1)
         with self._lock:
             self.completed = self.total
-            self.render()
+            line = self._line()
             if self._isatty:
+                print(f"\r{line}", end="", file=sys.stdout, flush=True)
                 print(file=sys.stdout, flush=True)
+            else:
+                print(line, file=sys.stdout, flush=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -268,12 +314,14 @@ def run_benchmark(
     run_dir = settings.artifacts_dir / active_run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     started_at = time.monotonic()
+    warnings_path = run_dir / "warnings.log"
 
     completed_case_ids = [case_id for case_id in case_ids if (run_dir / case_id / "result.json").exists()]
     completed_case_id_set = set(completed_case_ids)
     pending_case_ids = [case_id for case_id in case_ids if case_id not in completed_case_id_set]
     progress = BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
     progress.render()
+    progress.start()
 
     def process_case(case_id: str) -> None:
         case = dataset.load_case(case_id, ref)
@@ -281,21 +329,24 @@ def run_benchmark(
         state = workflow.initial_state_for_case(case, run_id=active_run_id)
         workflow.run(state)
 
-    if jobs <= 1:
-        for case_id in pending_case_ids:
-            process_case(case_id)
-            progress.advance()
-    else:
-        with ThreadPoolExecutor(max_workers=jobs) as executor:
-            futures = {executor.submit(process_case, case_id): case_id for case_id in pending_case_ids}
-            for future in as_completed(futures):
-                future.result()
+    with redirect_runtime_warnings(warnings_path):
+        if jobs <= 1:
+            for case_id in pending_case_ids:
+                process_case(case_id)
                 progress.advance()
+        else:
+            with ThreadPoolExecutor(max_workers=jobs) as executor:
+                futures = {executor.submit(process_case, case_id): case_id for case_id in pending_case_ids}
+                for future in as_completed(futures):
+                    future.result()
+                    progress.advance()
 
     progress.finish()
 
     summary = summarize_run(run_dir, total_elapsed_seconds=time.monotonic() - started_at)
     _notify_path("Summary written", run_dir / "summary.json")
+    if warnings_path.exists() and warnings_path.stat().st_size > 0:
+        _notify_path("Warnings written", warnings_path)
     if settings.trace_llm:
         _notify_path("LLM trace written", run_dir / "llm-trace.log")
     return 0

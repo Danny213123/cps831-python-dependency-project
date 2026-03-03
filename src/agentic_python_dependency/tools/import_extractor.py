@@ -50,6 +50,7 @@ STDLIB_MODULES = set(getattr(sys, "stdlib_module_names", set())) | PY2_STDLIB_EX
 REJECTED_PACKAGES = {"pip", "setuptools", "wheel", "distribute"}
 IMPORT_RE = re.compile(r"^\s*import\s+(.+)$")
 FROM_RE = re.compile(r"^\s*from\s+([A-Za-z_][\w\.]*)\s+import\s+")
+PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]{0,99})$")
 
 
 def _normalize_name(value: str) -> str:
@@ -57,6 +58,15 @@ def _normalize_name(value: str) -> str:
 
 
 ALIASES_BY_NORMALIZED = {_normalize_name(key): value for key, value in ALIASES.items()}
+
+
+def looks_like_package_name(value: str) -> bool:
+    candidate = value.strip()
+    if not candidate:
+        return False
+    if not PACKAGE_NAME_RE.fullmatch(candidate):
+        return False
+    return any(character.isalpha() for character in candidate)
 
 
 def _extract_import_roots_fallback(code: str) -> list[str]:
@@ -143,8 +153,12 @@ def normalize_candidate_packages(packages: list[str], extracted_imports: list[st
         package = package.strip()
         if not package:
             continue
+        if not looks_like_package_name(package):
+            continue
         normalized_package = _normalize_name(package)
         alias = ALIASES_BY_NORMALIZED.get(normalized_package, package)
+        if not looks_like_package_name(alias):
+            continue
         normalized_alias = _normalize_name(alias)
         if package in STDLIB_MODULES or alias in STDLIB_MODULES:
             continue

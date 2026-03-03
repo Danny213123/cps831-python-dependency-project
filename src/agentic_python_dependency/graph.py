@@ -29,6 +29,7 @@ from agentic_python_dependency.tools.import_extractor import (
     discover_python_files,
     extract_import_roots_from_code,
     filter_third_party_imports,
+    looks_like_package_name,
     load_python_sources,
     normalize_candidate_packages,
 )
@@ -491,6 +492,9 @@ class ResolutionWorkflow:
         for package in packages:
             if not package:
                 continue
+            if not looks_like_package_name(package):
+                unresolved.append(package)
+                continue
             try:
                 option = self.pypi_store.get_version_options(package, state["target_python"])
             except FileNotFoundError:
@@ -519,8 +523,10 @@ class ResolutionWorkflow:
             return state
 
         if not state.get("version_options"):
-            state["prompt_history"]["prompt_b"] = ""
-            state["model_outputs"]["version"].append({"attempt": state["current_attempt"], "output": ""})
+            state["prompt_history"]["prompt_b"] = "# skipped: no compatible PyPI version options were inferred"
+            state["model_outputs"]["version"].append(
+                {"attempt": state["current_attempt"], "output": "", "source": "no_version_options"}
+            )
             state["selected_dependencies"] = []
             return state
 
@@ -530,7 +536,9 @@ class ResolutionWorkflow:
                 for option in state["version_options"]
                 if option.versions
             ]
-            state["prompt_history"]["prompt_b"] = ""
+            state["prompt_history"]["prompt_b"] = (
+                "# skipped: single compatible version available for each inferred package"
+            )
             state["model_outputs"]["version"].append(
                 {
                     "attempt": state["current_attempt"],
@@ -565,7 +573,7 @@ class ResolutionWorkflow:
         state.pop("stop_reason", None)
         if not state.get("version_options") and not state.get("repaired_dependency_lines"):
             state["selected_dependencies"] = []
-            state["generated_requirements"] = ""
+            state["generated_requirements"] = "# no inferred third-party dependencies\n"
             return state
 
         previous_dependencies = state.get("attempt_records", [])[-1].dependencies if state.get("attempt_records") else []
@@ -604,14 +612,18 @@ class ResolutionWorkflow:
             )
         except ValueError:
             state["selected_dependencies"] = []
-            state["generated_requirements"] = ""
+            state["generated_requirements"] = "# no inferred third-party dependencies\n"
             if state.get("repaired_dependency_lines"):
                 state["repair_stall_count"] = state.get("repair_stall_count", 0) + 1
                 if state["repair_stall_count"] >= 2:
                     state["stop_reason"] = "RepairOutputStalled"
             return state
         state["selected_dependencies"] = dependencies
-        state["generated_requirements"] = "\n".join(dep.pin() for dep in dependencies) + ("\n" if dependencies else "")
+        state["generated_requirements"] = (
+            "\n".join(dep.pin() for dep in dependencies) + "\n"
+            if dependencies
+            else "# no inferred third-party dependencies\n"
+        )
         if state.get("repaired_dependency_lines"):
             if not dependencies:
                 state["repair_stall_count"] = state.get("repair_stall_count", 0) + 1

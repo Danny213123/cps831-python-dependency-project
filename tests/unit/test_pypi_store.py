@@ -52,6 +52,16 @@ def test_safe_cache_name_handles_windows_reserved_names() -> None:
     assert PyPIMetadataStore._safe_cache_name("Flask-SQLAlchemy") == "Flask-SQLAlchemy"
 
 
+def test_safe_cache_name_truncates_long_names_with_hash_suffix() -> None:
+    long_name = "a" * 200
+
+    safe_name = PyPIMetadataStore._safe_cache_name(long_name)
+
+    assert len(safe_name) <= PyPIMetadataStore._MAX_CACHE_STEM
+    assert safe_name.startswith("a")
+    assert "-" in safe_name
+
+
 def test_fetch_package_json_uses_sanitized_cache_path(tmp_path: Path, monkeypatch) -> None:
     store = PyPIMetadataStore(tmp_path)
 

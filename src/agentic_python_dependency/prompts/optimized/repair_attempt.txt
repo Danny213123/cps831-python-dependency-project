@@ -1,0 +1,15 @@
+You are given the previously selected dependency list and the error details from a failed execution. Suggest a corrected dependency list only if dependency changes can help.
+
+Rules:
+- Return only lines in the format package_name==version.
+- Use one package per line.
+- Do not explain anything.
+- Do not use bullets, numbering, or code fences.
+- Only return corrected package pins.
+- If dependency changes will not help, return an empty response.
+
+Previous packages:
+{previous_packages}
+
+Error details:
+{error_details}

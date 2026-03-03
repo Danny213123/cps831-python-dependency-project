@@ -11,11 +11,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - PLLM-inspired Python dependency resolver with a LangGraph workflow for extraction, version inference, repair, execution, and result finalization.
 - Ollama-backed LangChain model routing using `gemma3:4b` for extraction and `gemma3:12b` for versioning, repair, and adjudication.
+- Four user-selectable execution presets: `performance`, `optimized`, `balanced`, and `accuracy`.
+- Prompt-profile support with `paper`, `optimized-lite`, `optimized`, and `optimized-strict` prompt sets.
 - CLI entrypoint `apd` with benchmark, case, project, and reporting commands.
 - One-step benchmark wrapper commands for running the prepared segment and full benchmark without manually chaining setup steps.
 - Newcomer-friendly top-level commands `apd doctor`, `apd smoke`, `apd full`, and `apd solve`.
 - Gistable benchmark support pinned to the paper dataset commit, including deterministic `smoke30` subset generation.
-- Docker-based execution pipeline for benchmark cases and general project validation, with Docker Compose support for `app`, `ollama`, and `executor-dind`.
+- Docker-based execution pipeline for benchmark cases and general project validation using the host Docker daemon.
 - PyPI metadata caching with raw JSON storage and indexed release filtering.
 - System-package bootstrap rules for native benchmark dependencies such as `pygame`.
 - Prompt templates matching the paper's three prompt stages.
@@ -39,6 +41,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added a simpler first-run CLI surface and help text so new users can avoid the nested benchmark subcommands.
 - Added a newcomer-oriented health check flow with `apd doctor` and beginner-friendly top-level commands.
 - Added a live stdout benchmark progress bar with completed-case counts, percent complete, and elapsed time for serial and parallel runs.
+- Added canonical module-family reporting with raw fallback mode for paper-style comparison tables.
+- Added preset-aware routing for prompt usage, deterministic version selection, repair behavior, and compatibility handling.
+- Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.
+- Switched documentation away from Compose sidecars to host Ollama plus host Docker usage for local GPU testing.
 
 ### Fixed
 
@@ -55,3 +61,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed benchmark noise from upstream LangChain debug deprecation warnings by suppressing the warning in the CLI.
 - Fixed native package classification for missing system prerequisites such as SDL during `pygame` builds.
 - Fixed local-module/API mismatches such as `compress` being treated as generic runtime errors instead of non-PyPI dependency issues.
+- Fixed overly permissive package extraction by tracking candidate provenance and rejecting more non-package prompt output before PyPI lookup.
+- Fixed long PyPI cache filenames by truncating and hashing cache keys safely.
+- Fixed Windows Docker subprocess handling when `stdout` or `stderr` is `None`.

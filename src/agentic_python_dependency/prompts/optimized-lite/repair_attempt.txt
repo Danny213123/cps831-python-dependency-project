@@ -1,0 +1,14 @@
+Correct the dependency list using the previous package list and the error details below.
+
+Rules:
+- Return only lines in the format package_name==version.
+- Use one package per line.
+- Do not explain anything.
+- Do not use bullets or code fences.
+- If dependency changes will not help, return an empty response.
+
+Previous packages:
+{previous_packages}
+
+Error details:
+{error_details}

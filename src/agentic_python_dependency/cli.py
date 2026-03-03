@@ -18,6 +18,7 @@ from uuid import uuid4
 from agentic_python_dependency.benchmark.gistable import GistableDataset
 from agentic_python_dependency.benchmark.subsets import build_smoke30
 from agentic_python_dependency.config import Settings
+from agentic_python_dependency.presets import PRESET_CONFIGS
 from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, summarize_run
 
@@ -146,6 +147,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write prompts and model outputs to llm-trace.log files during execution.",
     )
+    parser.add_argument(
+        "--preset",
+        choices=sorted(PRESET_CONFIGS),
+        default=None,
+        help="Select the execution preset that controls speed vs. accuracy behavior.",
+    )
+    parser.add_argument(
+        "--prompt-profile",
+        choices=["paper", "optimized-lite", "optimized", "optimized-strict"],
+        default=None,
+        help="Override the prompt profile independently of the selected preset.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     doctor = subparsers.add_parser("doctor", help="Check Docker, Ollama, models, and dataset readiness.")
@@ -220,6 +233,7 @@ def build_parser() -> argparse.ArgumentParser:
     modules.add_argument("--run-id", required=True)
     modules.add_argument("--top", type=int, default=15)
     modules.add_argument("--ref", default=None)
+    modules.add_argument("--grouping", choices=["canonical", "raw"], default="canonical")
 
     return parser
 
@@ -279,6 +293,8 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "overall_status": overall_status,
+        "preset": settings.preset,
+        "prompt_profile": settings.prompt_profile,
         "checks": checks,
     }
 
@@ -288,6 +304,8 @@ def doctor_command(settings: Settings, ref: str | None) -> int:
     artifact_path = settings.project_root / "artifacts" / "doctor-latest.json"
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(f"[INFO] preset: {settings.preset}")
+    print(f"[INFO] prompt_profile: {settings.prompt_profile}")
     for check in report["checks"]:
         status = check["status"].upper()
         print(f"[{status}] {check['name']}: {check['detail']}")
@@ -388,11 +406,12 @@ def failures_command(settings: Settings, run_id: str, category: str | None, limi
     return 0
 
 
-def modules_command(settings: Settings, run_id: str, top: int, ref: str | None) -> int:
+def modules_command(settings: Settings, run_id: str, top: int, ref: str | None, grouping: str) -> int:
     dataset = GistableDataset(settings)
     dataset.fetch(ref)
-    build_module_success_table(settings.artifacts_dir / run_id, dataset, ref=ref, top_n=top)
-    _notify_path("Module success table written", settings.artifacts_dir / run_id / "module-success.md")
+    build_module_success_table(settings.artifacts_dir / run_id, dataset, ref=ref, top_n=top, grouping=grouping)
+    suffix = "" if grouping == "canonical" else "-raw"
+    _notify_path("Module success table written", settings.artifacts_dir / run_id / f"module-success{suffix}.md")
     return 0
 
 
@@ -404,7 +423,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser = build_parser()
     args = parser.parse_args(argv)
-    settings = Settings.from_env()
+    settings = Settings.from_env(
+        preset_override=args.preset,
+        prompt_profile_override=args.prompt_profile,
+    )
     if args.trace_llm:
         settings.trace_llm = True
 
@@ -451,7 +473,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "report" and args.report_command == "failures":
         return failures_command(settings, args.run_id, args.category, args.limit)
     if args.command == "report" and args.report_command == "modules":
-        return modules_command(settings, args.run_id, args.top, args.ref)
+        return modules_command(settings, args.run_id, args.top, args.ref, args.grouping)
 
     parser.error("Unsupported command.")
     return 2

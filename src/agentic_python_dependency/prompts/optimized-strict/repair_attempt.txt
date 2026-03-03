@@ -1,0 +1,19 @@
+You are given the previously selected package pins, the allowed package names, and the error details from a failed execution. Return a corrected dependency list only if dependency changes can fix the failure.
+
+Rules:
+- Only return packages from the allowed package list or direct canonical aliases of those packages.
+- Return only lines in the format package_name==version.
+- Use one package per line.
+- Do not explain anything.
+- Do not use bullets, numbering, or code fences.
+- Do not add unrelated packages.
+- If the error is not dependency-related, return an empty response.
+
+Allowed packages:
+{allowed_packages}
+
+Previous packages:
+{previous_packages}
+
+Error details:
+{error_details}

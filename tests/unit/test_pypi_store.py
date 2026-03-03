@@ -46,6 +46,27 @@ def test_compatible_release_records_avoids_post_eol_python2_releases_without_met
     assert [record.version for record in records] == ["1.0.0"]
 
 
+def test_get_version_options_applies_python2_package_ceiling(tmp_path: Path, monkeypatch) -> None:
+    store = PyPIMetadataStore(tmp_path)
+    payload = {
+        "releases": {
+            "1.3.24": [
+                {"yanked": False, "requires_python": ">=2.7", "upload_time_iso_8601": "2019-01-01T00:00:00"}
+            ],
+            "1.4.0": [
+                {"yanked": False, "requires_python": ">=2.7", "upload_time_iso_8601": "2019-06-01T00:00:00"}
+            ],
+        }
+    }
+
+    monkeypatch.setattr(store, "fetch_package_json", lambda package: payload)
+
+    options = store.get_version_options("sqlalchemy", "2.7", preset="accuracy")
+
+    assert options.versions == ["1.3.24"]
+    assert options.policy_notes == ["python2_ceiling<1.4"]
+
+
 def test_safe_cache_name_handles_windows_reserved_names() -> None:
     assert PyPIMetadataStore._safe_cache_name("con") == "pkg_con"
     assert PyPIMetadataStore._safe_cache_name("aux") == "pkg_aux"

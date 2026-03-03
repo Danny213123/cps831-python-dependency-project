@@ -16,11 +16,12 @@ from agentic_python_dependency.config import Settings
 def test_benchmark_run_parser_accepts_jobs_flag() -> None:
     parser = build_parser()
 
-    args = parser.parse_args(["benchmark", "run", "--subset", "smoke30", "--jobs", "3"])
+    args = parser.parse_args(["--preset", "balanced", "benchmark", "run", "--subset", "smoke30", "--jobs", "3"])
 
     assert args.command == "benchmark"
     assert args.benchmark_command == "run"
     assert args.jobs == 3
+    assert args.preset == "balanced"
 
 
 def test_benchmark_segment_parser_accepts_subset_and_jobs() -> None:
@@ -78,6 +79,16 @@ def test_top_level_doctor_parser_accepts_ref() -> None:
 
     assert args.command == "doctor"
     assert args.ref == "abc123"
+
+
+def test_report_modules_parser_accepts_grouping() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["report", "modules", "--run-id", "run123", "--grouping", "raw"])
+
+    assert args.command == "report"
+    assert args.report_command == "modules"
+    assert args.grouping == "raw"
 
 
 def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, monkeypatch) -> None:

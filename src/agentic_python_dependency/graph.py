@@ -14,6 +14,7 @@ from packaging.version import InvalidVersion, Version
 
 from agentic_python_dependency.benchmark.gistable import GistableDataset
 from agentic_python_dependency.config import Settings
+from agentic_python_dependency.presets import COMPATIBILITY_SENSITIVE_PACKAGES, get_preset_config
 from agentic_python_dependency.router import OllamaPromptRunner
 from agentic_python_dependency.state import (
     AttemptRecord,
@@ -32,6 +33,8 @@ from agentic_python_dependency.tools.import_extractor import (
     looks_like_package_name,
     load_python_sources,
     normalize_candidate_packages,
+    normalize_candidate_packages_with_sources,
+    runtime_package_alias,
 )
 from agentic_python_dependency.tools.pypi_store import PyPIMetadataStore
 
@@ -231,13 +234,14 @@ class ResolutionWorkflow:
         docker_executor: DockerExecutor | None = None,
     ):
         self.settings = settings
-        self.prompt_runner = prompt_runner or OllamaPromptRunner(settings, settings.prompts_dir)
+        self.preset_config = get_preset_config(settings.preset)
+        self.prompt_runner = prompt_runner or OllamaPromptRunner(settings, settings.prompt_template_dir)
         self.pypi_store = pypi_store or PyPIMetadataStore(settings.pypi_cache_dir)
         self.docker_executor = docker_executor or DockerExecutor(settings)
         self.dataset = GistableDataset(settings)
 
     def _prompt_template(self, name: str) -> str:
-        return (self.settings.prompts_dir / name).read_text(encoding="utf-8")
+        return (self.settings.prompt_template_dir / name).read_text(encoding="utf-8")
 
     def _format_prompt(self, name: str, **variables: Any) -> str:
         return self._prompt_template(name).format(**variables)
@@ -287,6 +291,87 @@ class ResolutionWorkflow:
         )
         self._emit_trace(state, message)
 
+    @staticmethod
+    def _dynamic_import_signals(source_text: str) -> bool:
+        lowered = source_text.lower()
+        return any(
+            token in lowered
+            for token in (
+                "importlib",
+                "__import__(",
+                "pkg_resources",
+                "entry_points(",
+                "find_spec(",
+                "plugin",
+            )
+        )
+
+    def _should_use_extract_llm(self, state: ResolutionState, extracted_imports: list[str]) -> bool:
+        if not extracted_imports:
+            return True
+        combined_source = "\n".join(state.get("source_files", {}).values())
+        if self._dynamic_import_signals(combined_source):
+            return True
+        if self.settings.preset in {"balanced", "accuracy"} and state["mode"] == "project":
+            if self.preset_config.extract_llm_for_project_frameworks and len(state.get("source_files", {})) > 1:
+                return True
+        return False
+
+    def _deterministic_dependencies(self, options: list[PackageVersionOptions]) -> list[ResolvedDependency]:
+        return [
+            ResolvedDependency(name=option.package, version=option.versions[0])
+            for option in options
+            if option.versions
+        ]
+
+    def _should_use_version_llm(self, options: list[PackageVersionOptions]) -> bool:
+        multi_version_options = [option for option in options if len(option.versions) > 1]
+        if not multi_version_options:
+            return False
+        mode = self.preset_config.version_prompt_mode
+        if mode == "accuracy":
+            return True
+        risky = any(normalize_package_name(option.package) in COMPATIBILITY_SENSITIVE_PACKAGES for option in options)
+        if mode == "high_risk_only":
+            return risky
+        if mode == "optimized":
+            return risky or len(multi_version_options) >= 2
+        if mode == "balanced":
+            return risky or len(options) >= 3
+        return False
+
+    def _repair_allowed_packages(self, state: ResolutionState) -> str:
+        allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
+        return "\n".join(allowed_packages)
+
+    def _maybe_alias_retry(self, state: ResolutionState) -> list[str] | None:
+        if not self.preset_config.allow_alias_retry:
+            return None
+        match = re.search(r"No module named ['\"]?([A-Za-z0-9_\.]+)['\"]?", state.get("last_error_details", ""))
+        if not match:
+            return None
+        missing_module = match.group(1).split(".", 1)[0]
+        alias = runtime_package_alias(missing_module)
+        if not alias:
+            return None
+        if normalize_package_name(alias) not in {normalize_package_name(package) for package in state.get("inferred_packages", [])}:
+            return None
+        try:
+            option = self.pypi_store.get_version_options(
+                alias,
+                state["target_python"],
+                preset=self.settings.preset,
+            )
+        except FileNotFoundError:
+            return None
+        if not option.versions:
+            return None
+        state["repair_outcome"] = "alias_retry"
+        return [f"{alias}=={option.versions[0]}"]
+
+    def _candidate_provenance_from(self, packages: list[str], extracted_imports: list[str]) -> dict[str, str]:
+        return normalize_candidate_packages_with_sources(packages, extracted_imports)
+
     def initial_state_for_case(self, case: BenchmarkCase, run_id: str | None = None) -> ResolutionState:
         return ResolutionState(
             run_id=run_id or uuid4().hex[:12],
@@ -298,6 +383,13 @@ class ResolutionWorkflow:
             model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": []},
             current_attempt=0,
             repair_stall_count=0,
+            preset=self.settings.preset,
+            prompt_profile=self.settings.prompt_profile,
+            dependency_reason="",
+            candidate_provenance={},
+            repair_outcome="",
+            applied_compatibility_policy={},
+            version_selection_source="",
         )
 
     def initial_state_for_project(
@@ -319,6 +411,13 @@ class ResolutionWorkflow:
             model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": []},
             current_attempt=0,
             repair_stall_count=0,
+            preset=self.settings.preset,
+            prompt_profile=self.settings.prompt_profile,
+            dependency_reason="",
+            candidate_provenance={},
+            repair_outcome="",
+            applied_compatibility_policy={},
+            version_selection_source="",
         )
 
     def run(self, state: ResolutionState) -> ResolutionState:
@@ -434,8 +533,9 @@ class ResolutionWorkflow:
 
     def infer_packages_prompt_a(self, state: ResolutionState) -> ResolutionState:
         extracted_imports = state.get("extracted_imports", [])
-        if state["mode"] == "gistable" and extracted_imports:
-            normalized = normalize_candidate_packages(extracted_imports, extracted_imports)
+        if extracted_imports and not self._should_use_extract_llm(state, extracted_imports):
+            provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
+            normalized = sorted(provenance, key=str.lower)
             if normalized:
                 state["prompt_history"]["prompt_a"] = []
                 state["model_outputs"]["extract"] = [
@@ -446,6 +546,7 @@ class ResolutionWorkflow:
                     }
                 ]
                 state["inferred_packages"] = normalized
+                state["candidate_provenance"] = provenance
                 return state
 
         inferred: set[str] = set()
@@ -468,10 +569,25 @@ class ResolutionWorkflow:
         state["model_outputs"]["extract"] = outputs
         if not inferred:
             inferred.update(extracted_imports)
-        normalized = normalize_candidate_packages(sorted(inferred), extracted_imports)
+        provenance = self._candidate_provenance_from(sorted(inferred), extracted_imports)
+        normalized = sorted(provenance, key=str.lower)
+        if self.preset_config.accuracy_extract_cleanup and inferred and not normalized and extracted_imports:
+            cleanup_prompt = (
+                "Rewrite the following text as plain package names only, one per line, with no explanations.\n\n"
+                + "\n".join(sorted(inferred))
+            )
+            self._trace_request(state, "adjudicate", cleanup_prompt)
+            cleaned_output = self.prompt_runner.invoke_text("adjudicate", cleanup_prompt)
+            self._trace_response(state, "adjudicate", cleaned_output)
+            state["model_outputs"]["adjudicate"].append(cleaned_output)
+            cleaned_candidates = [line.strip() for line in cleaned_output.splitlines() if line.strip()]
+            provenance = self._candidate_provenance_from(cleaned_candidates, extracted_imports)
+            normalized = sorted(provenance, key=str.lower)
         if not normalized and extracted_imports:
-            normalized = normalize_candidate_packages(extracted_imports, extracted_imports)
+            provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
+            normalized = sorted(provenance, key=str.lower)
         state["inferred_packages"] = normalized
+        state["candidate_provenance"] = provenance
         return state
 
     def retrieve_pypi_metadata(self, state: ResolutionState) -> ResolutionState:
@@ -496,7 +612,11 @@ class ResolutionWorkflow:
                 unresolved.append(package)
                 continue
             try:
-                option = self.pypi_store.get_version_options(package, state["target_python"])
+                option = self.pypi_store.get_version_options(
+                    package,
+                    state["target_python"],
+                    preset=self.settings.preset,
+                )
             except FileNotFoundError:
                 unresolved.append(package)
                 continue
@@ -506,6 +626,9 @@ class ResolutionWorkflow:
             options.append(option)
         state["version_options"] = options
         state["unresolved_packages"] = unresolved
+        state["applied_compatibility_policy"] = {
+            option.package: option.policy_notes for option in options if option.policy_notes
+        }
         return state
 
     def infer_versions_prompt_b(self, state: ResolutionState) -> ResolutionState:
@@ -520,6 +643,8 @@ class ResolutionWorkflow:
                 )
             except ValueError:
                 state["selected_dependencies"] = []
+            state["dependency_reason"] = "repair"
+            state["version_selection_source"] = state.get("repair_outcome") or "repair"
             return state
 
         if not state.get("version_options"):
@@ -528,14 +653,12 @@ class ResolutionWorkflow:
                 {"attempt": state["current_attempt"], "output": "", "source": "no_version_options"}
             )
             state["selected_dependencies"] = []
+            state["dependency_reason"] = "stdlib_only" if not state.get("inferred_packages") else "no_compatible_versions"
+            state["version_selection_source"] = "no_version_options"
             return state
 
         if all(len(option.versions) == 1 for option in state.get("version_options", [])):
-            selected = [
-                ResolvedDependency(name=option.package, version=option.versions[0])
-                for option in state["version_options"]
-                if option.versions
-            ]
+            selected = self._deterministic_dependencies(state["version_options"])
             state["prompt_history"]["prompt_b"] = (
                 "# skipped: single compatible version available for each inferred package"
             )
@@ -547,6 +670,23 @@ class ResolutionWorkflow:
                 }
             )
             state["selected_dependencies"] = sorted(selected, key=lambda dependency: dependency.name.lower())
+            state["dependency_reason"] = "single_version_fast_path"
+            state["version_selection_source"] = "single_version_fast_path"
+            return state
+
+        if not self._should_use_version_llm(state["version_options"]):
+            selected = self._deterministic_dependencies(state["version_options"])
+            state["prompt_history"]["prompt_b"] = "# skipped: deterministic version selector"
+            state["model_outputs"]["version"].append(
+                {
+                    "attempt": state["current_attempt"],
+                    "output": "\n".join(dependency.pin() for dependency in selected),
+                    "source": "deterministic_version_selector",
+                }
+            )
+            state["selected_dependencies"] = sorted(selected, key=lambda dependency: dependency.name.lower())
+            state["dependency_reason"] = "deterministic_version_selector"
+            state["version_selection_source"] = "deterministic_version_selector"
             return state
 
         package_versions = self.pypi_store.format_prompt_block(state.get("version_options", []))
@@ -567,6 +707,8 @@ class ResolutionWorkflow:
             )
         except ValueError:
             state["selected_dependencies"] = []
+        state["dependency_reason"] = "llm_version_selection"
+        state["version_selection_source"] = "llm_version_selection"
         return state
 
     def normalize_dependency_plan(self, state: ResolutionState) -> ResolutionState:
@@ -601,6 +743,10 @@ class ResolutionWorkflow:
             "Rewrite the following text as newline-delimited package==version entries only.\n\n"
             f"{last_output}"
         )
+        if not self.preset_config.allow_adjudication:
+            state["selected_dependencies"] = []
+            state["generated_requirements"] = "# no inferred third-party dependencies\n"
+            return state
         self._trace_request(state, "adjudicate", cleanup_prompt)
         cleaned_output = self.prompt_runner.invoke_text("adjudicate", cleanup_prompt)
         self._trace_response(state, "adjudicate", cleaned_output)
@@ -731,10 +877,15 @@ class ResolutionWorkflow:
         return state
 
     def repair_prompt_c(self, state: ResolutionState) -> ResolutionState:
+        alias_retry = self._maybe_alias_retry(state)
+        if alias_retry:
+            state["repaired_dependency_lines"] = alias_retry
+            return state
         previous_packages = "\n".join(dep.pin() for dep in state["selected_dependencies"])
         error_details = state["last_error_details"]
         prompt_text = self._format_prompt(
             "repair_attempt.txt",
+            allowed_packages=self._repair_allowed_packages(state),
             previous_packages=previous_packages,
             error_details=error_details,
         )
@@ -743,6 +894,7 @@ class ResolutionWorkflow:
             "repair",
             "repair_attempt.txt",
             {
+                "allowed_packages": self._repair_allowed_packages(state),
                 "previous_packages": previous_packages,
                 "error_details": error_details,
             },
@@ -757,8 +909,10 @@ class ResolutionWorkflow:
                 state.get("inferred_packages", []),
             )
             state["repaired_dependency_lines"] = [dependency.pin() for dependency in repaired_dependencies]
+            state["repair_outcome"] = "llm_repair"
         except ValueError:
             state["repaired_dependency_lines"] = repaired_lines
+            state["repair_outcome"] = "repair_not_applicable"
         return state
 
     def finalize_result(self, state: ResolutionState) -> ResolutionState:
@@ -785,11 +939,18 @@ class ResolutionWorkflow:
             "run_id": state["run_id"],
             "case_id": state["case_id"],
             "mode": state["mode"],
+            "preset": state.get("preset", self.settings.preset),
+            "prompt_profile": state.get("prompt_profile", self.settings.prompt_profile),
             "success": execution.success,
             "attempts": state["current_attempt"],
             "final_error_category": execution.category,
             "initial_eval": state.get("benchmark_case").initial_eval if state.get("benchmark_case") else "",
             "dependencies": [dependency.pin() for dependency in state.get("selected_dependencies", [])],
+            "dependency_reason": state.get("dependency_reason", ""),
+            "candidate_provenance": state.get("candidate_provenance", {}),
+            "repair_outcome": state.get("repair_outcome", ""),
+            "version_selection_source": state.get("version_selection_source", ""),
+            "compatibility_policy": state.get("applied_compatibility_policy", {}),
             "wall_clock_seconds": total_wall_clock,
             "artifact_dir": str(artifact_dir),
             "stop_reason": state.get("stop_reason", execution.category),

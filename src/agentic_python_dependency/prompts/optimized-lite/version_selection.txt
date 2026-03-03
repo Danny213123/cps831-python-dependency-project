@@ -1,0 +1,12 @@
+Choose the best package version for each listed package using only the versions shown below.
+
+Rules:
+- Return only lines in the format package_name==version.
+- Use one package per line.
+- Do not explain anything.
+- Do not use bullets or code fences.
+- Prefer stable versions.
+- If nothing should be selected, return an empty response.
+
+Packages and versions:
+{package_versions}

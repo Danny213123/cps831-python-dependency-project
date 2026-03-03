@@ -3,6 +3,7 @@ from agentic_python_dependency.tools.import_extractor import (
     filter_third_party_imports,
     looks_like_package_name,
     normalize_candidate_packages,
+    normalize_candidate_packages_with_sources,
 )
 
 
@@ -60,3 +61,9 @@ def test_normalize_candidate_packages_rejects_prose_and_invalid_names() -> None:
     assert normalized == ["requests", "this-package-name-is-valid"]
     assert looks_like_package_name("requests") is True
     assert looks_like_package_name("contains/slash") is False
+
+
+def test_normalize_candidate_packages_with_sources_tracks_aliases() -> None:
+    normalized = normalize_candidate_packages_with_sources(["yaml", "requests"], extracted_imports=["yaml", "requests"])
+
+    assert normalized == {"PyYAML": "alias", "requests": "extracted"}

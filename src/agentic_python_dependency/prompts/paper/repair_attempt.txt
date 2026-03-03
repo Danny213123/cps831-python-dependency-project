@@ -1,0 +1,9 @@
+You are provided with the error details from a failed attempt to infer the dependencies for a Python script, along with the previously installed packages and their versions. Based on this information, suggest the corrected list of dependencies to install, including specific version numbers if necessary.
+
+Return the result as a plain list using the format package_name==version, with no additional explanation or formatting.
+
+Previous packages:
+{previous_packages}
+
+Error details:
+{error_details}

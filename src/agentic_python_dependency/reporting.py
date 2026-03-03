@@ -8,12 +8,46 @@ from pathlib import Path
 from typing import Any
 
 from agentic_python_dependency.benchmark.gistable import GistableDataset
+from agentic_python_dependency.presets import GroupingMode
 from agentic_python_dependency.state import BenchmarkSummary
 from agentic_python_dependency.tools.import_extractor import (
     extract_import_roots_from_code,
     filter_third_party_imports,
     normalize_candidate_packages,
 )
+
+
+CANONICAL_MODULE_FAMILIES = {
+    "pil": "pillow",
+    "pillow": "pillow",
+    "bs4": "beautifulsoup4",
+    "beautifulsoup": "beautifulsoup4",
+    "beautifulsoup4": "beautifulsoup4",
+    "tensorflow": "tensorflow",
+    "tensorflow-gpu": "tensorflow",
+    "tensorflow-cpu": "tensorflow",
+    "cv2": "opencv-python",
+    "opencv-python": "opencv-python",
+    "yaml": "pyyaml",
+    "pyyaml": "pyyaml",
+    "sklearn": "scikit-learn",
+    "scikit-learn": "scikit-learn",
+    "dateutil": "python-dateutil",
+    "python-dateutil": "python-dateutil",
+    "openssl": "pyopenssl",
+    "pyopenssl": "pyopenssl",
+    "serial": "pyserial",
+    "pyserial": "pyserial",
+    "git": "gitpython",
+    "gitpython": "gitpython",
+}
+
+
+def canonical_module_name(module_name: str, grouping: GroupingMode) -> str:
+    normalized = module_name.lower()
+    if grouping == "raw":
+        return normalized
+    return CANONICAL_MODULE_FAMILIES.get(normalized, normalized)
 
 
 def load_run_results(run_dir: Path) -> list[dict[str, Any]]:
@@ -41,9 +75,15 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     mean_wall_clock = summed_wall_clock / total_cases if results else 0.0
     total_wall_clock = total_elapsed_seconds if total_elapsed_seconds is not None else summed_wall_clock
     transitions: dict[str, int] = {}
+    dependency_reason_counts: dict[str, int] = {}
+    preset = results[0].get("preset", "optimized") if results else "optimized"
+    prompt_profile = results[0].get("prompt_profile", "optimized") if results else "optimized"
     for item in results:
         key = f'{item.get("initial_eval", "")}->{item.get("final_error_category", "Success" if item["success"] else "UnknownError")}'
         transitions[key] = transitions.get(key, 0) + 1
+        reason = item.get("dependency_reason")
+        if reason:
+            dependency_reason_counts[reason] = dependency_reason_counts.get(reason, 0) + 1
 
     summary = BenchmarkSummary(
         run_id=run_dir.name,
@@ -55,9 +95,12 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         final_import_errors=final_import_errors,
         mean_attempts_to_success=mean_attempts,
         mean_wall_clock_time=mean_wall_clock,
+        preset=preset,
+        prompt_profile=prompt_profile,
         total_wall_clock_time=total_wall_clock,
         total_wall_clock_human=format_duration(total_wall_clock),
         transitions=transitions,
+        dependency_reason_counts=dependency_reason_counts,
     )
     write_summary_artifacts(run_dir, results, summary)
     return summary
@@ -88,6 +131,8 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         "# Benchmark Summary",
         "",
         f"- Run ID: `{summary.run_id}`",
+        f"- Preset: `{summary.preset}`",
+        f"- Prompt profile: `{summary.prompt_profile}`",
         f"- Total cases: `{summary.total_cases}`",
         f"- Success rate: `{summary.success_rate:.2%}`",
         f"- Initial ImportErrors: `{summary.initial_import_errors}`",
@@ -159,6 +204,7 @@ def build_module_success_table(
     dataset: GistableDataset,
     ref: str | None = None,
     top_n: int = 15,
+    grouping: GroupingMode = "canonical",
 ) -> dict[str, Any]:
     results = load_run_results(run_dir)
     counts: dict[str, int] = defaultdict(int)
@@ -170,16 +216,16 @@ def build_module_success_table(
         import_roots = filter_third_party_imports(extract_import_roots_from_code(source_code))
         modules = normalize_candidate_packages(import_roots, import_roots)
         for module in set(modules):
-            module_name = module.lower()
+            module_name = canonical_module_name(module, grouping)
             counts[module_name] += 1
             if item.get("success", False):
                 successes[module_name] += 1
 
-    rows = []
-    for module_name, project_count in sorted(counts.items(), key=lambda entry: (-entry[1], entry[0]))[:top_n]:
+    all_rows = []
+    for module_name, project_count in sorted(counts.items(), key=lambda entry: (-entry[1], entry[0])):
         success_count = successes.get(module_name, 0)
         success_rate = (success_count / project_count * 100.0) if project_count else 0.0
-        rows.append(
+        all_rows.append(
             {
                 "module_name": module_name,
                 "projects": project_count,
@@ -187,24 +233,30 @@ def build_module_success_table(
                 "apd_success_rate": round(success_rate, 2),
             }
         )
+    top_rows = all_rows[:top_n]
 
     report = {
         "run_id": run_dir.name,
+        "grouping": grouping,
         "top_n": top_n,
-        "rows": rows,
+        "rows": top_rows,
+        "top_rows": top_rows,
+        "all_rows": all_rows,
     }
     write_module_success_artifacts(run_dir, report)
     return report
 
 
 def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> None:
-    rows = report["rows"]
-    (run_dir / "module-success.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    rows = report["top_rows"]
+    all_rows = report["all_rows"]
+    suffix = "" if report["grouping"] == "canonical" else "-raw"
+    (run_dir / f"module-success{suffix}.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    with (run_dir / "module-success.csv").open("w", newline="", encoding="utf-8") as handle:
+    with (run_dir / f"module-success{suffix}.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["module_name", "projects", "successes", "apd_success_rate"])
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(all_rows)
 
     lines = [
         "# Module Success Table",
@@ -218,4 +270,4 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
         lines.append(
             f"| {row['module_name']} | {row['projects']} | {row['apd_success_rate']:.2f} |"
         )
-    (run_dir / "module-success.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (run_dir / f"module-success{suffix}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

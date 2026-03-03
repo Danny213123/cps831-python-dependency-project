@@ -37,7 +37,14 @@ class FakePyPIStore:
     def __init__(self, options: dict[str, list[str]]):
         self.options = options
 
-    def get_version_options(self, package: str, target_python: str, limit: int = 20) -> PackageVersionOptions:
+    def get_version_options(
+        self,
+        package: str,
+        target_python: str,
+        limit: int = 20,
+        *,
+        preset: str = "optimized",
+    ) -> PackageVersionOptions:
         if package not in self.options:
             raise FileNotFoundError(package)
         return PackageVersionOptions(package=package, versions=self.options[package])
@@ -364,6 +371,45 @@ def test_workflow_marks_skipped_prompt_b_for_stdlib_only_project(tmp_path: Path)
     assert final_state["final_result"]["success"] is True
 
 
+def test_workflow_uses_deterministic_version_selector_for_performance_preset(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.preset = "performance"
+    settings.prompt_profile = "optimized-lite"
+    settings.max_attempts = 2
+    project_root = write_project(tmp_path, "import requests\nprint('ok')\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner(
+            {
+                "extract": ["requests"],
+                "version": [],
+                "repair": [],
+                "adjudicate": [],
+            }
+        ),
+        pypi_store=FakePyPIStore({"requests": ["2.32.3", "2.31.0"]}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["dependency_reason"] == "deterministic_version_selector"
+    assert final_state["version_selection_source"] == "deterministic_version_selector"
+    assert final_state["final_result"]["dependencies"] == ["requests==2.32.3"]
+
+
 def test_workflow_stops_on_syntax_error(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     project_root = write_project(tmp_path, "print('hello')\n")
@@ -501,7 +547,7 @@ def test_workflow_skips_unresolved_pypi_packages(tmp_path: Path) -> None:
 def test_workflow_writes_llm_trace_log(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     settings.trace_llm = True
-    project_root = write_project(tmp_path, "import yaml\n")
+    project_root = write_project(tmp_path, "import importlib\nmodule = importlib.import_module('yaml')\n")
     workflow = ResolutionWorkflow(
         settings,
         prompt_runner=FakePromptRunner(

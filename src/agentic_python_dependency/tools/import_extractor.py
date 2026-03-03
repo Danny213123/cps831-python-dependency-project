@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 
-ALIASES = {
+RUNTIME_ALIASES = {
     "PIL": "Pillow",
     "cv2": "opencv-python",
     "yaml": "PyYAML",
@@ -57,7 +57,11 @@ def _normalize_name(value: str) -> str:
     return value.strip().replace("-", "_").lower()
 
 
-ALIASES_BY_NORMALIZED = {_normalize_name(key): value for key, value in ALIASES.items()}
+ALIASES_BY_NORMALIZED = {_normalize_name(key): value for key, value in RUNTIME_ALIASES.items()}
+
+
+def runtime_package_alias(value: str) -> str | None:
+    return ALIASES_BY_NORMALIZED.get(_normalize_name(value))
 
 
 def looks_like_package_name(value: str) -> bool:
@@ -135,18 +139,26 @@ def load_python_sources(root: Path) -> dict[str, str]:
     return sources
 
 
-def normalize_candidate_packages(packages: list[str], extracted_imports: list[str] | None = None) -> list[str]:
+def normalize_candidate_packages_with_sources(
+    packages: list[str],
+    extracted_imports: list[str] | None = None,
+) -> dict[str, str]:
     allowed: set[str] | None = None
+    allowed_sources: dict[str, str] = {}
     if extracted_imports:
         allowed = set()
         for root in extracted_imports:
             normalized_root = _normalize_name(root)
             allowed.add(normalized_root)
+            allowed_sources[normalized_root] = "extracted"
             alias = ALIASES_BY_NORMALIZED.get(normalized_root)
             if alias:
-                allowed.add(_normalize_name(alias))
+                normalized_alias = _normalize_name(alias)
+                allowed.add(normalized_alias)
+                allowed_sources[normalized_alias] = "alias"
 
     normalized: dict[str, str] = {}
+    sources: dict[str, str] = {}
     for package in packages:
         if not package:
             continue
@@ -167,4 +179,14 @@ def normalize_candidate_packages(packages: list[str], extracted_imports: list[st
         if allowed is not None and normalized_package not in allowed and normalized_alias not in allowed:
             continue
         normalized[normalized_alias] = alias
-    return sorted(normalized.values(), key=str.lower)
+        if normalized_alias in allowed_sources:
+            sources[normalized_alias] = allowed_sources[normalized_alias]
+        elif normalized_package in allowed_sources:
+            sources[normalized_alias] = allowed_sources[normalized_package]
+        else:
+            sources[normalized_alias] = "llm"
+    return {normalized[key]: sources[key] for key in sorted(normalized, key=str.lower)}
+
+
+def normalize_candidate_packages(packages: list[str], extracted_imports: list[str] | None = None) -> list[str]:
+    return list(normalize_candidate_packages_with_sources(packages, extracted_imports).keys())

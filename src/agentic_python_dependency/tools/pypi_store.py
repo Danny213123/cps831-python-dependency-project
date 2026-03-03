@@ -19,6 +19,15 @@ from agentic_python_dependency.state import PackageVersionOptions
 
 SCHEMA_VERSION = 1
 PYTHON2_UPLOAD_CUTOFF = "2020-01-01T00:00:00"
+PYTHON2_VERSION_CEILINGS = {
+    "django": Version("2.0"),
+    "sqlalchemy": Version("1.4"),
+    "fabric": Version("2.0"),
+    "boto3": Version("1.18"),
+    "emoji": Version("1.0"),
+    "pygame": Version("2.0"),
+    "luigi": Version("3.0"),
+}
 
 
 @dataclass(slots=True)
@@ -215,14 +224,47 @@ class PyPIMetadataStore:
         compatible.sort(key=lambda item: Version(item.version), reverse=True)
         return compatible[:limit]
 
-    def get_version_options(self, package: str, target_python: str, limit: int = 20) -> PackageVersionOptions:
+    @staticmethod
+    def _apply_policy(
+        package: str,
+        records: list[PyPIReleaseRecord],
+        target_python: str,
+        preset: str,
+    ) -> tuple[list[PyPIReleaseRecord], list[str]]:
+        notes: list[str] = []
+        if not records:
+            return records, notes
+
+        normalized_package = package.strip().replace("-", "_").lower()
+        target_version = Version(target_python)
+        target_is_python2 = target_version < Version("3")
+
+        if target_is_python2 and preset in {"optimized", "balanced", "accuracy"}:
+            ceiling = PYTHON2_VERSION_CEILINGS.get(normalized_package)
+            if ceiling is not None:
+                filtered = [record for record in records if Version(record.version) < ceiling]
+                if filtered:
+                    records = filtered
+                    notes.append(f"python2_ceiling<{ceiling}")
+        return records, notes
+
+    def get_version_options(
+        self,
+        package: str,
+        target_python: str,
+        limit: int = 20,
+        *,
+        preset: str = "optimized",
+    ) -> PackageVersionOptions:
         payload = self.fetch_package_json(package)
         compatible = self.compatible_release_records(payload, target_python=target_python, limit=limit)
+        compatible, policy_notes = self._apply_policy(package, compatible, target_python, preset)
         return PackageVersionOptions(
             package=package,
             versions=[record.version for record in compatible],
             requires_python={record.version: record.requires_python for record in compatible},
             upload_time={record.version: record.upload_time for record in compatible},
+            policy_notes=policy_notes,
         )
 
     @staticmethod

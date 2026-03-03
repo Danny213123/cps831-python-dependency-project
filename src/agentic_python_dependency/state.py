@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
+from agentic_python_dependency.presets import GroupingMode, PresetName, PromptProfile
+
 
 Mode = Literal["gistable", "project"]
 
@@ -39,6 +41,7 @@ class PackageVersionOptions:
     versions: list[str]
     requires_python: dict[str, str] = field(default_factory=dict)
     upload_time: dict[str, str] = field(default_factory=dict)
+    policy_notes: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -90,9 +93,12 @@ class BenchmarkSummary:
     final_import_errors: int
     mean_attempts_to_success: float
     mean_wall_clock_time: float
+    preset: str = "optimized"
+    prompt_profile: str = "optimized"
     total_wall_clock_time: float = 0.0
     total_wall_clock_human: str = "00:00:00"
     transitions: dict[str, int] = field(default_factory=dict)
+    dependency_reason_counts: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -129,3 +135,10 @@ class ResolutionState(TypedDict, total=False):
     stop_reason: str
     final_result: dict[str, Any]
     target_python: str
+    preset: PresetName
+    prompt_profile: PromptProfile
+    dependency_reason: str
+    candidate_provenance: dict[str, str]
+    repair_outcome: str
+    applied_compatibility_policy: dict[str, list[str]]
+    version_selection_source: str

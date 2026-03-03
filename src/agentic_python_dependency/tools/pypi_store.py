@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import ssl
+import threading
 import urllib.parse
 import urllib.error
 import urllib.request
@@ -28,12 +29,38 @@ class PyPIReleaseRecord:
 
 
 class PyPIMetadataStore:
+    _global_lock = threading.RLock()
+
     def __init__(self, cache_dir: Path):
         self.cache_dir = cache_dir
         self.raw_dir = cache_dir / "raw"
         self.db_path = cache_dir / "index.duckdb"
+        self._db_enabled = True
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self._init_db()
+
+    @staticmethod
+    def _safe_cache_name(package: str) -> str:
+        normalized = []
+        for character in package:
+            if character.isalnum() or character in {"-", "_", "."}:
+                normalized.append(character)
+            else:
+                normalized.append("_")
+        candidate = "".join(normalized).strip(" .")
+        if not candidate:
+            candidate = "package"
+        reserved = {
+            "con",
+            "prn",
+            "aux",
+            "nul",
+            *(f"com{index}" for index in range(1, 10)),
+            *(f"lpt{index}" for index in range(1, 10)),
+        }
+        if candidate.lower() in reserved:
+            candidate = f"pkg_{candidate}"
+        return candidate
 
     def _connect(self):
         try:
@@ -45,27 +72,31 @@ class PyPIMetadataStore:
             return sqlite3.connect(self.db_path)
 
     def _init_db(self) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS metadata_schema (
-                    schema_version INTEGER
-                )
-                """
-            )
-            if conn.execute("SELECT COUNT(*) FROM metadata_schema").fetchone()[0] == 0:
-                conn.execute("INSERT INTO metadata_schema VALUES (?)", [SCHEMA_VERSION])
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS package_releases (
-                    package TEXT,
-                    version TEXT,
-                    requires_python TEXT,
-                    yanked BOOLEAN,
-                    upload_time TEXT
-                )
-                """
-            )
+        with self._global_lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS metadata_schema (
+                            schema_version INTEGER
+                        )
+                        """
+                    )
+                    if conn.execute("SELECT COUNT(*) FROM metadata_schema").fetchone()[0] == 0:
+                        conn.execute("INSERT INTO metadata_schema VALUES (?)", [SCHEMA_VERSION])
+                    conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS package_releases (
+                            package TEXT,
+                            version TEXT,
+                            requires_python TEXT,
+                            yanked BOOLEAN,
+                            upload_time TEXT
+                        )
+                        """
+                    )
+            except Exception:
+                self._db_enabled = False
 
     def _download_json(self, package: str) -> dict[str, Any]:
         encoded = urllib.parse.quote(package)
@@ -84,7 +115,7 @@ class PyPIMetadataStore:
             return json.load(response)
 
     def fetch_package_json(self, package: str) -> dict[str, Any]:
-        raw_path = self.raw_dir / f"{package}.json"
+        raw_path = self.raw_dir / f"{self._safe_cache_name(package)}.json"
         if raw_path.exists():
             return json.loads(raw_path.read_text(encoding="utf-8"))
 
@@ -94,11 +125,14 @@ class PyPIMetadataStore:
             if exc.code == 404:
                 raise FileNotFoundError(f"Package not found on PyPI: {package}") from exc
             raise
-        raw_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        with self._global_lock:
+            raw_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
         self._index_payload(package, payload)
         return payload
 
     def _index_payload(self, package: str, payload: dict[str, Any]) -> None:
+        if not self._db_enabled:
+            return
         rows: list[tuple[str, str, str, bool, str]] = []
         for version, files in payload.get("releases", {}).items():
             for file_meta in files:
@@ -111,10 +145,14 @@ class PyPIMetadataStore:
                         file_meta.get("upload_time_iso_8601") or file_meta.get("upload_time") or "",
                     )
                 )
-        with self._connect() as conn:
-            conn.execute("DELETE FROM package_releases WHERE package = ?", [package])
-            if rows:
-                conn.executemany("INSERT INTO package_releases VALUES (?, ?, ?, ?, ?)", rows)
+        with self._global_lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute("DELETE FROM package_releases WHERE package = ?", [package])
+                    if rows:
+                        conn.executemany("INSERT INTO package_releases VALUES (?, ?, ?, ?, ?)", rows)
+            except Exception:
+                self._db_enabled = False
 
     @staticmethod
     def compatible_release_records(

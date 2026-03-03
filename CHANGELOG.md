@@ -44,6 +44,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed host runtime defaults for Ollama and Docker so local execution works outside Compose.
 - Fixed SSL certificate handling for Gistable fetches and PyPI metadata downloads on macOS environments with incomplete trust stores.
 - Fixed PyPI 404 handling so unresolved package names do not abort a benchmark run.
+- Fixed Windows PyPI metadata-store failures by sanitizing reserved cache filenames, locking cache writes, and degrading DuckDB indexing to a non-fatal best-effort path.
 - Fixed import extraction for Python 2 snippets by falling back to syntax-tolerant parsing when `ast.parse()` fails.
 - Fixed Docker build and run timeouts so they are recorded as failed attempts instead of crashing the workflow.
 - Fixed LangGraph recursion-limit failures for legitimate retry paths.

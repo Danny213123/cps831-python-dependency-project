@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-PresetName = Literal["performance", "optimized", "balanced", "accuracy"]
+PresetName = Literal["performance", "efficient", "optimized", "balanced", "thorough", "accuracy"]
 PromptProfile = Literal["paper", "optimized-lite", "optimized", "optimized-strict"]
 GroupingMode = Literal["canonical", "raw"]
 CompatibilityPolicyMode = Literal["essential", "curated", "full"]
-VersionPromptMode = Literal["high_risk_only", "optimized", "balanced", "accuracy"]
+VersionPromptMode = Literal["high_risk_only", "efficient", "optimized", "balanced", "thorough", "accuracy"]
 
 
 COMPATIBILITY_SENSITIVE_PACKAGES = {
@@ -51,6 +51,17 @@ PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
         extract_llm_for_project_frameworks=False,
         accuracy_extract_cleanup=False,
     ),
+    "efficient": PresetConfig(
+        name="efficient",
+        prompt_profile="optimized-lite",
+        max_attempts=3,
+        compatibility_policy="curated",
+        version_prompt_mode="efficient",
+        allow_adjudication=True,
+        allow_alias_retry=False,
+        extract_llm_for_project_frameworks=False,
+        accuracy_extract_cleanup=False,
+    ),
     "optimized": PresetConfig(
         name="optimized",
         prompt_profile="optimized",
@@ -68,6 +79,17 @@ PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
         max_attempts=4,
         compatibility_policy="full",
         version_prompt_mode="balanced",
+        allow_adjudication=True,
+        allow_alias_retry=True,
+        extract_llm_for_project_frameworks=True,
+        accuracy_extract_cleanup=False,
+    ),
+    "thorough": PresetConfig(
+        name="thorough",
+        prompt_profile="optimized-strict",
+        max_attempts=4,
+        compatibility_policy="full",
+        version_prompt_mode="thorough",
         allow_adjudication=True,
         allow_alias_retry=True,
         extract_llm_for_project_frameworks=True,
@@ -107,4 +129,3 @@ def normalize_prompt_profile(value: str | None) -> PromptProfile | None:
 
 def get_preset_config(preset: str | None) -> PresetConfig:
     return PRESET_CONFIGS[normalize_preset(preset)]
-

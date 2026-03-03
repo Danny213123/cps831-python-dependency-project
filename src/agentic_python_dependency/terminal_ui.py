@@ -20,7 +20,7 @@ from prompt_toolkit.shortcuts import button_dialog, input_dialog, message_dialog
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Box, Frame
 
-from agentic_python_dependency.config import Settings
+from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
 from agentic_python_dependency.presets import PRESET_CONFIGS
 
 
@@ -81,6 +81,7 @@ class TerminalBenchmarkDashboard:
         self.failures = 0
         self.preset = "optimized"
         self.prompt_profile = "optimized"
+        self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
         self.jobs = 1
         self.target = "benchmark"
         self.artifacts_dir = Path(".")
@@ -107,6 +108,7 @@ class TerminalBenchmarkDashboard:
         failures: int,
         preset: str,
         prompt_profile: str,
+        model_summary: str,
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -118,6 +120,7 @@ class TerminalBenchmarkDashboard:
         self.failures = failures
         self.preset = preset
         self.prompt_profile = prompt_profile
+        self.model_summary = model_summary
         self.jobs = jobs
         self.target = target
         self.artifacts_dir = artifacts_dir
@@ -218,6 +221,7 @@ class TerminalBenchmarkDashboard:
             ("class:label", "Target       "), ("class:value", f"{self.target}\n"),
             ("class:label", "Preset       "), ("class:value", f"{self.preset}\n"),
             ("class:label", "Prompt       "), ("class:value", f"{self.prompt_profile}\n"),
+            ("class:label", "Models       "), ("class:value", f"{getattr(self, 'model_summary', 'default')}\n"),
             ("class:label", "Jobs         "), ("class:value", f"{self.jobs}\n"),
             ("class:label", "Artifacts    "), ("class:value", f"{self.artifacts_dir}\n\n"),
             ("class:label", "Progress     "), ("class:accent", f"{self.completed}/{self.total} ({percent:5.1f}%)\n"),
@@ -264,6 +268,7 @@ class TerminalBenchmarkDashboard:
             f"Target: {self.target}",
             f"Preset: {self.preset}",
             f"Prompt profile: {self.prompt_profile}",
+            f"Models: {getattr(self, 'model_summary', 'default')}",
             f"Jobs: {self.jobs}",
             f"Artifacts: {self.artifacts_dir}",
             "",
@@ -303,6 +308,7 @@ class TerminalUI:
         self._use_prompt_toolkit = (
             self.input_fn is input and self.output is print and sys.stdin.isatty() and sys.stdout.isatty()
         )
+        self._fresh_run = False
 
     def run(self) -> int:
         if self._use_prompt_toolkit:
@@ -323,6 +329,8 @@ class TerminalUI:
                     ("Failure report", "6"),
                     ("Module report", "7"),
                     ("Preset", "p"),
+                    ("Models", "m"),
+                    ("Fresh run", "f"),
                     ("Trace", "t"),
                     ("Quit", "8"),
                 ],
@@ -345,7 +353,7 @@ class TerminalUI:
                 self.output("\nExiting APD UI.")
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice not in {"p", "t"}:
+            if choice not in {"p", "m", "f", "t"}:
                 self._pause_after(exit_code)
 
     def _dispatch_choice(self, choice: str | None) -> int:
@@ -365,6 +373,13 @@ class TerminalUI:
             return self._run_modules()
         if choice == "p":
             self._choose_preset()
+            return 0
+        if choice == "m":
+            self._choose_model_profile()
+            return 0
+        if choice == "f":
+            self._fresh_run = not self._fresh_run
+            self._show_status_dialog(f"Fresh run is now {'on' if self._fresh_run else 'off'}.")
             return 0
         if choice == "t":
             self.settings.trace_llm = not self.settings.trace_llm
@@ -387,6 +402,7 @@ class TerminalUI:
             jobs,
             observer=dashboard,
             notify_paths=False,
+            fresh_run=self._fresh_run,
         )
 
     def _run_full(self) -> int:
@@ -402,13 +418,21 @@ class TerminalUI:
             jobs,
             observer=dashboard,
             notify_paths=False,
+            fresh_run=self._fresh_run,
         )
 
     def _run_project_solve(self) -> int:
         project_path = self._prompt_required("Project path")
         validation = self._prompt_optional("Validation command override", "")
         run_id = self._prompt_optional("Run ID", "")
-        return self._run_captured(self.run_project, self.settings, project_path, validation or None, run_id or None)
+        return self._run_captured(
+            self.run_project,
+            self.settings,
+            project_path,
+            validation or None,
+            run_id or None,
+            self._fresh_run,
+        )
 
     def _run_summary(self) -> int:
         run_id = self._prompt_required("Run ID")
@@ -466,12 +490,48 @@ class TerminalUI:
         self.settings.default_module_grouping = preset_config.reporting_grouping
         self._show_status_dialog(f"Preset switched to {selected}.")
 
+    def _choose_model_profile(self) -> None:
+        options = [(profile, profile) for profile in MODEL_PROFILE_DEFAULTS if profile != "custom"]
+        if self._use_prompt_toolkit:
+            selected = radiolist_dialog(
+                title="Select model bundle",
+                text="Choose the Ollama model bundle for the next runs.",
+                values=options,
+                default=self.settings.model_profile if self.settings.model_profile != "custom" else "gemma-moe",
+                style=UI_STYLE,
+            ).run()
+            if selected is None:
+                return
+        else:
+            self.output("\nAvailable model bundles:")
+            visible_profiles = [profile for profile in MODEL_PROFILE_DEFAULTS if profile != "custom"]
+            for index, profile in enumerate(visible_profiles, start=1):
+                marker = "*" if profile == self.settings.model_profile else " "
+                self.output(f"  {index}. [{marker}] {profile}")
+            choice = self.input_fn("Choose model bundle number: ").strip()
+            if not choice.isdigit():
+                return
+            index = int(choice) - 1
+            if index < 0 or index >= len(visible_profiles):
+                return
+            selected = visible_profiles[index]
+        extraction_model, reasoning_model = MODEL_PROFILE_DEFAULTS[selected]
+        self.settings.model_profile = selected
+        self.settings.extraction_model = extraction_model
+        self.settings.reasoning_model = reasoning_model
+        self._show_status_dialog(
+            f"Model bundle switched to {selected} ({extraction_model} / {reasoning_model})."
+        )
+
     def _menu_dialog_text(self) -> AnyFormattedText:
         return HTML(
             "<b><ansibrightyellow>APD Command Center</ansibrightyellow></b>\n"
             "<style fg='#98c1d9'>Run benchmarks, inspect reports, and solve local projects without memorizing subcommands.</style>\n\n"
             f"<b>Preset:</b> {self.settings.preset}\n"
+            f"<b>Model bundle:</b> {self.settings.model_profile}\n"
+            f"<b>Models:</b> {self.settings.extraction_model} / {self.settings.reasoning_model}\n"
             f"<b>Prompt profile:</b> {self.settings.prompt_profile}\n"
+            f"<b>Fresh run:</b> {'on' if self._fresh_run else 'off'}\n"
             f"<b>Trace LLM:</b> {'on' if self.settings.trace_llm else 'off'}\n"
             f"<b>Ollama:</b> {self.settings.ollama_base_url}\n"
             f"<b>Artifacts:</b> {self.settings.artifacts_dir}"
@@ -539,7 +599,10 @@ class TerminalUI:
         self.output(title.center(width))
         self.output("=" * width)
         self.output(f"Preset: {self.settings.preset}")
+        self.output(f"Model bundle: {self.settings.model_profile}")
+        self.output(f"Models: {self.settings.extraction_model} / {self.settings.reasoning_model}")
         self.output(f"Prompt profile: {self.settings.prompt_profile}")
+        self.output(f"Fresh run: {'on' if self._fresh_run else 'off'}")
         self.output(f"Trace LLM: {'on' if self.settings.trace_llm else 'off'}")
         self.output(f"Ollama: {self.settings.ollama_base_url}")
         self.output(f"Artifacts: {self.settings.artifacts_dir}")
@@ -554,6 +617,8 @@ class TerminalUI:
         self.output("  6. Failure report")
         self.output("  7. Module report")
         self.output("  P. Change preset")
+        self.output("  M. Change model bundle")
+        self.output("  F. Toggle fresh run / no LLM cache")
         self.output("  T. Toggle LLM tracing")
         self.output("  8. Quit")
 

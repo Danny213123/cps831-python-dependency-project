@@ -38,7 +38,7 @@ def test_terminal_ui_can_exit_immediately(tmp_path: Path, monkeypatch) -> None:
 def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["p", "4", "8"])
+    inputs = iter(["p", "6", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -60,6 +60,58 @@ def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
     assert settings.preset == "accuracy"
     assert settings.prompt_profile == "optimized-strict"
     assert settings.max_attempts == 5
+
+
+def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["m", "2", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert settings.model_profile == "qwen35-9b"
+    assert settings.extraction_model == "qwen3.5:9b"
+    assert settings.reasoning_model == "qwen3.5:9b"
+
+
+def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["f", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert ui._fresh_run is True
 
 
 def test_terminal_ui_smoke_run_uses_dashboard(tmp_path: Path, monkeypatch) -> None:
@@ -106,6 +158,7 @@ def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:
         failures=0,
         preset="balanced",
         prompt_profile="optimized-strict",
+        model_summary="gemma-moe: gemma3:4b / gemma3:12b",
         jobs=2,
         target="smoke30",
         artifacts_dir=Path("/tmp/run123"),

@@ -312,9 +312,12 @@ class ResolutionWorkflow:
         combined_source = "\n".join(state.get("source_files", {}).values())
         if self._dynamic_import_signals(combined_source):
             return True
-        if self.settings.preset in {"balanced", "accuracy"} and state["mode"] == "project":
-            if self.preset_config.extract_llm_for_project_frameworks and len(state.get("source_files", {})) > 1:
-                return True
+        if (
+            state["mode"] == "project"
+            and self.preset_config.extract_llm_for_project_frameworks
+            and len(state.get("source_files", {})) > 1
+        ):
+            return True
         return False
 
     def _deterministic_dependencies(self, options: list[PackageVersionOptions]) -> list[ResolvedDependency]:
@@ -334,10 +337,14 @@ class ResolutionWorkflow:
         risky = any(normalize_package_name(option.package) in COMPATIBILITY_SENSITIVE_PACKAGES for option in options)
         if mode == "high_risk_only":
             return risky
+        if mode == "efficient":
+            return risky or len(multi_version_options) >= 3
         if mode == "optimized":
             return risky or len(multi_version_options) >= 2
         if mode == "balanced":
             return risky or len(options) >= 3
+        if mode == "thorough":
+            return risky or len(multi_version_options) >= 1
         return False
 
     def _repair_allowed_packages(self, state: ResolutionState) -> str:

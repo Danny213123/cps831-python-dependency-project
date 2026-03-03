@@ -14,6 +14,7 @@ from typing import Any
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
+from agentic_python_dependency.presets import get_preset_config
 from agentic_python_dependency.state import PackageVersionOptions
 
 
@@ -238,8 +239,9 @@ class PyPIMetadataStore:
         normalized_package = package.strip().replace("-", "_").lower()
         target_version = Version(target_python)
         target_is_python2 = target_version < Version("3")
+        preset_config = get_preset_config(preset)
 
-        if target_is_python2 and preset in {"optimized", "balanced", "accuracy"}:
+        if target_is_python2 and preset_config.compatibility_policy != "essential":
             ceiling = PYTHON2_VERSION_CEILINGS.get(normalized_package)
             if ceiling is not None:
                 filtered = [record for record in records if Version(record.version) < ceiling]

@@ -18,7 +18,7 @@ from uuid import uuid4
 
 from agentic_python_dependency.benchmark.gistable import GistableDataset
 from agentic_python_dependency.benchmark.subsets import build_smoke30
-from agentic_python_dependency.config import Settings
+from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
 from agentic_python_dependency.presets import PRESET_CONFIGS
 from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, summarize_run
@@ -40,6 +40,7 @@ class BenchmarkObserver(Protocol):
         failures: int,
         preset: str,
         prompt_profile: str,
+        model_summary: str,
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -103,6 +104,7 @@ class BenchmarkProgress:
         self.last_status = ""
         self.preset = "optimized"
         self.prompt_profile = "optimized"
+        self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
         self.jobs = 1
         self.target = "benchmark"
         self.active_cases = 0
@@ -147,6 +149,7 @@ class BenchmarkProgress:
         failures: int,
         preset: str,
         prompt_profile: str,
+        model_summary: str,
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -158,6 +161,7 @@ class BenchmarkProgress:
         self.failures = failures
         self.preset = preset
         self.prompt_profile = prompt_profile
+        self.model_summary = model_summary
         self.jobs = jobs
         self.target = target
         self.artifacts_dir = artifacts_dir
@@ -233,6 +237,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write prompts and model outputs to llm-trace.log files during execution.",
     )
     parser.add_argument(
+        "--fresh-run",
+        action="store_true",
+        help="Start from a clean run directory and bypass the on-disk LLM cache for this invocation.",
+    )
+    parser.add_argument(
+        "--no-llm-cache",
+        action="store_true",
+        help="Disable reading and writing the on-disk LLM cache for this invocation.",
+    )
+    parser.add_argument(
         "--preset",
         choices=sorted(PRESET_CONFIGS),
         default=None,
@@ -243,6 +257,22 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["paper", "optimized-lite", "optimized", "optimized-strict"],
         default=None,
         help="Override the prompt profile independently of the selected preset.",
+    )
+    parser.add_argument(
+        "--model-profile",
+        choices=sorted(MODEL_PROFILE_DEFAULTS),
+        default=None,
+        help="Select the Ollama model bundle to use for extraction and reasoning.",
+    )
+    parser.add_argument(
+        "--extraction-model",
+        default=None,
+        help="Override the extraction-stage Ollama model name.",
+    )
+    parser.add_argument(
+        "--reasoning-model",
+        default=None,
+        help="Override the version/repair/adjudication Ollama model name.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -321,6 +351,10 @@ def build_parser() -> argparse.ArgumentParser:
     modules.add_argument("--top", type=int, default=15)
     modules.add_argument("--ref", default=None)
     modules.add_argument("--grouping", choices=["canonical", "raw"], default="canonical")
+    trace = report_sub.add_parser("trace")
+    trace.add_argument("--run-id", required=True)
+    trace.add_argument("--case-id", default=None)
+    trace.add_argument("--tail", type=int, default=0, help="Show only the last N lines of the trace log.")
 
     return parser
 
@@ -358,6 +392,11 @@ def load_existing_case_results(run_dir: Path, case_ids: list[str]) -> list[dict[
         except json.JSONDecodeError:
             continue
     return results
+
+
+def resolve_trace_path(settings: Settings, run_id: str, case_id: str | None = None) -> Path:
+    run_dir = settings.artifacts_dir / run_id
+    return (run_dir / case_id / "llm-trace.log") if case_id else (run_dir / "llm-trace.log")
 
 
 def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[str, object]:
@@ -402,6 +441,7 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
         "overall_status": overall_status,
         "preset": settings.preset,
         "prompt_profile": settings.prompt_profile,
+        "model_profile": settings.model_profile,
         "checks": checks,
     }
 
@@ -413,6 +453,10 @@ def doctor_command(settings: Settings, ref: str | None) -> int:
     artifact_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"[INFO] preset: {settings.preset}")
     print(f"[INFO] prompt_profile: {settings.prompt_profile}")
+    print(f"[INFO] model_profile: {settings.model_profile}")
+    print(f"[INFO] extraction_model: {settings.extraction_model}")
+    print(f"[INFO] reasoning_model: {settings.reasoning_model}")
+    print(f"[INFO] llm_cache: {'disabled' if settings.disable_llm_cache else 'enabled'}")
     for check in report["checks"]:
         status = check["status"].upper()
         print(f"[{status}] {check['name']}: {check['detail']}")
@@ -430,6 +474,7 @@ def run_benchmark(
     observer: BenchmarkObserver | None = None,
     *,
     notify_paths: bool = True,
+    fresh_run: bool = False,
 ) -> int:
     dataset = GistableDataset(settings)
     dataset.fetch(ref)
@@ -440,6 +485,8 @@ def run_benchmark(
 
     active_run_id = run_id or uuid4().hex[:12]
     run_dir = settings.artifacts_dir / active_run_id
+    if fresh_run and run_dir.exists():
+        shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     started_at = time.monotonic()
     warnings_path = run_dir / "warnings.log"
@@ -459,6 +506,7 @@ def run_benchmark(
         failures=completed_failures,
         preset=settings.preset,
         prompt_profile=settings.prompt_profile,
+        model_summary=f"{settings.model_profile}: {settings.extraction_model} / {settings.reasoning_model}",
         jobs=jobs,
         target=subset or ("full" if full else "benchmark"),
         artifacts_dir=run_dir,
@@ -509,9 +557,13 @@ def run_benchmark(
     return 0
 
 
-def run_case(settings: Settings, case_id: str, ref: str | None, run_id: str | None) -> int:
+def run_case(settings: Settings, case_id: str, ref: str | None, run_id: str | None, fresh_run: bool = False) -> int:
     dataset = GistableDataset(settings)
     dataset.fetch(ref)
+    if fresh_run and run_id:
+        case_run_dir = settings.artifacts_dir / run_id
+        if case_run_dir.exists():
+            shutil.rmtree(case_run_dir)
     case = dataset.load_case(case_id, ref)
     workflow = ResolutionWorkflow(settings)
     state = workflow.initial_state_for_case(case, run_id=run_id)
@@ -522,7 +574,17 @@ def run_case(settings: Settings, case_id: str, ref: str | None, run_id: str | No
     return 0
 
 
-def run_project(settings: Settings, project_path: str, validation_command: str | None, run_id: str | None) -> int:
+def run_project(
+    settings: Settings,
+    project_path: str,
+    validation_command: str | None,
+    run_id: str | None,
+    fresh_run: bool = False,
+) -> int:
+    if fresh_run and run_id:
+        project_run_dir = settings.artifacts_dir / run_id
+        if project_run_dir.exists():
+            shutil.rmtree(project_run_dir)
     workflow = ResolutionWorkflow(settings)
     state = workflow.initial_state_for_project(Path(project_path).resolve(), validation_command, run_id=run_id)
     final_state = workflow.run(state)
@@ -554,6 +616,22 @@ def modules_command(settings: Settings, run_id: str, top: int, ref: str | None, 
     return 0
 
 
+def trace_command(settings: Settings, run_id: str, case_id: str | None, tail: int) -> int:
+    trace_path = resolve_trace_path(settings, run_id, case_id)
+    if not trace_path.exists():
+        print(
+            f"Trace log not found at {trace_path}. Run the command with --trace-llm first.",
+            file=sys.stderr,
+        )
+        return 1
+    contents = trace_path.read_text(encoding="utf-8")
+    if tail > 0:
+        lines = contents.splitlines()
+        contents = "\n".join(lines[-tail:]) + ("\n" if lines else "")
+    print(contents, end="" if contents.endswith("\n") or not contents else "\n")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     warnings.filterwarnings(
         "ignore",
@@ -565,6 +643,10 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings.from_env(
         preset_override=args.preset,
         prompt_profile_override=args.prompt_profile,
+        model_profile_override=args.model_profile,
+        extraction_model_override=args.extraction_model,
+        reasoning_model_override=args.reasoning_model,
+        disable_llm_cache_override=args.no_llm_cache or args.fresh_run,
     )
     if args.trace_llm:
         settings.trace_llm = True
@@ -574,13 +656,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "smoke":
         ensure_smoke_subset(settings, args.ref, "smoke30")
-        return run_benchmark(settings, args.ref, "smoke30", False, args.run_id, args.jobs)
+        return run_benchmark(settings, args.ref, "smoke30", False, args.run_id, args.jobs, fresh_run=args.fresh_run)
 
     if args.command == "full":
-        return run_benchmark(settings, args.ref, None, True, args.run_id, args.jobs)
+        return run_benchmark(settings, args.ref, None, True, args.run_id, args.jobs, fresh_run=args.fresh_run)
 
     if args.command == "solve":
-        return run_project(settings, args.path, args.validation_command, args.run_id)
+        return run_project(settings, args.path, args.validation_command, args.run_id, fresh_run=args.fresh_run)
 
     if args.command == "ui":
         return launch_terminal_ui(
@@ -604,20 +686,36 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.benchmark_command == "segment":
             ensure_smoke_subset(settings, args.ref, args.subset)
-            return run_benchmark(settings, args.ref, args.subset, False, args.run_id, args.jobs)
+            return run_benchmark(
+                settings,
+                args.ref,
+                args.subset,
+                False,
+                args.run_id,
+                args.jobs,
+                fresh_run=args.fresh_run,
+            )
         if args.benchmark_command == "full":
             _notify_path("Benchmark dataset ready", dataset.fetch(args.ref))
-            return run_benchmark(settings, args.ref, None, True, args.run_id, args.jobs)
+            return run_benchmark(settings, args.ref, None, True, args.run_id, args.jobs, fresh_run=args.fresh_run)
         if args.benchmark_command == "run":
             if args.subset == "smoke30":
                 ensure_smoke_subset(settings, args.ref, "smoke30")
-            return run_benchmark(settings, args.ref, args.subset, args.full, args.run_id, args.jobs)
+            return run_benchmark(
+                settings,
+                args.ref,
+                args.subset,
+                args.full,
+                args.run_id,
+                args.jobs,
+                fresh_run=args.fresh_run,
+            )
 
     if args.command == "case" and args.case_command == "run":
-        return run_case(settings, args.case_id, args.ref, args.run_id)
+        return run_case(settings, args.case_id, args.ref, args.run_id, fresh_run=args.fresh_run)
 
     if args.command == "project" and args.project_command == "solve":
-        return run_project(settings, args.path, args.validation_command, args.run_id)
+        return run_project(settings, args.path, args.validation_command, args.run_id, fresh_run=args.fresh_run)
 
     if args.command == "report" and args.report_command == "summarize":
         return summarize_command(settings, args.run_id)
@@ -625,6 +723,8 @@ def main(argv: list[str] | None = None) -> int:
         return failures_command(settings, args.run_id, args.category, args.limit)
     if args.command == "report" and args.report_command == "modules":
         return modules_command(settings, args.run_id, args.top, args.ref, args.grouping)
+    if args.command == "report" and args.report_command == "trace":
+        return trace_command(settings, args.run_id, args.case_id, args.tail)
 
     parser.error("Unsupported command.")
     return 2

@@ -9,14 +9,6 @@ from typing import Any
 from agentic_python_dependency.config import Settings
 
 
-STAGE_TO_MODEL = {
-    "extract": "gemma3:4b",
-    "version": "gemma3:12b",
-    "repair": "gemma3:12b",
-    "adjudicate": "gemma3:12b",
-}
-
-
 @dataclass
 class OllamaPromptRunner:
     settings: Settings
@@ -46,12 +38,16 @@ class OllamaPromptRunner:
         return self.settings.llm_cache_dir / f"{digest}.txt"
 
     def _read_cache(self, stage: str, prompt_text: str) -> str | None:
+        if self.settings.disable_llm_cache:
+            return None
         cache_path = self._cache_path(stage, prompt_text)
         if cache_path.exists():
             return cache_path.read_text(encoding="utf-8")
         return None
 
     def _write_cache(self, stage: str, prompt_text: str, response_text: str) -> None:
+        if self.settings.disable_llm_cache:
+            return
         cache_path = self._cache_path(stage, prompt_text)
         cache_path.write_text(response_text, encoding="utf-8")
 

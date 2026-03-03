@@ -30,3 +30,16 @@ def test_invoke_template_uses_disk_cache_without_model_imports(tmp_path: Path) -
     response = runner.invoke_template("extract", "example.txt", {"name": "world"})
 
     assert response == "cached-response"
+
+
+def test_invoke_text_skips_disk_cache_when_disabled(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.disable_llm_cache = True
+    runner = OllamaPromptRunner(settings, settings.prompts_dir, scripted_responses={"version": ["fresh-response"]})
+    prompt_text = "Return only package==version"
+    runner._write_cache("version", prompt_text, "cached-response")
+
+    response = runner.invoke_text("version", prompt_text)
+
+    assert response == "fresh-response"
+    assert not any(settings.llm_cache_dir.iterdir())

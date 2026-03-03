@@ -9,6 +9,7 @@ from agentic_python_dependency.cli import (
     format_elapsed,
     format_progress_bar,
     redirect_runtime_warnings,
+    resolve_trace_path,
 )
 from agentic_python_dependency.config import Settings
 
@@ -16,12 +17,28 @@ from agentic_python_dependency.config import Settings
 def test_benchmark_run_parser_accepts_jobs_flag() -> None:
     parser = build_parser()
 
-    args = parser.parse_args(["--preset", "balanced", "benchmark", "run", "--subset", "smoke30", "--jobs", "3"])
+    args = parser.parse_args(
+        [
+            "--preset",
+            "thorough",
+            "--model-profile",
+            "gpt-oss-20b",
+            "--fresh-run",
+            "benchmark",
+            "run",
+            "--subset",
+            "smoke30",
+            "--jobs",
+            "3",
+        ]
+    )
 
     assert args.command == "benchmark"
     assert args.benchmark_command == "run"
     assert args.jobs == 3
-    assert args.preset == "balanced"
+    assert args.preset == "thorough"
+    assert args.model_profile == "gpt-oss-20b"
+    assert args.fresh_run is True
 
 
 def test_benchmark_segment_parser_accepts_subset_and_jobs() -> None:
@@ -99,6 +116,17 @@ def test_report_modules_parser_accepts_grouping() -> None:
     assert args.grouping == "raw"
 
 
+def test_report_trace_parser_accepts_case_and_tail() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["report", "trace", "--run-id", "run123", "--case-id", "case1", "--tail", "20"])
+
+    assert args.command == "report"
+    assert args.report_command == "trace"
+    assert args.case_id == "case1"
+    assert args.tail == 20
+
+
 def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, monkeypatch) -> None:
     settings = Settings.from_env(project_root=tmp_path)
 
@@ -152,6 +180,7 @@ def test_benchmark_progress_refresh_thread_starts_and_stops(monkeypatch) -> None
         failures=0,
         preset="optimized",
         prompt_profile="optimized",
+        model_summary="gemma-moe: gemma3:4b / gemma3:12b",
         jobs=1,
         target="smoke30",
         artifacts_dir=Path("/tmp/run123"),
@@ -173,6 +202,7 @@ def test_benchmark_progress_tracks_case_results() -> None:
         failures=0,
         preset="optimized",
         prompt_profile="optimized",
+        model_summary="gemma-moe: gemma3:4b / gemma3:12b",
         jobs=1,
         target="smoke30",
         artifacts_dir=Path("/tmp/run123"),
@@ -199,3 +229,10 @@ def test_redirect_runtime_warnings_writes_warning_to_file(tmp_path: Path) -> Non
     contents = warning_path.read_text(encoding="utf-8")
     assert "SyntaxWarning" in contents
     assert "invalid escape sequence" in contents
+
+
+def test_resolve_trace_path_supports_run_and_case_scope(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+
+    assert resolve_trace_path(settings, "run1") == settings.artifacts_dir / "run1" / "llm-trace.log"
+    assert resolve_trace_path(settings, "run1", "case1") == settings.artifacts_dir / "run1" / "case1" / "llm-trace.log"

@@ -11,7 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - PLLM-inspired Python dependency resolver with a LangGraph workflow for extraction, version inference, repair, execution, and result finalization.
 - Ollama-backed LangChain model routing using `gemma3:4b` for extraction and `gemma3:12b` for versioning, repair, and adjudication.
-- Four user-selectable execution presets: `performance`, `optimized`, `balanced`, and `accuracy`.
+- Six user-selectable execution presets spanning `performance` through `accuracy`, including `efficient` and `thorough` intermediate tradeoff levels.
 - Prompt-profile support with `paper`, `optimized-lite`, `optimized`, and `optimized-strict` prompt sets.
 - CLI entrypoint `apd` with benchmark, case, project, and reporting commands.
 - One-step benchmark wrapper commands for running the prepared segment and full benchmark without manually chaining setup steps.
@@ -46,6 +46,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Replaced the dry hand-rolled terminal UI with a prompt-toolkit powered command center that uses styled dialogs and a fullscreen benchmark dashboard.
 - Added canonical module-family reporting with raw fallback mode for paper-style comparison tables.
 - Added preset-aware routing for prompt usage, deterministic version selection, repair behavior, and compatibility handling.
+- Added fresh-run and no-LLM-cache execution options plus bundled model selection for `gemma-moe`, `qwen35-9b`, and `gpt-oss-20b`, with per-stage extraction/reasoning model overrides.
 - Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.
 - Switched documentation away from Compose sidecars to host Ollama plus host Docker usage for local GPU testing.
 
@@ -68,3 +69,4 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed long PyPI cache filenames by truncating and hashing cache keys safely.
 - Fixed Windows Docker subprocess handling when `stdout` or `stderr` is `None`.
 - Fixed the terminal UI dependency path by declaring `prompt_toolkit` as a runtime dependency for `apd ui`.
+- Added a trace-view CLI path so prompt/response logs written by `--trace-llm` can be inspected directly without manually opening artifact files.

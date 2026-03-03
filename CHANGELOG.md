@@ -17,6 +17,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - One-step benchmark wrapper commands for running the prepared segment and full benchmark without manually chaining setup steps.
 - Newcomer-friendly top-level commands `apd doctor`, `apd smoke`, `apd full`, and `apd solve`.
 - Interactive terminal command `apd ui` for guided benchmark, reporting, and local-project workflows.
+- Case timeline tracking with per-case and per-attempt UTC timestamps, plus `apd report timeline` artifacts for run-level timing analysis.
 - Gistable benchmark support pinned to the paper dataset commit, including deterministic `smoke30` subset generation.
 - Docker-based execution pipeline for benchmark cases and general project validation using the host Docker daemon.
 - PyPI metadata caching with raw JSON storage and indexed release filtering.
@@ -48,6 +49,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added preset-aware routing for prompt usage, deterministic version selection, repair behavior, and compatibility handling.
 - Added fresh-run and no-LLM-cache execution options plus bundled model selection for `gemma-moe`, `qwen35-9b`, and `gpt-oss-20b`, with per-stage extraction/reasoning model overrides.
 - Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.
+- Added timeline artifacts (`timeline.json`, `timeline.csv`, `timeline.md`) and exposed timeline viewing in the interactive terminal UI.
 - Switched documentation away from Compose sidecars to host Ollama plus host Docker usage for local GPU testing.
 
 ### Fixed

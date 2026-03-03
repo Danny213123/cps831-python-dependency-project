@@ -66,6 +66,8 @@ class AttemptRecord:
     validation_command: str | None
     wall_clock_seconds: float
     artifact_dir: str
+    started_at: str = ""
+    finished_at: str = ""
 
 
 @dataclass(slots=True)
@@ -129,6 +131,8 @@ class ResolutionState(TypedDict, total=False):
     generated_dockerfile: str
     generated_requirements: str
     prepared_execution_context: Any
+    case_started_at: str
+    case_finished_at: str
     last_execution: ExecutionOutcome
     last_error_category: str
     last_error_details: str

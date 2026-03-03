@@ -127,6 +127,16 @@ def test_report_trace_parser_accepts_case_and_tail() -> None:
     assert args.tail == 20
 
 
+def test_report_timeline_parser_accepts_run_id() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["report", "timeline", "--run-id", "run123"])
+
+    assert args.command == "report"
+    assert args.report_command == "timeline"
+    assert args.run_id == "run123"
+
+
 def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, monkeypatch) -> None:
     settings = Settings.from_env(project_root=tmp_path)
 

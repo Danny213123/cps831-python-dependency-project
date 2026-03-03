@@ -321,6 +321,7 @@ class TerminalUI:
     failures_command: ActionCallback
     modules_command: ActionCallback
     ensure_smoke_subset: Callable[..., Path]
+    timeline_command: ActionCallback | None = None
     output: Callable[[str], None] = print
     input_fn: Callable[[str], str] = input
 
@@ -348,6 +349,7 @@ class TerminalUI:
                     ("Summarize run", "5"),
                     ("Failure report", "6"),
                     ("Module report", "7"),
+                    ("Timeline view", "l"),
                     ("Preset", "p"),
                     ("Models", "m"),
                     ("Fresh run", "f"),
@@ -391,6 +393,8 @@ class TerminalUI:
             return self._run_failures()
         if choice == "7":
             return self._run_modules()
+        if choice == "l":
+            return self._run_timeline()
         if choice == "p":
             self._choose_preset()
             return 0
@@ -469,6 +473,13 @@ class TerminalUI:
         top = self._prompt_int("Top modules", 15)
         grouping = self._prompt_choice("Grouping", ["canonical", "raw"], self.settings.default_module_grouping)
         return self._run_captured(self.modules_command, self.settings, run_id, top, None, grouping)
+
+    def _run_timeline(self) -> int:
+        if self.timeline_command is None:
+            self._show_status_dialog("Timeline command is unavailable.")
+            return 1
+        run_id = self._prompt_required("Run ID")
+        return self._run_captured(self.timeline_command, self.settings, run_id)
 
     def _run_captured(self, action: ActionCallback, *args) -> int:
         buffer = io.StringIO()
@@ -636,6 +647,7 @@ class TerminalUI:
         self.output("  5. Summarize run")
         self.output("  6. Failure report")
         self.output("  7. Module report")
+        self.output("  L. Timeline view")
         self.output("  P. Change preset")
         self.output("  M. Change model bundle")
         self.output("  F. Toggle fresh run / no LLM cache")
@@ -651,6 +663,7 @@ def launch_terminal_ui(
     summarize_command: ActionCallback,
     failures_command: ActionCallback,
     modules_command: ActionCallback,
+    timeline_command: ActionCallback,
     ensure_smoke_subset: Callable[..., Path],
 ) -> int:
     ui = TerminalUI(
@@ -661,6 +674,7 @@ def launch_terminal_ui(
         summarize_command=summarize_command,
         failures_command=failures_command,
         modules_command=modules_command,
+        timeline_command=timeline_command,
         ensure_smoke_subset=ensure_smoke_subset,
     )
     return ui.run()

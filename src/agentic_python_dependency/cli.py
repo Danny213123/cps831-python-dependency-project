@@ -21,7 +21,7 @@ from agentic_python_dependency.benchmark.subsets import build_smoke30
 from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
 from agentic_python_dependency.presets import PRESET_CONFIGS
 from agentic_python_dependency.graph import ResolutionWorkflow
-from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, summarize_run
+from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, build_timeline_view, summarize_run
 from agentic_python_dependency.terminal_ui import launch_terminal_ui
 
 
@@ -367,6 +367,8 @@ def build_parser() -> argparse.ArgumentParser:
     trace.add_argument("--run-id", required=True)
     trace.add_argument("--case-id", default=None)
     trace.add_argument("--tail", type=int, default=0, help="Show only the last N lines of the trace log.")
+    timeline = report_sub.add_parser("timeline")
+    timeline.add_argument("--run-id", required=True)
 
     return parser
 
@@ -634,6 +636,12 @@ def modules_command(settings: Settings, run_id: str, top: int, ref: str | None, 
     return 0
 
 
+def timeline_command(settings: Settings, run_id: str) -> int:
+    build_timeline_view(settings.artifacts_dir / run_id)
+    _notify_path("Timeline written", settings.artifacts_dir / run_id / "timeline.md")
+    return 0
+
+
 def trace_command(settings: Settings, run_id: str, case_id: str | None, tail: int) -> int:
     trace_path = resolve_trace_path(settings, run_id, case_id)
     if not trace_path.exists():
@@ -691,6 +699,7 @@ def main(argv: list[str] | None = None) -> int:
             summarize_command=summarize_command,
             failures_command=failures_command,
             modules_command=modules_command,
+            timeline_command=timeline_command,
             ensure_smoke_subset=ensure_smoke_subset,
         )
 
@@ -741,6 +750,8 @@ def main(argv: list[str] | None = None) -> int:
         return failures_command(settings, args.run_id, args.category, args.limit)
     if args.command == "report" and args.report_command == "modules":
         return modules_command(settings, args.run_id, args.top, args.ref, args.grouping)
+    if args.command == "report" and args.report_command == "timeline":
+        return timeline_command(settings, args.run_id)
     if args.command == "report" and args.report_command == "trace":
         return trace_command(settings, args.run_id, args.case_id, args.tail)
 

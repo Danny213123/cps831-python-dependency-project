@@ -385,6 +385,7 @@ class ResolutionWorkflow:
             mode="gistable",
             case_id=case.case_id,
             benchmark_case=case,
+            case_started_at=datetime.now(timezone.utc).isoformat(),
             attempt_records=[],
             prompt_history={"prompt_a": [], "prompt_b": "", "prompt_c": []},
             model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": []},
@@ -413,6 +414,7 @@ class ResolutionWorkflow:
             mode="project",
             case_id=project_root.name,
             project_target=target,
+            case_started_at=datetime.now(timezone.utc).isoformat(),
             attempt_records=[],
             prompt_history={"prompt_a": [], "prompt_b": "", "prompt_c": []},
             model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": []},
@@ -836,8 +838,10 @@ class ResolutionWorkflow:
     def execute_candidate(self, state: ResolutionState) -> ResolutionState:
         attempt_dir = Path(state["current_attempt_dir"])
         context = state["prepared_execution_context"]
+        attempt_started_at = datetime.now(timezone.utc).isoformat()
 
         result = self.docker_executor.execute(context)
+        attempt_finished_at = datetime.now(timezone.utc).isoformat()
         (attempt_dir / "build.log").write_text(result.build_log, encoding="utf-8")
         (attempt_dir / "run.log").write_text(result.run_log, encoding="utf-8")
 
@@ -867,6 +871,8 @@ class ResolutionWorkflow:
                 validation_command=state.get("current_validation_command") or None,
                 wall_clock_seconds=result.wall_clock_seconds,
                 artifact_dir=str(attempt_dir),
+                started_at=attempt_started_at,
+                finished_at=attempt_finished_at,
             )
         )
         return state
@@ -925,6 +931,8 @@ class ResolutionWorkflow:
     def finalize_result(self, state: ResolutionState) -> ResolutionState:
         artifact_dir = Path(state["artifact_dir"])
         execution = state["last_execution"]
+        case_finished_at = datetime.now(timezone.utc).isoformat()
+        state["case_finished_at"] = case_finished_at
         if state["attempt_records"]:
             latest_attempt_dir = Path(state["attempt_records"][-1].artifact_dir)
             for name in ("build.log", "run.log"):
@@ -959,6 +967,8 @@ class ResolutionWorkflow:
             "version_selection_source": state.get("version_selection_source", ""),
             "compatibility_policy": state.get("applied_compatibility_policy", {}),
             "wall_clock_seconds": total_wall_clock,
+            "started_at": state.get("case_started_at", ""),
+            "finished_at": case_finished_at,
             "artifact_dir": str(artifact_dir),
             "stop_reason": state.get("stop_reason", execution.category),
             "attempt_records": [asdict(attempt) for attempt in state.get("attempt_records", [])],

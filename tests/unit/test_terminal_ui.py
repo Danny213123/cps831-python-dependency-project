@@ -146,6 +146,34 @@ def test_terminal_ui_smoke_run_uses_dashboard(tmp_path: Path, monkeypatch) -> No
     assert isinstance(benchmark_calls[0]["observer"], TerminalBenchmarkDashboard)
 
 
+def test_terminal_ui_can_run_timeline_view(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    timeline_calls: list[tuple[object, ...]] = []
+    inputs = iter(["l", "run123", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        timeline_command=lambda *args, **kwargs: timeline_calls.append(args) or 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert timeline_calls
+    assert timeline_calls[0][1] == "run123"
+
+
 def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)

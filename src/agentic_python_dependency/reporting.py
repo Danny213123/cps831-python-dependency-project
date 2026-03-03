@@ -4,6 +4,7 @@ import csv
 import json
 import math
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,94 @@ def format_duration(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
+def parse_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _render_timeline_bar(
+    start_seconds: float | None,
+    duration_seconds: float,
+    total_span_seconds: float,
+    width: int = 32,
+) -> str:
+    if total_span_seconds <= 0 or start_seconds is None:
+        return "█" * min(width, max(1, int(round(duration_seconds)))) if duration_seconds > 0 else "·"
+    offset = int((start_seconds / total_span_seconds) * max(0, width - 1))
+    span = max(1, int((duration_seconds / total_span_seconds) * width))
+    filled = min(width - offset, span)
+    return ("·" * offset) + ("█" * filled) + ("·" * max(0, width - offset - filled))
+
+
+def build_timeline_view(run_dir: Path) -> dict[str, Any]:
+    results = load_run_results(run_dir)
+    timed_rows: list[dict[str, Any]] = []
+    all_started = [parse_timestamp(item.get("started_at")) for item in results]
+    all_finished = [parse_timestamp(item.get("finished_at")) for item in results]
+    valid_started = [value for value in all_started if value is not None]
+    valid_finished = [value for value in all_finished if value is not None]
+    run_started_at = min(valid_started) if valid_started else None
+    run_finished_at = max(valid_finished) if valid_finished else None
+    total_span_seconds = (
+        max(0.0, (run_finished_at - run_started_at).total_seconds())
+        if run_started_at is not None and run_finished_at is not None
+        else 0.0
+    )
+
+    for item in results:
+        started_at = parse_timestamp(item.get("started_at"))
+        finished_at = parse_timestamp(item.get("finished_at"))
+        relative_start = (
+            max(0.0, (started_at - run_started_at).total_seconds())
+            if started_at is not None and run_started_at is not None
+            else None
+        )
+        relative_end = (
+            max(0.0, (finished_at - run_started_at).total_seconds())
+            if finished_at is not None and run_started_at is not None
+            else None
+        )
+        duration_seconds = float(item.get("wall_clock_seconds", 0.0))
+        timed_rows.append(
+            {
+                "case_id": item.get("case_id", ""),
+                "success": bool(item.get("success", False)),
+                "final_error_category": item.get("final_error_category", ""),
+                "attempts": int(item.get("attempts", 0)),
+                "started_at": item.get("started_at", ""),
+                "finished_at": item.get("finished_at", ""),
+                "wall_clock_seconds": duration_seconds,
+                "duration_human": format_duration(duration_seconds),
+                "relative_start_seconds": relative_start,
+                "relative_end_seconds": relative_end,
+                "timeline_bar": _render_timeline_bar(relative_start, duration_seconds, total_span_seconds),
+            }
+        )
+
+    timed_rows.sort(
+        key=lambda item: (
+            item["relative_start_seconds"] is None,
+            float(item["relative_start_seconds"] or 0.0),
+            item["case_id"],
+        )
+    )
+
+    report = {
+        "run_id": run_dir.name,
+        "run_started_at": run_started_at.isoformat() if run_started_at is not None else "",
+        "run_finished_at": run_finished_at.isoformat() if run_finished_at is not None else "",
+        "total_span_seconds": total_span_seconds,
+        "total_span_human": format_duration(total_span_seconds),
+        "rows": timed_rows,
+    }
+    write_timeline_artifacts(run_dir, report)
+    return report
+
+
 def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> BenchmarkSummary:
     results = load_run_results(run_dir)
     total_cases = len(results)
@@ -103,6 +192,7 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         dependency_reason_counts=dependency_reason_counts,
     )
     write_summary_artifacts(run_dir, results, summary)
+    build_timeline_view(run_dir)
     return summary
 
 
@@ -112,7 +202,16 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
     with (run_dir / "summary.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["case_id", "success", "attempts", "initial_eval", "final_error_category", "wall_clock_seconds"],
+            fieldnames=[
+                "case_id",
+                "success",
+                "attempts",
+                "initial_eval",
+                "final_error_category",
+                "wall_clock_seconds",
+                "started_at",
+                "finished_at",
+            ],
         )
         writer.writeheader()
         for row in results:
@@ -124,6 +223,8 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
                     "initial_eval": row.get("initial_eval", ""),
                     "final_error_category": row.get("final_error_category", ""),
                     "wall_clock_seconds": row.get("wall_clock_seconds", 0.0),
+                    "started_at": row.get("started_at", ""),
+                    "finished_at": row.get("finished_at", ""),
                 }
             )
 
@@ -197,6 +298,74 @@ def analyze_failures(run_dir: Path, limit: int = 10, category: str | None = None
     output_name = "failure-analysis.json" if not category else f"failure-analysis-{category}.json"
     (run_dir / output_name).write_text(json.dumps(analysis, indent=2), encoding="utf-8")
     return analysis
+
+
+def write_timeline_artifacts(run_dir: Path, report: dict[str, Any]) -> None:
+    rows = report["rows"]
+    (run_dir / "timeline.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+    with (run_dir / "timeline.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "case_id",
+                "success",
+                "final_error_category",
+                "attempts",
+                "started_at",
+                "finished_at",
+                "wall_clock_seconds",
+                "duration_human",
+                "relative_start_seconds",
+                "relative_end_seconds",
+            ],
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "case_id": row["case_id"],
+                    "success": row["success"],
+                    "final_error_category": row["final_error_category"],
+                    "attempts": row["attempts"],
+                    "started_at": row["started_at"],
+                    "finished_at": row["finished_at"],
+                    "wall_clock_seconds": row["wall_clock_seconds"],
+                    "duration_human": row["duration_human"],
+                    "relative_start_seconds": row["relative_start_seconds"],
+                    "relative_end_seconds": row["relative_end_seconds"],
+                }
+            )
+
+    lines = [
+        "# Case Timeline",
+        "",
+        f"Run ID: `{report['run_id']}`",
+        f"Run started: `{report['run_started_at'] or 'unknown'}`",
+        f"Run finished: `{report['run_finished_at'] or 'unknown'}`",
+        f"Timeline span: `{report['total_span_human']}`",
+        "",
+        "| Case ID | Start | End | Duration | Attempts | Status | Timeline |",
+        "| --- | --- | --- | ---: | ---: | --- | --- |",
+    ]
+    for row in rows:
+        status = "Success" if row["success"] else row["final_error_category"]
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    row["case_id"],
+                    row["started_at"] or "unknown",
+                    row["finished_at"] or "unknown",
+                    row["duration_human"],
+                    str(row["attempts"]),
+                    status,
+                    f"`{row['timeline_bar']}`",
+                ]
+            )
+            + " |"
+        )
+    (run_dir / "timeline.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def build_module_success_table(

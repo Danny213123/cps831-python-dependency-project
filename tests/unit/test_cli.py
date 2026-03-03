@@ -218,6 +218,16 @@ def test_benchmark_progress_tracks_case_results() -> None:
     assert progress.last_status == "TimeoutError"
 
 
+def test_benchmark_progress_can_request_stop() -> None:
+    progress = BenchmarkProgress("run123", total=3)
+
+    assert progress.stop_requested() is False
+
+    progress.request_stop()
+
+    assert progress.stop_requested() is True
+
+
 def test_redirect_runtime_warnings_writes_warning_to_file(tmp_path: Path) -> None:
     warning_path = tmp_path / "warnings.log"
 

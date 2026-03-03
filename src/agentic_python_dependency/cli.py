@@ -50,6 +50,8 @@ class BenchmarkObserver(Protocol):
 
     def advance(self, result: dict[str, object]) -> None: ...
 
+    def stop_requested(self) -> bool: ...
+
     def finish(self, *, summary_path: Path, warnings_path: Path | None) -> None: ...
 
 
@@ -115,6 +117,7 @@ class BenchmarkProgress:
         self._refresh_interval = refresh_interval
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._cancel_requested = False
 
     def _line(self) -> str:
         bar = format_progress_bar(self.completed, self.total)
@@ -196,6 +199,15 @@ class BenchmarkProgress:
                 self.current_case_id = ""
             self.active_cases = max(0, self.active_cases - 1)
             self.render()
+
+    def request_stop(self) -> None:
+        with self._lock:
+            self._cancel_requested = True
+            self.render()
+
+    def stop_requested(self) -> bool:
+        with self._lock:
+            return self._cancel_requested
 
     def _finish_render(self) -> None:
         self._stop_event.set()
@@ -522,6 +534,8 @@ def run_benchmark(
     with redirect_runtime_warnings(warnings_path):
         if jobs <= 1:
             for case_id in pending_case_ids:
+                if progress_observer.stop_requested():
+                    break
                 progress_observer.case_started(case_id)
                 result = process_case(case_id)
                 progress_observer.advance(result)
@@ -530,6 +544,8 @@ def run_benchmark(
                 pending_iterator = iter(pending_case_ids)
                 futures: dict[object, str] = {}
                 for _ in range(min(jobs, len(pending_case_ids))):
+                    if progress_observer.stop_requested():
+                        break
                     case_id = next(pending_iterator, None)
                     if case_id is None:
                         break
@@ -540,6 +556,8 @@ def run_benchmark(
                     case_id = futures.pop(future)
                     result = future.result()
                     progress_observer.advance(result)
+                    if progress_observer.stop_requested():
+                        continue
                     next_case_id = next(pending_iterator, None)
                     if next_case_id is not None:
                         progress_observer.case_started(next_case_id)

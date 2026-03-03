@@ -93,6 +93,7 @@ class TerminalBenchmarkDashboard:
         self.warnings_path: Path | None = None
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
+        self._cancel_requested = False
         self._thread: threading.Thread | None = None
         self._app_thread: threading.Thread | None = None
         self._app: Application[None] | None = None
@@ -172,6 +173,15 @@ class TerminalBenchmarkDashboard:
         if not self._isatty:
             self._render_text(final=True)
 
+    def request_stop(self) -> None:
+        with self._lock:
+            self._cancel_requested = True
+        self._refresh()
+
+    def stop_requested(self) -> bool:
+        with self._lock:
+            return self._cancel_requested
+
     def _refresh(self) -> None:
         if self._isatty:
             if self._app is not None:
@@ -183,7 +193,8 @@ class TerminalBenchmarkDashboard:
         bindings = KeyBindings()
 
         @bindings.add("c-c")
-        def _ignore_interrupt(event) -> None:
+        def _request_stop(event) -> None:
+            self.request_stop()
             event.app.invalidate()
 
         control = FormattedTextControl(self._formatted_text, focusable=False)
@@ -234,6 +245,13 @@ class TerminalBenchmarkDashboard:
             ("", "    "),
             ("class:accent", f"Elapsed: {_format_elapsed(time.monotonic() - self.started_at)}\n"),
         ]
+        if self._cancel_requested:
+            fragments.extend(
+                [
+                    ("class:bad", "\nStop requested\n"),
+                    ("class:muted", "APD will stop scheduling new cases and exit after the active work finishes.\n"),
+                ]
+            )
         if self.current_cases:
             fragments.append(("class:label", "\nActive cases\n"))
             for case_id in self.current_cases[: min(6, len(self.current_cases))]:
@@ -275,6 +293,8 @@ class TerminalBenchmarkDashboard:
             f"Progress: {_format_progress_bar(self.completed, self.total)} {self.completed}/{self.total} ({percent:5.1f}%)",
             f"Successes: {self.successes}    Failures: {self.failures}    Elapsed: {_format_elapsed(time.monotonic() - self.started_at)}",
         ]
+        if self._cancel_requested:
+            lines.append("Stop requested: APD will stop after the current active cases finish.")
         if self.current_cases:
             lines.append("Active cases:")
             lines.extend(f"  - {case_id}" for case_id in self.current_cases[: min(6, len(self.current_cases))])

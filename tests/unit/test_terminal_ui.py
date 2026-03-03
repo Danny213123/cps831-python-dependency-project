@@ -173,3 +173,15 @@ def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:
     assert dashboard.failures == 0
     assert dashboard.last_case_id == "case-2"
     assert dashboard.current_cases == []
+
+
+def test_terminal_benchmark_dashboard_can_request_stop(monkeypatch) -> None:
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
+
+    assert dashboard.stop_requested() is False
+
+    dashboard.request_stop()
+
+    assert dashboard.stop_requested() is True

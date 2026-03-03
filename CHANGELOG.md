@@ -70,3 +70,4 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed Windows Docker subprocess handling when `stdout` or `stderr` is `None`.
 - Fixed the terminal UI dependency path by declaring `prompt_toolkit` as a runtime dependency for `apd ui`.
 - Added a trace-view CLI path so prompt/response logs written by `--trace-llm` can be inspected directly without manually opening artifact files.
+- Fixed `apd ui` benchmark shutdown so `Ctrl+C` requests a clean cooperative stop instead of being swallowed by the fullscreen dashboard.

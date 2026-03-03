@@ -40,6 +40,23 @@ apd project solve --path /path/to/python/repo
 apd report summarize --run-id <run-id>
 ```
 
+## One-step benchmark commands
+
+Run the prepared benchmark segment in one command:
+
+```bash
+apd benchmark segment --jobs 2
+```
+
+Run the full benchmark in one command:
+
+```bash
+apd benchmark full --jobs 2
+```
+
+`benchmark segment` automatically fetches Gistable, regenerates `smoke30`, and runs it.
+`benchmark full` automatically fetches Gistable and runs all valid cases.
+
 ## Docker Compose
 
 Start the full runtime:

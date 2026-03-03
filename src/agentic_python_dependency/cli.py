@@ -38,6 +38,17 @@ def build_parser() -> argparse.ArgumentParser:
     make_subsets = benchmark_sub.add_parser("make-subsets")
     make_subsets.add_argument("--ref", default=None)
 
+    segment = benchmark_sub.add_parser("segment")
+    segment.add_argument("--subset", default="smoke30")
+    segment.add_argument("--ref", default=None)
+    segment.add_argument("--run-id", default=None)
+    segment.add_argument("--jobs", type=int, default=1)
+
+    full_run = benchmark_sub.add_parser("full")
+    full_run.add_argument("--ref", default=None)
+    full_run.add_argument("--run-id", default=None)
+    full_run.add_argument("--jobs", type=int, default=1)
+
     run = benchmark_sub.add_parser("run")
     run_group = run.add_mutually_exclusive_group(required=True)
     run_group.add_argument("--subset")
@@ -74,6 +85,21 @@ def build_parser() -> argparse.ArgumentParser:
     modules.add_argument("--ref", default=None)
 
     return parser
+
+
+def ensure_smoke_subset(settings: Settings, ref: str | None, subset_name: str = "smoke30") -> Path:
+    dataset = GistableDataset(settings)
+    dataset.fetch(ref)
+    if subset_name == "smoke30":
+        smoke = build_smoke30(dataset, ref)
+        subset_path = dataset.save_subset(subset_name, smoke, ref)
+        _notify_path("Subset written", subset_path)
+        return subset_path
+
+    subset_path = dataset.dataset_root(ref) / "subsets" / f"{subset_name}.json"
+    if not subset_path.exists():
+        raise FileNotFoundError(f"Subset not found: {subset_name}")
+    return subset_path
 
 
 def run_benchmark(
@@ -182,12 +208,17 @@ def main(argv: list[str] | None = None) -> int:
             _notify_path("Benchmark dataset ready", dataset.fetch(args.ref))
             return 0
         if args.benchmark_command == "make-subsets":
-            dataset.fetch(args.ref)
-            smoke = build_smoke30(dataset, args.ref)
-            subset_path = dataset.save_subset("smoke30", smoke, args.ref)
-            _notify_path("Subset written", subset_path)
+            ensure_smoke_subset(settings, args.ref, "smoke30")
             return 0
+        if args.benchmark_command == "segment":
+            ensure_smoke_subset(settings, args.ref, args.subset)
+            return run_benchmark(settings, args.ref, args.subset, False, args.run_id, args.jobs)
+        if args.benchmark_command == "full":
+            _notify_path("Benchmark dataset ready", dataset.fetch(args.ref))
+            return run_benchmark(settings, args.ref, None, True, args.run_id, args.jobs)
         if args.benchmark_command == "run":
+            if args.subset == "smoke30":
+                ensure_smoke_subset(settings, args.ref, "smoke30")
             return run_benchmark(settings, args.ref, args.subset, args.full, args.run_id, args.jobs)
 
     if args.command == "case" and args.case_command == "run":

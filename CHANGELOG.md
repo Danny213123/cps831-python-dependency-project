@@ -12,6 +12,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - PLLM-inspired Python dependency resolver with a LangGraph workflow for extraction, version inference, repair, execution, and result finalization.
 - Ollama-backed LangChain model routing using `gemma3:4b` for extraction and `gemma3:12b` for versioning, repair, and adjudication.
 - CLI entrypoint `apd` with benchmark, case, project, and reporting commands.
+- One-step benchmark wrapper commands for running the prepared segment and full benchmark without manually chaining setup steps.
 - Gistable benchmark support pinned to the paper dataset commit, including deterministic `smoke30` subset generation.
 - Docker-based execution pipeline for benchmark cases and general project validation, with Docker Compose support for `app`, `ollama`, and `executor-dind`.
 - PyPI metadata caching with raw JSON storage and indexed release filtering.
@@ -30,7 +31,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Switched command output to file-first artifacts instead of dumping JSON to stdout.
 - Added benchmark timing fields for total wall-clock completion time and human-readable duration.
 - Added parallel benchmark workers via `apd benchmark run --jobs N`.
+- Added automatic `smoke30` regeneration before segment runs and explicit `apd benchmark segment` / `apd benchmark full` entrypoints.
 - Reordered benchmark Docker build layers so dependency installation can reuse cache before copying snippet source files.
+- Reduced repeated benchmark overhead by reusing prepared execution contexts and caching LLM responses on disk.
 
 ### Fixed
 

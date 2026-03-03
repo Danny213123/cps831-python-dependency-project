@@ -66,7 +66,7 @@ apd full --jobs 1
 apd solve --path /path/to/python/repo
 ```
 
-- `apd ui` launches an interactive terminal menu for common benchmark, report, and project commands, including a live benchmark dashboard with preset, progress, active cases, elapsed time, and result counts.
+- `apd ui` launches a prompt-toolkit powered terminal control center for common benchmark, report, and project commands, including a live benchmark dashboard with preset, progress, active cases, elapsed time, and result counts.
 - `apd doctor` checks Docker, Ollama, required models, and dataset readiness.
 - `apd smoke` runs the beginner-friendly smoke benchmark flow.
 - `apd full` runs the full benchmark.

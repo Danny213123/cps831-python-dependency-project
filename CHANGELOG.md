@@ -43,6 +43,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added a newcomer-oriented health check flow with `apd doctor` and beginner-friendly top-level commands.
 - Added a live stdout benchmark progress bar with completed-case counts, percent complete, and elapsed time for serial and parallel runs.
 - Integrated the benchmark runner with the terminal UI so smoke/full runs can render a live dashboard with preset, prompt profile, active cases, success/failure counts, elapsed time, and final artifact paths.
+- Replaced the dry hand-rolled terminal UI with a prompt-toolkit powered command center that uses styled dialogs and a fullscreen benchmark dashboard.
 - Added canonical module-family reporting with raw fallback mode for paper-style comparison tables.
 - Added preset-aware routing for prompt usage, deterministic version selection, repair behavior, and compatibility handling.
 - Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.
@@ -66,3 +67,4 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed overly permissive package extraction by tracking candidate provenance and rejecting more non-package prompt output before PyPI lookup.
 - Fixed long PyPI cache filenames by truncating and hashing cache keys safely.
 - Fixed Windows Docker subprocess handling when `stdout` or `stderr` is `None`.
+- Fixed the terminal UI dependency path by declaring `prompt_toolkit` as a runtime dependency for `apd ui`.

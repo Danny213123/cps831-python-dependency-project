@@ -25,6 +25,7 @@ dependencies = [
   "langchain-ollama>=0.3,<0.4",
   "langgraph>=0.3,<0.4",
   "packaging>=24,<26",
+  "prompt_toolkit>=3.0,<4",
 ]
 
 [project.scripts]

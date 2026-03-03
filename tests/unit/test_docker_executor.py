@@ -164,3 +164,41 @@ def test_execute_adds_headless_runtime_environment(monkeypatch, tmp_path: Path) 
     assert "MPLBACKEND=Agg" in run_command
     assert "SDL_VIDEODRIVER=dummy" in run_command
     assert "QT_QPA_PLATFORM=offscreen" in run_command
+
+
+def test_execute_handles_none_stdout_on_windows_subprocess(monkeypatch, tmp_path: Path) -> None:
+    settings = Settings(
+        project_root=tmp_path,
+        data_dir=tmp_path / "data",
+        artifacts_dir=tmp_path / "artifacts",
+        benchmark_dir=tmp_path / "benchmarks",
+        pypi_cache_dir=tmp_path / "pypi-cache",
+        llm_cache_dir=tmp_path / "llm-cache",
+        prompts_dir=tmp_path / "prompts",
+    )
+    executor = DockerExecutor(settings)
+    context = PreparedExecutionContext(
+        context_dir=tmp_path,
+        dockerfile_path=tmp_path / "Dockerfile.generated",
+        image_tag="pllm-test-case-3",
+        validation_command=None,
+        artifact_dir=tmp_path,
+    )
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[:2] == ["docker", "build"]:
+            return subprocess.CompletedProcess(command, 0, stdout=None, stderr="built\n")
+        if command[:2] == ["docker", "run"]:
+            return subprocess.CompletedProcess(command, 0, stdout=None, stderr="ran\n")
+        if command[:3] == ["docker", "image", "rm"]:
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = executor.execute(context)
+
+    assert result.build_succeeded is True
+    assert result.run_succeeded is True
+    assert result.build_log == "built\n"
+    assert result.run_log == "ran\n"

@@ -277,7 +277,7 @@ class DockerExecutor:
                 env=env,
                 check=False,
             )
-            build_log = build.stdout + build.stderr
+            build_log = self._decode_output(build.stdout) + self._decode_output(build.stderr)
             build_succeeded = build.returncode == 0
             exit_code = build.returncode
         except subprocess.TimeoutExpired as exc:
@@ -324,7 +324,7 @@ class DockerExecutor:
                     env=env,
                     check=False,
                 )
-                run_log = run.stdout + run.stderr
+                run_log = self._decode_output(run.stdout) + self._decode_output(run.stderr)
                 exit_code = run.returncode
                 run_success = run.returncode == 0
             except subprocess.TimeoutExpired as exc:

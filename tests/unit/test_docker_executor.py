@@ -51,6 +51,29 @@ def test_patch_dockerfile_rewrites_benchmark_pip_installs_for_python2() -> None:
     )
 
 
+def test_patch_dockerfile_injects_system_packages_for_pygame() -> None:
+    dockerfile = "\n".join(
+        [
+            "FROM python:2.7.13",
+            'ADD snippet.py snippet.py',
+            'CMD ["python", "snippet.py"]',
+            "",
+        ]
+    )
+
+    patched = DockerExecutor.patch_dockerfile(
+        dockerfile,
+        rewrite_python_installs=True,
+        target_python="2.7.13",
+        system_packages=["libsdl1.2-dev", "pkg-config"],
+    )
+
+    assert "apt-get update && apt-get install -y --no-install-recommends libsdl1.2-dev pkg-config" in patched
+    assert patched.index("apt-get update && apt-get install -y --no-install-recommends libsdl1.2-dev pkg-config") < patched.index(
+        'ADD snippet.py snippet.py'
+    )
+
+
 def test_execute_converts_run_timeout_into_failed_result(monkeypatch, tmp_path: Path) -> None:
     settings = Settings(
         project_root=tmp_path,

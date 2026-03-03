@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 import json
+import shutil
 import sys
 import time
+import urllib.error
+import urllib.request
 import warnings
 from pathlib import Path
 from uuid import uuid4
@@ -21,13 +25,46 @@ def _notify_path(label: str, path: Path) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="apd", description="Agentic Python dependency resolver.")
+    parser = argparse.ArgumentParser(
+        prog="apd",
+        description="Agentic Python dependency resolver.",
+        epilog=(
+            "Beginner-friendly commands:\n"
+            "  apd doctor\n"
+            "  apd smoke --jobs 1\n"
+            "  apd full --jobs 1\n"
+            "  apd solve --path /path/to/repo\n\n"
+            "Advanced commands:\n"
+            "  apd benchmark segment --jobs 2\n"
+            "  apd benchmark full --jobs 2\n"
+            "  apd report summarize --run-id <run_id>\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--trace-llm",
         action="store_true",
         help="Write prompts and model outputs to llm-trace.log files during execution.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    doctor = subparsers.add_parser("doctor", help="Check Docker, Ollama, models, and dataset readiness.")
+    doctor.add_argument("--ref", default=None)
+
+    smoke = subparsers.add_parser("smoke", help="Run the beginner-friendly smoke benchmark flow.")
+    smoke.add_argument("--ref", default=None)
+    smoke.add_argument("--run-id", default=None)
+    smoke.add_argument("--jobs", type=int, default=1)
+
+    full_easy = subparsers.add_parser("full", help="Run the full benchmark flow.")
+    full_easy.add_argument("--ref", default=None)
+    full_easy.add_argument("--run-id", default=None)
+    full_easy.add_argument("--jobs", type=int, default=1)
+
+    solve_easy = subparsers.add_parser("solve", help="Resolve dependencies for a local Python project.")
+    solve_easy.add_argument("--path", required=True)
+    solve_easy.add_argument("--validation-command", default=None)
+    solve_easy.add_argument("--run-id", default=None)
 
     benchmark = subparsers.add_parser("benchmark")
     benchmark_sub = benchmark.add_subparsers(dest="benchmark_command", required=True)
@@ -100,6 +137,62 @@ def ensure_smoke_subset(settings: Settings, ref: str | None, subset_name: str = 
     if not subset_path.exists():
         raise FileNotFoundError(f"Subset not found: {subset_name}")
     return subset_path
+
+
+def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[str, object]:
+    dataset = GistableDataset(settings)
+    dataset_root = dataset.dataset_root(ref)
+    marker = dataset_root / ".fetch-complete"
+    checks: list[dict[str, str]] = []
+
+    def add_check(name: str, status: str, detail: str) -> None:
+        checks.append({"name": name, "status": status, "detail": detail})
+
+    python_detail = sys.executable
+    add_check("python", "ok", python_detail)
+
+    docker_path = shutil.which("docker")
+    add_check("docker_cli", "ok" if docker_path else "missing", docker_path or "docker not found on PATH")
+
+    ollama_path = shutil.which("ollama")
+    add_check("ollama_cli", "ok" if ollama_path else "missing", ollama_path or "ollama not found on PATH")
+
+    ollama_models: list[str] = []
+    try:
+        with urllib.request.urlopen(f"{settings.ollama_base_url}/api/tags", timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        ollama_models = [item.get("name", "") for item in payload.get("models", []) if item.get("name")]
+        add_check("ollama_server", "ok", settings.ollama_base_url)
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        add_check("ollama_server", "warning", f"{settings.ollama_base_url} unavailable: {exc}")
+
+    for model_name in (settings.extraction_model, settings.reasoning_model):
+        status = "ok" if model_name in ollama_models else "missing"
+        detail = "installed" if status == "ok" else "pull this model before running benchmarks"
+        add_check(f"model:{model_name}", status, detail)
+
+    dataset_status = "ok" if marker.exists() else "warning"
+    dataset_detail = str(dataset_root) if marker.exists() else "benchmark dataset not fetched yet"
+    add_check("gistable_dataset", dataset_status, dataset_detail)
+
+    overall_status = "ok" if all(check["status"] == "ok" for check in checks) else "warning"
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "overall_status": overall_status,
+        "checks": checks,
+    }
+
+
+def doctor_command(settings: Settings, ref: str | None) -> int:
+    report = collect_doctor_report(settings, ref)
+    artifact_path = settings.project_root / "artifacts" / "doctor-latest.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    for check in report["checks"]:
+        status = check["status"].upper()
+        print(f"[{status}] {check['name']}: {check['detail']}")
+    _notify_path("Doctor report written", artifact_path)
+    return 0
 
 
 def run_benchmark(
@@ -201,6 +294,19 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings.from_env()
     if args.trace_llm:
         settings.trace_llm = True
+
+    if args.command == "doctor":
+        return doctor_command(settings, args.ref)
+
+    if args.command == "smoke":
+        ensure_smoke_subset(settings, args.ref, "smoke30")
+        return run_benchmark(settings, args.ref, "smoke30", False, args.run_id, args.jobs)
+
+    if args.command == "full":
+        return run_benchmark(settings, args.ref, None, True, args.run_id, args.jobs)
+
+    if args.command == "solve":
+        return run_project(settings, args.path, args.validation_command, args.run_id)
 
     if args.command == "benchmark":
         dataset = GistableDataset(settings)

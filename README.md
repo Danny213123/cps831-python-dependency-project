@@ -29,6 +29,22 @@ pre-commit install
 pre-commit install --hook-type commit-msg
 ```
 
+## Quick start
+
+If you just cloned the repo and want the easiest commands, use these:
+
+```bash
+apd doctor
+apd smoke --jobs 1
+apd full --jobs 1
+apd solve --path /path/to/python/repo
+```
+
+- `apd doctor` checks Docker, Ollama, required models, and dataset readiness.
+- `apd smoke` runs the beginner-friendly smoke benchmark flow.
+- `apd full` runs the full benchmark.
+- `apd solve` runs dependency resolution for a local repo.
+
 ## CLI
 
 ```bash
@@ -46,12 +62,14 @@ Run the prepared benchmark segment in one command:
 
 ```bash
 apd benchmark segment --jobs 2
+apd smoke --jobs 2
 ```
 
 Run the full benchmark in one command:
 
 ```bash
 apd benchmark full --jobs 2
+apd full --jobs 2
 ```
 
 `benchmark segment` automatically fetches Gistable, regenerates `smoke30`, and runs it.

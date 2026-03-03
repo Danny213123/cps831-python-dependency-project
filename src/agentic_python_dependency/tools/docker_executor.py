@@ -34,6 +34,22 @@ class DockerExecutionResult:
 
 
 class DockerExecutor:
+    SYSTEM_PACKAGE_MAP = {
+        "pygame": [
+            "libsdl1.2-dev",
+            "libsdl-image1.2-dev",
+            "libsdl-mixer1.2-dev",
+            "libsdl-ttf2.0-dev",
+            "libsmpeg-dev",
+            "libportmidi-dev",
+            "libavformat-dev",
+            "libswscale-dev",
+            "libjpeg-dev",
+            "libfreetype6-dev",
+            "pkg-config",
+        ],
+    }
+
     def __init__(self, settings: Settings):
         self.settings = settings
 
@@ -71,6 +87,17 @@ class DockerExecutor:
         dependency_map = {dependency.name.lower(): dependency.pin() for dependency in dependencies}
         return [dependency_map[name] for name in preferred if name in dependency_map]
 
+    @classmethod
+    def system_packages(cls, dependencies: list[ResolvedDependency]) -> list[str]:
+        packages: list[str] = []
+        seen: set[str] = set()
+        for dependency in dependencies:
+            for package in cls.SYSTEM_PACKAGE_MAP.get(dependency.name.lower(), []):
+                if package not in seen:
+                    seen.add(package)
+                    packages.append(package)
+        return packages
+
     @staticmethod
     def _is_python_install_line(line: str) -> bool:
         stripped = line.strip()
@@ -92,6 +119,7 @@ class DockerExecutor:
         rewrite_python_installs: bool = False,
         target_python: str = "3.12",
         bootstrap_pins: list[str] | None = None,
+        system_packages: list[str] | None = None,
     ) -> str:
         lines = dockerfile_text.splitlines()
         rewritten_lines: list[str] = []
@@ -101,6 +129,12 @@ class DockerExecutor:
             rewritten_lines.append(line)
 
         injection: list[str] = []
+        if system_packages:
+            injection.append(
+                "RUN apt-get update && apt-get install -y --no-install-recommends "
+                + " ".join(system_packages)
+                + " && rm -rf /var/lib/apt/lists/*"
+            )
         if target_python.startswith("2"):
             injection.append("RUN pip install --no-cache-dir --upgrade 'pip<21' 'setuptools<45' 'wheel<0.35'")
         if bootstrap_pins:
@@ -165,6 +199,7 @@ class DockerExecutor:
                 rewrite_python_installs=True,
                 target_python=target_python,
                 bootstrap_pins=self.bootstrap_pins(dependencies),
+                system_packages=self.system_packages(dependencies),
             ),
             encoding="utf-8",
         )
@@ -189,6 +224,7 @@ class DockerExecutor:
                 self.patch_dockerfile(
                     dockerfile_text,
                     bootstrap_pins=self.bootstrap_pins(dependencies),
+                    system_packages=self.system_packages(dependencies),
                 ),
                 encoding="utf-8",
             )

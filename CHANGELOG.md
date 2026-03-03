@@ -13,9 +13,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Ollama-backed LangChain model routing using `gemma3:4b` for extraction and `gemma3:12b` for versioning, repair, and adjudication.
 - CLI entrypoint `apd` with benchmark, case, project, and reporting commands.
 - One-step benchmark wrapper commands for running the prepared segment and full benchmark without manually chaining setup steps.
+- Newcomer-friendly top-level commands `apd doctor`, `apd smoke`, `apd full`, and `apd solve`.
 - Gistable benchmark support pinned to the paper dataset commit, including deterministic `smoke30` subset generation.
 - Docker-based execution pipeline for benchmark cases and general project validation, with Docker Compose support for `app`, `ollama`, and `executor-dind`.
 - PyPI metadata caching with raw JSON storage and indexed release filtering.
+- System-package bootstrap rules for native benchmark dependencies such as `pygame`.
 - Prompt templates matching the paper's three prompt stages.
 - Failure analysis reporting, module-level success-rate tables, summary artifacts, and benchmark leaderboard output.
 - LLM trace logging to artifact files and on-disk LLM response caching for repeated benchmark runs.
@@ -34,6 +36,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added automatic `smoke30` regeneration before segment runs and explicit `apd benchmark segment` / `apd benchmark full` entrypoints.
 - Reordered benchmark Docker build layers so dependency installation can reuse cache before copying snippet source files.
 - Reduced repeated benchmark overhead by reusing prepared execution contexts and caching LLM responses on disk.
+- Added a simpler first-run CLI surface and help text so new users can avoid the nested benchmark subcommands.
+- Added a newcomer-oriented health check flow with `apd doctor` and beginner-friendly top-level commands.
 
 ### Fixed
 
@@ -47,3 +51,5 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed repair-loop stalls by early-stopping unusable retries and adjudicating malformed repair output instead of crashing.
 - Fixed repeated false-positive dependency additions such as stdlib modules, packaging tools, and unrelated repair suggestions.
 - Fixed benchmark noise from upstream LangChain debug deprecation warnings by suppressing the warning in the CLI.
+- Fixed native package classification for missing system prerequisites such as SDL during `pygame` builds.
+- Fixed local-module/API mismatches such as `compress` being treated as generic runtime errors instead of non-PyPI dependency issues.

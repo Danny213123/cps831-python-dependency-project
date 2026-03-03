@@ -54,8 +54,26 @@ def test_classify_error_detects_native_build_failure_as_retryable() -> None:
     assert outcome.dependency_retryable is True
 
 
+def test_classify_error_detects_sdl_native_build_failure_as_retryable() -> None:
+    outcome = classify_error(
+        "",
+        'Unable to run "sdl-config". Please make sure a development version of SDL is installed.',
+        1,
+    )
+
+    assert outcome.category == "NativeBuildError"
+    assert outcome.dependency_retryable is True
+
+
 def test_classify_error_detects_package_compatibility_failure_as_retryable() -> None:
     outcome = classify_error("", 'File "/usr/local/lib/python2.7/site-packages/emoji/core.py", line 25\nSyntaxError', 1)
 
     assert outcome.category == "PackageCompatibilityError"
     assert outcome.dependency_retryable is True
+
+
+def test_classify_error_detects_local_module_mismatch_as_terminal() -> None:
+    outcome = classify_error("", "AttributeError: 'module' object has no attribute 'compress'", 1)
+
+    assert outcome.category == "LocalModuleMismatch"
+    assert outcome.dependency_retryable is False

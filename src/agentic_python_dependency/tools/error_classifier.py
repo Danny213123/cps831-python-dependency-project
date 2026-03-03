@@ -11,7 +11,8 @@ DEPENDENCY_PATTERNS = [
         re.compile(
             r"Failed building wheel|Could not build wheels|error: command ['\"](?:gcc|g\+\+)['\"] failed|"
             r"unable to execute ['\"](?:gcc|g\+\+)['\"]|Python\.h: No such file|ffi\.h: No such file|"
-            r"fatal error: .*: No such file or directory",
+            r"fatal error: .*: No such file or directory|sdl-config: not found|Unable to run \"sdl-config\"|"
+            r"pkg-config freetype2\" failed",
             re.IGNORECASE,
         ),
         "NativeBuildError",
@@ -44,6 +45,10 @@ TERMINAL_PATTERNS = [
             re.IGNORECASE,
         ),
         "DisplayRuntimeError",
+    ),
+    (
+        re.compile(r"AttributeError:\s*'module'\s*object has no attribute", re.IGNORECASE),
+        "LocalModuleMismatch",
     ),
     (re.compile(r"timed out after \d+ seconds", re.IGNORECASE), "TimeoutError"),
     (re.compile(r"SyntaxError"), "SyntaxError"),

@@ -38,6 +38,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Reduced repeated benchmark overhead by reusing prepared execution contexts and caching LLM responses on disk.
 - Added a simpler first-run CLI surface and help text so new users can avoid the nested benchmark subcommands.
 - Added a newcomer-oriented health check flow with `apd doctor` and beginner-friendly top-level commands.
+- Added a live stdout benchmark progress bar with completed-case counts, percent complete, and elapsed time for serial and parallel runs.
 
 ### Fixed
 

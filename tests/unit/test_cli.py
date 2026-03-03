@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from agentic_python_dependency.cli import build_parser, collect_doctor_report
+from agentic_python_dependency.cli import (
+    BenchmarkProgress,
+    build_parser,
+    collect_doctor_report,
+    format_elapsed,
+    format_progress_bar,
+)
 from agentic_python_dependency.config import Settings
 
 
@@ -88,3 +94,23 @@ def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, m
     assert names["docker_cli"]["status"] == "missing"
     assert names["ollama_server"]["status"] == "warning"
     assert names["gistable_dataset"]["status"] == "warning"
+
+
+def test_format_progress_bar_renders_partial_progress() -> None:
+    assert format_progress_bar(3, 4, width=8) == "[######--]"
+
+
+def test_format_elapsed_formats_hms() -> None:
+    assert format_elapsed(3661.9) == "01:01:01"
+
+
+def test_benchmark_progress_line_contains_run_id_and_counts(monkeypatch) -> None:
+    progress = BenchmarkProgress("run123", total=10, completed=4)
+    monkeypatch.setattr(progress, "started_at", progress.started_at - 65)
+
+    line = progress._line()
+
+    assert "Benchmark run123" in line
+    assert "4/10" in line
+    assert "40.0%" in line
+    assert "elapsed 00:01:05" in line

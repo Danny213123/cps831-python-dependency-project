@@ -7,6 +7,7 @@ import json
 import shutil
 import sys
 import time
+import threading
 import urllib.error
 import urllib.request
 import warnings
@@ -22,6 +23,59 @@ from agentic_python_dependency.reporting import analyze_failures, build_module_s
 
 def _notify_path(label: str, path: Path) -> None:
     print(f"{label}: {path}", file=sys.stderr)
+
+
+def format_progress_bar(completed: int, total: int, width: int = 24) -> str:
+    if total <= 0:
+        return "[" + ("#" * width) + "]"
+    ratio = min(max(completed / total, 0.0), 1.0)
+    filled = min(width, int(ratio * width))
+    return "[" + ("#" * filled) + ("-" * (width - filled)) + "]"
+
+
+def format_elapsed(seconds: float) -> str:
+    total_seconds = max(0, int(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+class BenchmarkProgress:
+    def __init__(self, run_id: str, total: int, completed: int = 0):
+        self.run_id = run_id
+        self.total = total
+        self.completed = completed
+        self.started_at = time.monotonic()
+        self._lock = threading.Lock()
+        self._isatty = sys.stdout.isatty()
+
+    def _line(self) -> str:
+        bar = format_progress_bar(self.completed, self.total)
+        percent = (self.completed / self.total * 100.0) if self.total else 100.0
+        return (
+            f"Benchmark {self.run_id} {bar} "
+            f"{self.completed}/{self.total} {percent:5.1f}% "
+            f"elapsed {format_elapsed(time.monotonic() - self.started_at)}"
+        )
+
+    def render(self) -> None:
+        line = self._line()
+        if self._isatty:
+            print(f"\r{line}", end="", file=sys.stdout, flush=True)
+        else:
+            print(line, file=sys.stdout, flush=True)
+
+    def advance(self, count: int = 1) -> None:
+        with self._lock:
+            self.completed = min(self.total, self.completed + count)
+            self.render()
+
+    def finish(self) -> None:
+        with self._lock:
+            self.completed = self.total
+            self.render()
+            if self._isatty:
+                print(file=sys.stdout, flush=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -215,7 +269,11 @@ def run_benchmark(
     run_dir.mkdir(parents=True, exist_ok=True)
     started_at = time.monotonic()
 
-    pending_case_ids = [case_id for case_id in case_ids if not (run_dir / case_id / "result.json").exists()]
+    completed_case_ids = [case_id for case_id in case_ids if (run_dir / case_id / "result.json").exists()]
+    completed_case_id_set = set(completed_case_ids)
+    pending_case_ids = [case_id for case_id in case_ids if case_id not in completed_case_id_set]
+    progress = BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
+    progress.render()
 
     def process_case(case_id: str) -> None:
         case = dataset.load_case(case_id, ref)
@@ -226,11 +284,15 @@ def run_benchmark(
     if jobs <= 1:
         for case_id in pending_case_ids:
             process_case(case_id)
+            progress.advance()
     else:
         with ThreadPoolExecutor(max_workers=jobs) as executor:
             futures = {executor.submit(process_case, case_id): case_id for case_id in pending_case_ids}
             for future in as_completed(futures):
                 future.result()
+                progress.advance()
+
+    progress.finish()
 
     summary = summarize_run(run_dir, total_elapsed_seconds=time.monotonic() - started_at)
     _notify_path("Summary written", run_dir / "summary.json")

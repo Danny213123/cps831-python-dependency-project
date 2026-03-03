@@ -81,6 +81,14 @@ def test_top_level_doctor_parser_accepts_ref() -> None:
     assert args.ref == "abc123"
 
 
+def test_top_level_ui_parser_is_available() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["ui"])
+
+    assert args.command == "ui"
+
+
 def test_report_modules_parser_accepts_grouping() -> None:
     parser = build_parser()
 
@@ -127,6 +135,8 @@ def test_benchmark_progress_line_contains_run_id_and_counts(monkeypatch) -> None
     assert "Benchmark run123" in line
     assert "4/10" in line
     assert "40.0%" in line
+    assert "ok 0" in line
+    assert "fail 0" in line
     assert "elapsed 00:01:05" in line
 
 
@@ -134,12 +144,48 @@ def test_benchmark_progress_refresh_thread_starts_and_stops(monkeypatch) -> None
     progress = BenchmarkProgress("run123", total=10, refresh_interval=0.01)
     monkeypatch.setattr(progress, "_isatty", True)
 
-    progress.start()
+    progress.start(
+        run_id="run123",
+        total=10,
+        completed=0,
+        successes=0,
+        failures=0,
+        preset="optimized",
+        prompt_profile="optimized",
+        jobs=1,
+        target="smoke30",
+        artifacts_dir=Path("/tmp/run123"),
+    )
     time.sleep(0.03)
-    progress.finish()
+    progress.finish(summary_path=Path("/tmp/run123/summary.json"), warnings_path=None)
 
     assert progress._thread is not None
     assert not progress._thread.is_alive()
+
+
+def test_benchmark_progress_tracks_case_results() -> None:
+    progress = BenchmarkProgress("run123", total=3, completed=1)
+    progress.start(
+        run_id="run123",
+        total=3,
+        completed=1,
+        successes=1,
+        failures=0,
+        preset="optimized",
+        prompt_profile="optimized",
+        jobs=1,
+        target="smoke30",
+        artifacts_dir=Path("/tmp/run123"),
+    )
+
+    progress.case_started("case-2")
+    progress.advance({"case_id": "case-2", "success": False, "final_error_category": "TimeoutError"})
+
+    assert progress.completed == 2
+    assert progress.successes == 1
+    assert progress.failures == 1
+    assert progress.last_case_id == "case-2"
+    assert progress.last_status == "TimeoutError"
 
 
 def test_redirect_runtime_warnings_writes_warning_to_file(tmp_path: Path) -> None:

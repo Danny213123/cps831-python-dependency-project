@@ -59,12 +59,14 @@ apd --preset accuracy smoke --jobs 1
 If you just cloned the repo and want the easiest commands, use these:
 
 ```bash
+apd ui
 apd doctor
 apd smoke --jobs 1
 apd full --jobs 1
 apd solve --path /path/to/python/repo
 ```
 
+- `apd ui` launches an interactive terminal menu for common benchmark, report, and project commands, including a live benchmark dashboard with preset, progress, active cases, elapsed time, and result counts.
 - `apd doctor` checks Docker, Ollama, required models, and dataset readiness.
 - `apd smoke` runs the beginner-friendly smoke benchmark flow.
 - `apd full` runs the full benchmark.

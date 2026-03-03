@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 import warnings
 from pathlib import Path
+from typing import Protocol
 from uuid import uuid4
 
 from agentic_python_dependency.benchmark.gistable import GistableDataset
@@ -21,10 +22,34 @@ from agentic_python_dependency.config import Settings
 from agentic_python_dependency.presets import PRESET_CONFIGS
 from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, summarize_run
+from agentic_python_dependency.terminal_ui import launch_terminal_ui
 
 
 def _notify_path(label: str, path: Path) -> None:
     print(f"{label}: {path}", file=sys.stderr)
+
+
+class BenchmarkObserver(Protocol):
+    def start(
+        self,
+        *,
+        run_id: str,
+        total: int,
+        completed: int,
+        successes: int,
+        failures: int,
+        preset: str,
+        prompt_profile: str,
+        jobs: int,
+        target: str,
+        artifacts_dir: Path,
+    ) -> None: ...
+
+    def case_started(self, case_id: str) -> None: ...
+
+    def advance(self, result: dict[str, object]) -> None: ...
+
+    def finish(self, *, summary_path: Path, warnings_path: Path | None) -> None: ...
 
 
 @contextlib.contextmanager
@@ -71,6 +96,17 @@ class BenchmarkProgress:
         self.run_id = run_id
         self.total = total
         self.completed = completed
+        self.successes = 0
+        self.failures = 0
+        self.current_case_id = ""
+        self.last_case_id = ""
+        self.last_status = ""
+        self.preset = "optimized"
+        self.prompt_profile = "optimized"
+        self.jobs = 1
+        self.target = "benchmark"
+        self.active_cases = 0
+        self.artifacts_dir = Path(".")
         self.started_at = time.monotonic()
         self._lock = threading.RLock()
         self._isatty = sys.stdout.isatty()
@@ -81,9 +117,15 @@ class BenchmarkProgress:
     def _line(self) -> str:
         bar = format_progress_bar(self.completed, self.total)
         percent = (self.completed / self.total * 100.0) if self.total else 100.0
+        status_bits = [f"ok {self.successes}", f"fail {self.failures}"]
+        if self.current_case_id:
+            status_bits.append(f"current {self.current_case_id}")
+        elif self.last_case_id:
+            status_bits.append(f"last {self.last_case_id}:{self.last_status}")
         return (
             f"Benchmark {self.run_id} {bar} "
             f"{self.completed}/{self.total} {percent:5.1f}% "
+            f"{' '.join(status_bits)} "
             f"elapsed {format_elapsed(time.monotonic() - self.started_at)}"
         )
 
@@ -95,7 +137,32 @@ class BenchmarkProgress:
             else:
                 print(line, file=sys.stdout, flush=True)
 
-    def start(self) -> None:
+    def start(
+        self,
+        *,
+        run_id: str,
+        total: int,
+        completed: int,
+        successes: int,
+        failures: int,
+        preset: str,
+        prompt_profile: str,
+        jobs: int,
+        target: str,
+        artifacts_dir: Path,
+    ) -> None:
+        self.run_id = run_id
+        self.total = total
+        self.completed = completed
+        self.successes = successes
+        self.failures = failures
+        self.preset = preset
+        self.prompt_profile = prompt_profile
+        self.jobs = jobs
+        self.target = target
+        self.artifacts_dir = artifacts_dir
+        self.started_at = time.monotonic()
+        self.render()
         if not self._isatty or self._thread is not None:
             return
 
@@ -106,12 +173,27 @@ class BenchmarkProgress:
         self._thread = threading.Thread(target=_refresh_loop, name="benchmark-progress", daemon=True)
         self._thread.start()
 
-    def advance(self, count: int = 1) -> None:
+    def case_started(self, case_id: str) -> None:
         with self._lock:
-            self.completed = min(self.total, self.completed + count)
+            self.current_case_id = case_id
+            self.active_cases += 1
             self.render()
 
-    def finish(self) -> None:
+    def advance(self, result: dict[str, object]) -> None:
+        success = bool(result.get("success", False))
+        case_id = str(result.get("case_id", ""))
+        with self._lock:
+            self.completed = min(self.total, self.completed + 1)
+            self.successes += int(success)
+            self.failures += int(not success)
+            self.last_case_id = case_id
+            self.last_status = "ok" if success else str(result.get("final_error_category", "fail"))
+            if self.current_case_id == case_id:
+                self.current_case_id = ""
+            self.active_cases = max(0, self.active_cases - 1)
+            self.render()
+
+    def _finish_render(self) -> None:
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=self._refresh_interval + 0.1)
@@ -123,6 +205,9 @@ class BenchmarkProgress:
                 print(file=sys.stdout, flush=True)
             else:
                 print(line, file=sys.stdout, flush=True)
+
+    def finish(self, *, summary_path: Path, warnings_path: Path | None) -> None:
+        self._finish_render()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -178,6 +263,8 @@ def build_parser() -> argparse.ArgumentParser:
     solve_easy.add_argument("--path", required=True)
     solve_easy.add_argument("--validation-command", default=None)
     solve_easy.add_argument("--run-id", default=None)
+
+    subparsers.add_parser("ui", help="Launch the interactive terminal UI.")
 
     benchmark = subparsers.add_parser("benchmark")
     benchmark_sub = benchmark.add_subparsers(dest="benchmark_command", required=True)
@@ -238,19 +325,39 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def ensure_smoke_subset(settings: Settings, ref: str | None, subset_name: str = "smoke30") -> Path:
+def ensure_smoke_subset(
+    settings: Settings,
+    ref: str | None,
+    subset_name: str = "smoke30",
+    *,
+    notify: bool = True,
+) -> Path:
     dataset = GistableDataset(settings)
     dataset.fetch(ref)
     if subset_name == "smoke30":
         smoke = build_smoke30(dataset, ref)
         subset_path = dataset.save_subset(subset_name, smoke, ref)
-        _notify_path("Subset written", subset_path)
+        if notify:
+            _notify_path("Subset written", subset_path)
         return subset_path
 
     subset_path = dataset.dataset_root(ref) / "subsets" / f"{subset_name}.json"
     if not subset_path.exists():
         raise FileNotFoundError(f"Subset not found: {subset_name}")
     return subset_path
+
+
+def load_existing_case_results(run_dir: Path, case_ids: list[str]) -> list[dict[str, object]]:
+    results: list[dict[str, object]] = []
+    for case_id in case_ids:
+        result_path = run_dir / case_id / "result.json"
+        if not result_path.exists():
+            continue
+        try:
+            results.append(json.loads(result_path.read_text(encoding="utf-8")))
+        except json.JSONDecodeError:
+            continue
+    return results
 
 
 def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[str, object]:
@@ -320,6 +427,9 @@ def run_benchmark(
     full: bool,
     run_id: str | None,
     jobs: int = 1,
+    observer: BenchmarkObserver | None = None,
+    *,
+    notify_paths: bool = True,
 ) -> int:
     dataset = GistableDataset(settings)
     dataset.fetch(ref)
@@ -337,36 +447,65 @@ def run_benchmark(
     completed_case_ids = [case_id for case_id in case_ids if (run_dir / case_id / "result.json").exists()]
     completed_case_id_set = set(completed_case_ids)
     pending_case_ids = [case_id for case_id in case_ids if case_id not in completed_case_id_set]
-    progress = BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
-    progress.render()
-    progress.start()
+    completed_results = load_existing_case_results(run_dir, completed_case_ids)
+    completed_successes = sum(1 for result in completed_results if bool(result.get("success", False)))
+    completed_failures = len(completed_results) - completed_successes
+    progress_observer = observer or BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
+    progress_observer.start(
+        run_id=active_run_id,
+        total=len(case_ids),
+        completed=len(completed_case_ids),
+        successes=completed_successes,
+        failures=completed_failures,
+        preset=settings.preset,
+        prompt_profile=settings.prompt_profile,
+        jobs=jobs,
+        target=subset or ("full" if full else "benchmark"),
+        artifacts_dir=run_dir,
+    )
 
-    def process_case(case_id: str) -> None:
+    def process_case(case_id: str) -> dict[str, object]:
         case = dataset.load_case(case_id, ref)
         workflow = ResolutionWorkflow(settings)
         state = workflow.initial_state_for_case(case, run_id=active_run_id)
-        workflow.run(state)
+        final_state = workflow.run(state)
+        return dict(final_state["final_result"])
 
     with redirect_runtime_warnings(warnings_path):
         if jobs <= 1:
             for case_id in pending_case_ids:
-                process_case(case_id)
-                progress.advance()
+                progress_observer.case_started(case_id)
+                result = process_case(case_id)
+                progress_observer.advance(result)
         else:
             with ThreadPoolExecutor(max_workers=jobs) as executor:
-                futures = {executor.submit(process_case, case_id): case_id for case_id in pending_case_ids}
-                for future in as_completed(futures):
-                    future.result()
-                    progress.advance()
-
-    progress.finish()
+                pending_iterator = iter(pending_case_ids)
+                futures: dict[object, str] = {}
+                for _ in range(min(jobs, len(pending_case_ids))):
+                    case_id = next(pending_iterator, None)
+                    if case_id is None:
+                        break
+                    progress_observer.case_started(case_id)
+                    futures[executor.submit(process_case, case_id)] = case_id
+                while futures:
+                    future = next(as_completed(futures))
+                    case_id = futures.pop(future)
+                    result = future.result()
+                    progress_observer.advance(result)
+                    next_case_id = next(pending_iterator, None)
+                    if next_case_id is not None:
+                        progress_observer.case_started(next_case_id)
+                        futures[executor.submit(process_case, next_case_id)] = next_case_id
 
     summary = summarize_run(run_dir, total_elapsed_seconds=time.monotonic() - started_at)
-    _notify_path("Summary written", run_dir / "summary.json")
-    if warnings_path.exists() and warnings_path.stat().st_size > 0:
-        _notify_path("Warnings written", warnings_path)
-    if settings.trace_llm:
-        _notify_path("LLM trace written", run_dir / "llm-trace.log")
+    non_empty_warnings_path = warnings_path if warnings_path.exists() and warnings_path.stat().st_size > 0 else None
+    progress_observer.finish(summary_path=run_dir / "summary.json", warnings_path=non_empty_warnings_path)
+    if notify_paths:
+        _notify_path("Summary written", run_dir / "summary.json")
+        if non_empty_warnings_path is not None:
+            _notify_path("Warnings written", warnings_path)
+        if settings.trace_llm:
+            _notify_path("LLM trace written", run_dir / "llm-trace.log")
     return 0
 
 
@@ -442,6 +581,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "solve":
         return run_project(settings, args.path, args.validation_command, args.run_id)
+
+    if args.command == "ui":
+        return launch_terminal_ui(
+            settings,
+            doctor_command=doctor_command,
+            run_benchmark=run_benchmark,
+            run_project=run_project,
+            summarize_command=summarize_command,
+            failures_command=failures_command,
+            modules_command=modules_command,
+            ensure_smoke_subset=ensure_smoke_subset,
+        )
 
     if args.command == "benchmark":
         dataset = GistableDataset(settings)

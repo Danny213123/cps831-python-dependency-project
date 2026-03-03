@@ -16,6 +16,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - CLI entrypoint `apd` with benchmark, case, project, and reporting commands.
 - One-step benchmark wrapper commands for running the prepared segment and full benchmark without manually chaining setup steps.
 - Newcomer-friendly top-level commands `apd doctor`, `apd smoke`, `apd full`, and `apd solve`.
+- Interactive terminal command `apd ui` for guided benchmark, reporting, and local-project workflows.
 - Gistable benchmark support pinned to the paper dataset commit, including deterministic `smoke30` subset generation.
 - Docker-based execution pipeline for benchmark cases and general project validation using the host Docker daemon.
 - PyPI metadata caching with raw JSON storage and indexed release filtering.
@@ -41,6 +42,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added a simpler first-run CLI surface and help text so new users can avoid the nested benchmark subcommands.
 - Added a newcomer-oriented health check flow with `apd doctor` and beginner-friendly top-level commands.
 - Added a live stdout benchmark progress bar with completed-case counts, percent complete, and elapsed time for serial and parallel runs.
+- Integrated the benchmark runner with the terminal UI so smoke/full runs can render a live dashboard with preset, prompt profile, active cases, success/failure counts, elapsed time, and final artifact paths.
 - Added canonical module-family reporting with raw fallback mode for paper-style comparison tables.
 - Added preset-aware routing for prompt usage, deterministic version selection, repair behavior, and compatibility handling.
 - Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.

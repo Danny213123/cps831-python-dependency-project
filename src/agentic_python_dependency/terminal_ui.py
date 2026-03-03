@@ -492,8 +492,16 @@ class TerminalUI:
 
     def _run_captured(self, action: ActionCallback, *args) -> int:
         buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-            exit_code = action(*args)
+        try:
+            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                exit_code = action(*args)
+        except Exception as exc:
+            payload = buffer.getvalue().strip()
+            message = f"{type(exc).__name__}: {exc}"
+            if payload:
+                message = f"{payload}\n\n{message}"
+            self._show_status_dialog(message)
+            return 1
         payload = buffer.getvalue().strip()
         if payload:
             self._show_status_dialog(payload)

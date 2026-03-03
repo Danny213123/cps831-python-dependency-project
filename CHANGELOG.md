@@ -71,6 +71,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed overly permissive package extraction by tracking candidate provenance and rejecting more non-package prompt output before PyPI lookup.
 - Fixed long PyPI cache filenames by truncating and hashing cache keys safely.
 - Fixed Windows Docker subprocess handling when `stdout` or `stderr` is `None`.
+- Fixed `apd ui` module reporting so paper-compatible reports no longer crash on unreadable `all-gists` snippets on Windows; unreadable cases are skipped and surfaced in the generated report instead.
 - Fixed the terminal UI dependency path by declaring `prompt_toolkit` as a runtime dependency for `apd ui`.
 - Added a trace-view CLI path so prompt/response logs written by `--trace-llm` can be inspected directly without manually opening artifact files.
 - Fixed `apd ui` benchmark shutdown so `Ctrl+C` requests a clean cooperative stop instead of being swallowed by the fullscreen dashboard.

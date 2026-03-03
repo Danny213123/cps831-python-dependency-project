@@ -61,6 +61,13 @@ def paper_hard_subset_case_ids(dataset: GistableDataset, ref: str | None = None)
     return sorted(hard_ids)
 
 
+def safe_read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
 def load_run_results(run_dir: Path) -> list[dict[str, Any]]:
     result_paths = sorted(run_dir.glob("*/result.json"))
     return [json.loads(path.read_text(encoding="utf-8")) for path in result_paths]
@@ -391,6 +398,7 @@ def build_module_success_table(
     counts: dict[str, int] = defaultdict(int)
     successes: dict[str, int] = defaultdict(int)
     covered: dict[str, int] = defaultdict(int)
+    skipped_case_ids: list[str] = []
 
     if paper_compatible:
         cohort = "paper-compatible"
@@ -404,7 +412,10 @@ def build_module_success_table(
             snippet_path = dataset.dataset_root(ref) / "all-gists" / case_id / "snippet.py"
         else:
             snippet_path = dataset.load_case(case_id, ref).snippet_path
-        source_code = snippet_path.read_text(encoding="utf-8", errors="replace")
+        source_code = safe_read_text(snippet_path)
+        if source_code is None:
+            skipped_case_ids.append(case_id)
+            continue
         import_roots = filter_third_party_imports(extract_import_roots_from_code(source_code))
         modules = normalize_candidate_packages(import_roots, import_roots)
         item = result_map.get(case_id)
@@ -441,6 +452,8 @@ def build_module_success_table(
         "paper_compatible": paper_compatible,
         "total_cohort_cases": len(case_ids),
         "covered_case_count": sum(1 for case_id in case_ids if case_id in result_map),
+        "skipped_case_count": len(skipped_case_ids),
+        "skipped_case_ids": skipped_case_ids,
         "rows": top_rows,
         "top_rows": top_rows,
         "all_rows": all_rows,
@@ -455,6 +468,7 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
     cohort = report.get("cohort", "run")
     covered_case_count = report.get("covered_case_count", 0)
     total_cohort_cases = report.get("total_cohort_cases", 0)
+    skipped_case_count = report.get("skipped_case_count", 0)
     suffix_parts: list[str] = []
     if report.get("paper_compatible"):
         suffix_parts.append("paper")
@@ -484,6 +498,7 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
             f"Run ID: `{report['run_id']}`",
             f"Cohort: `{cohort}`",
             f"Covered cases: `{covered_case_count}/{total_cohort_cases}`",
+            f"Skipped unreadable cases: `{skipped_case_count}`",
             "",
             "| Module Name | # Projects | APD |",
             "| --- | ---: | ---: |",

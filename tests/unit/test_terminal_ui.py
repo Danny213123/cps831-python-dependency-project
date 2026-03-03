@@ -202,6 +202,33 @@ def test_terminal_ui_module_report_can_choose_paper_compatible(tmp_path: Path, m
     assert module_calls[0][-1] is True
 
 
+def test_terminal_ui_surfaces_captured_command_errors_without_crashing(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["7", "run123", "15", "canonical", "paper-compatible", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        timeline_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    exit_code = ui.run()
+
+    assert exit_code == 0
+    assert any("RuntimeError: boom" in line for line in outputs)
+
+
 def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)

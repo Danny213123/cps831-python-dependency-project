@@ -50,6 +50,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added fresh-run and no-LLM-cache execution options plus bundled model selection for `gemma-moe`, `qwen35-9b`, and `gpt-oss-20b`, with per-stage extraction/reasoning model overrides.
 - Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.
 - Added timeline artifacts (`timeline.json`, `timeline.csv`, `timeline.md`) and exposed timeline viewing in the interactive terminal UI.
+- Added a paper-compatible module report mode that builds top-module tables from the hard subset in `all-gists` so the reported module families line up more closely with the paper.
 - Switched documentation away from Compose sidecars to host Ollama plus host Docker usage for local GPU testing.
 
 ### Fixed

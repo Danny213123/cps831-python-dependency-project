@@ -472,7 +472,16 @@ class TerminalUI:
         run_id = self._prompt_required("Run ID")
         top = self._prompt_int("Top modules", 15)
         grouping = self._prompt_choice("Grouping", ["canonical", "raw"], self.settings.default_module_grouping)
-        return self._run_captured(self.modules_command, self.settings, run_id, top, None, grouping)
+        cohort = self._prompt_choice("Cohort", ["run", "paper-compatible"], "run")
+        return self._run_captured(
+            self.modules_command,
+            self.settings,
+            run_id,
+            top,
+            None,
+            grouping,
+            cohort == "paper-compatible",
+        )
 
     def _run_timeline(self) -> int:
         if self.timeline_command is None:

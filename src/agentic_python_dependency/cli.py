@@ -363,6 +363,11 @@ def build_parser() -> argparse.ArgumentParser:
     modules.add_argument("--top", type=int, default=15)
     modules.add_argument("--ref", default=None)
     modules.add_argument("--grouping", choices=["canonical", "raw"], default="canonical")
+    modules.add_argument(
+        "--paper-compatible",
+        action="store_true",
+        help="Build the module table from the paper-style hard subset in all-gists (final-eval=ImportError).",
+    )
     trace = report_sub.add_parser("trace")
     trace.add_argument("--run-id", required=True)
     trace.add_argument("--case-id", default=None)
@@ -627,11 +632,30 @@ def failures_command(settings: Settings, run_id: str, category: str | None, limi
     return 0
 
 
-def modules_command(settings: Settings, run_id: str, top: int, ref: str | None, grouping: str) -> int:
+def modules_command(
+    settings: Settings,
+    run_id: str,
+    top: int,
+    ref: str | None,
+    grouping: str,
+    paper_compatible: bool = False,
+) -> int:
     dataset = GistableDataset(settings)
     dataset.fetch(ref)
-    build_module_success_table(settings.artifacts_dir / run_id, dataset, ref=ref, top_n=top, grouping=grouping)
-    suffix = "" if grouping == "canonical" else "-raw"
+    build_module_success_table(
+        settings.artifacts_dir / run_id,
+        dataset,
+        ref=ref,
+        top_n=top,
+        grouping=grouping,
+        paper_compatible=paper_compatible,
+    )
+    suffix_parts: list[str] = []
+    if paper_compatible:
+        suffix_parts.append("paper")
+    if grouping == "raw":
+        suffix_parts.append("raw")
+    suffix = "" if not suffix_parts else "-" + "-".join(suffix_parts)
     _notify_path("Module success table written", settings.artifacts_dir / run_id / f"module-success{suffix}.md")
     return 0
 
@@ -749,7 +773,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "report" and args.report_command == "failures":
         return failures_command(settings, args.run_id, args.category, args.limit)
     if args.command == "report" and args.report_command == "modules":
-        return modules_command(settings, args.run_id, args.top, args.ref, args.grouping)
+        return modules_command(settings, args.run_id, args.top, args.ref, args.grouping, args.paper_compatible)
     if args.command == "report" and args.report_command == "timeline":
         return timeline_command(settings, args.run_id)
     if args.command == "report" and args.report_command == "trace":

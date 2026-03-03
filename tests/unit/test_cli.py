@@ -116,6 +116,16 @@ def test_report_modules_parser_accepts_grouping() -> None:
     assert args.grouping == "raw"
 
 
+def test_report_modules_parser_accepts_paper_compatible() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["report", "modules", "--run-id", "run123", "--paper-compatible"])
+
+    assert args.command == "report"
+    assert args.report_command == "modules"
+    assert args.paper_compatible is True
+
+
 def test_report_trace_parser_accepts_case_and_tail() -> None:
     parser = build_parser()
 

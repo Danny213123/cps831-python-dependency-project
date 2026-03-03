@@ -16,6 +16,7 @@ from agentic_python_dependency.reporting import (
 def make_dataset(settings: Settings) -> Path:
     root = settings.benchmark_dir / "gistable" / settings.benchmark_ref
     (root / "dockerized-gists").mkdir(parents=True, exist_ok=True)
+    (root / "all-gists").mkdir(parents=True, exist_ok=True)
     (root / "results").mkdir(parents=True, exist_ok=True)
     return root
 
@@ -25,6 +26,9 @@ def write_case(root: Path, case_id: str) -> None:
     case_root.mkdir(parents=True, exist_ok=True)
     (case_root / "snippet.py").write_text("print('ok')\n", encoding="utf-8")
     (case_root / "Dockerfile").write_text("FROM python:3.12-slim\nCMD [\"python\", \"snippet.py\"]\n", encoding="utf-8")
+    all_case_root = root / "all-gists" / case_id
+    all_case_root.mkdir(parents=True, exist_ok=True)
+    (all_case_root / "snippet.py").write_text("print('ok')\n", encoding="utf-8")
 
 
 def test_build_smoke30_is_deterministic(tmp_path: Path) -> None:
@@ -236,3 +240,47 @@ def test_build_module_success_table_writes_artifacts(tmp_path: Path) -> None:
     assert (run_dir / "module-success.json").exists()
     assert (run_dir / "module-success.csv").exists()
     assert (run_dir / "module-success.md").exists()
+
+
+def test_build_module_success_table_supports_paper_compatible_cohort(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    root = make_dataset(settings)
+    write_case(root, "case1")
+    write_case(root, "case2")
+    write_case(root, "case3")
+    (root / "all-gists" / "case1" / "snippet.py").write_text("import django\n", encoding="utf-8")
+    (root / "all-gists" / "case2" / "snippet.py").write_text("import requests\n", encoding="utf-8")
+    (root / "all-gists" / "case3" / "snippet.py").write_text("import requests\n", encoding="utf-8")
+    with (root / "results" / "naive-inference-results.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["id", "url", "initial-eval", "final-eval", "error"])
+        writer.writeheader()
+        writer.writerows(
+            [
+                {"id": "case1", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
+                {"id": "case2", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
+                {"id": "case3", "url": "", "initial-eval": "Success", "final-eval": "", "error": ""},
+            ]
+        )
+
+    run_dir = tmp_path / "artifacts" / "runs" / "run123"
+    (run_dir / "case1").mkdir(parents=True, exist_ok=True)
+    (run_dir / "case2").mkdir(parents=True, exist_ok=True)
+    (run_dir / "case1" / "result.json").write_text(
+        json.dumps({"case_id": "case1", "success": True, "attempts": 1, "initial_eval": "ImportError"}),
+        encoding="utf-8",
+    )
+    (run_dir / "case2" / "result.json").write_text(
+        json.dumps({"case_id": "case2", "success": False, "attempts": 1, "initial_eval": "ImportError"}),
+        encoding="utf-8",
+    )
+
+    dataset = GistableDataset(settings)
+    report = build_module_success_table(run_dir, dataset, top_n=5, paper_compatible=True)
+
+    assert report["cohort"] == "paper-compatible"
+    assert report["total_cohort_cases"] == 2
+    assert report["covered_case_count"] == 2
+    assert report["rows"][0]["module_name"] == "django"
+    assert (run_dir / "module-success-paper.json").exists()
+    assert (run_dir / "module-success-paper.csv").exists()
+    assert (run_dir / "module-success-paper.md").exists()

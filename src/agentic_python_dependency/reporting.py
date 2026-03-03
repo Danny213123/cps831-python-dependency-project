@@ -51,6 +51,16 @@ def canonical_module_name(module_name: str, grouping: GroupingMode) -> str:
     return CANONICAL_MODULE_FAMILIES.get(normalized, normalized)
 
 
+def paper_hard_subset_case_ids(dataset: GistableDataset, ref: str | None = None) -> list[str]:
+    hard_ids = {
+        row["id"]
+        for row in dataset.load_results_rows(ref)
+        if row.get("final-eval") == "ImportError"
+        and (dataset.dataset_root(ref) / "all-gists" / row["id"] / "snippet.py").exists()
+    }
+    return sorted(hard_ids)
+
+
 def load_run_results(run_dir: Path) -> list[dict[str, Any]]:
     result_paths = sorted(run_dir.glob("*/result.json"))
     return [json.loads(path.read_text(encoding="utf-8")) for path in result_paths]
@@ -374,31 +384,50 @@ def build_module_success_table(
     ref: str | None = None,
     top_n: int = 15,
     grouping: GroupingMode = "canonical",
+    paper_compatible: bool = False,
 ) -> dict[str, Any]:
     results = load_run_results(run_dir)
+    result_map = {item.get("case_id", ""): item for item in results}
     counts: dict[str, int] = defaultdict(int)
     successes: dict[str, int] = defaultdict(int)
+    covered: dict[str, int] = defaultdict(int)
 
-    for item in results:
-        case = dataset.load_case(item["case_id"], ref)
-        source_code = case.snippet_path.read_text(encoding="utf-8")
+    if paper_compatible:
+        cohort = "paper-compatible"
+        case_ids = paper_hard_subset_case_ids(dataset, ref)
+    else:
+        cohort = "run"
+        case_ids = [item["case_id"] for item in results if item.get("case_id")]
+
+    for case_id in case_ids:
+        if paper_compatible:
+            snippet_path = dataset.dataset_root(ref) / "all-gists" / case_id / "snippet.py"
+        else:
+            snippet_path = dataset.load_case(case_id, ref).snippet_path
+        source_code = snippet_path.read_text(encoding="utf-8", errors="replace")
         import_roots = filter_third_party_imports(extract_import_roots_from_code(source_code))
         modules = normalize_candidate_packages(import_roots, import_roots)
+        item = result_map.get(case_id)
         for module in set(modules):
             module_name = canonical_module_name(module, grouping)
             counts[module_name] += 1
-            if item.get("success", False):
+            if item is not None:
+                covered[module_name] += 1
+            if item is not None and item.get("success", False):
                 successes[module_name] += 1
 
     all_rows = []
     for module_name, project_count in sorted(counts.items(), key=lambda entry: (-entry[1], entry[0])):
         success_count = successes.get(module_name, 0)
+        covered_count = covered.get(module_name, 0)
         success_rate = (success_count / project_count * 100.0) if project_count else 0.0
         all_rows.append(
             {
                 "module_name": module_name,
                 "projects": project_count,
+                "covered_projects": covered_count,
                 "successes": success_count,
+                "coverage_rate": round((covered_count / project_count * 100.0), 2) if project_count else 0.0,
                 "apd_success_rate": round(success_rate, 2),
             }
         )
@@ -406,8 +435,12 @@ def build_module_success_table(
 
     report = {
         "run_id": run_dir.name,
+        "cohort": cohort,
         "grouping": grouping,
         "top_n": top_n,
+        "paper_compatible": paper_compatible,
+        "total_cohort_cases": len(case_ids),
+        "covered_case_count": sum(1 for case_id in case_ids if case_id in result_map),
         "rows": top_rows,
         "top_rows": top_rows,
         "all_rows": all_rows,
@@ -419,22 +452,42 @@ def build_module_success_table(
 def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> None:
     rows = report["top_rows"]
     all_rows = report["all_rows"]
-    suffix = "" if report["grouping"] == "canonical" else "-raw"
+    cohort = report.get("cohort", "run")
+    covered_case_count = report.get("covered_case_count", 0)
+    total_cohort_cases = report.get("total_cohort_cases", 0)
+    suffix_parts: list[str] = []
+    if report.get("paper_compatible"):
+        suffix_parts.append("paper")
+    if report["grouping"] == "raw":
+        suffix_parts.append("raw")
+    suffix = "" if not suffix_parts else "-" + "-".join(suffix_parts)
     (run_dir / f"module-success{suffix}.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     with (run_dir / f"module-success{suffix}.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["module_name", "projects", "successes", "apd_success_rate"])
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "module_name",
+                "projects",
+                "covered_projects",
+                "successes",
+                "coverage_rate",
+                "apd_success_rate",
+            ],
+        )
         writer.writeheader()
         writer.writerows(all_rows)
 
-    lines = [
-        "# Module Success Table",
-        "",
-        f"Run ID: `{report['run_id']}`",
-        "",
-        "| Module Name | # Projects | APD |",
-        "| --- | ---: | ---: |",
-    ]
+        lines = [
+            "# Module Success Table",
+            "",
+            f"Run ID: `{report['run_id']}`",
+            f"Cohort: `{cohort}`",
+            f"Covered cases: `{covered_case_count}/{total_cohort_cases}`",
+            "",
+            "| Module Name | # Projects | APD |",
+            "| --- | ---: | ---: |",
+        ]
     for row in rows:
         lines.append(
             f"| {row['module_name']} | {row['projects']} | {row['apd_success_rate']:.2f} |"

@@ -325,6 +325,44 @@ def test_build_module_success_table_uses_covered_projects_for_paper_preview_rate
     assert report["rows"][0]["apd_success_rate"] == 100.0
 
 
+def test_build_module_success_table_prefers_covered_rows_for_partial_paper_preview(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    root = make_dataset(settings)
+    write_case(root, "case1")
+    write_case(root, "case2")
+    write_case(root, "case3")
+    write_case(root, "case4")
+    (root / "all-gists" / "case1" / "snippet.py").write_text("import requests\n", encoding="utf-8")
+    (root / "all-gists" / "case2" / "snippet.py").write_text("import requests\n", encoding="utf-8")
+    (root / "all-gists" / "case3" / "snippet.py").write_text("import django\n", encoding="utf-8")
+    (root / "all-gists" / "case4" / "snippet.py").write_text("import django\n", encoding="utf-8")
+    with (root / "results" / "naive-inference-results.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["id", "url", "initial-eval", "final-eval", "error"])
+        writer.writeheader()
+        writer.writerows(
+            [
+                {"id": "case1", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
+                {"id": "case2", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
+                {"id": "case3", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
+                {"id": "case4", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
+            ]
+        )
+
+    run_dir = tmp_path / "artifacts" / "runs" / "run123"
+    (run_dir / "case1").mkdir(parents=True, exist_ok=True)
+    (run_dir / "case1" / "result.json").write_text(
+        json.dumps({"case_id": "case1", "success": True, "attempts": 1, "initial_eval": "ImportError"}),
+        encoding="utf-8",
+    )
+
+    dataset = GistableDataset(settings)
+    report = build_module_success_table(run_dir, dataset, top_n=2, paper_compatible=True)
+
+    assert report["display_strategy"] == "covered-first"
+    assert report["rows"][0]["module_name"] == "requests"
+    assert report["rows"][0]["covered_projects"] == 1
+
+
 def test_build_module_success_table_skips_unreadable_paper_case(tmp_path: Path, monkeypatch) -> None:
     settings = Settings.from_env(project_root=tmp_path)
     root = make_dataset(settings)

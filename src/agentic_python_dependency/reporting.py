@@ -477,7 +477,16 @@ def build_module_success_table(
                 "apd_rate_denominator": denominator,
             }
         )
-    top_rows = all_rows[:top_n]
+    if paper_compatible and any(row["covered_projects"] > 0 for row in all_rows):
+        covered_rows = [row for row in all_rows if row["covered_projects"] > 0]
+        uncovered_rows = [row for row in all_rows if row["covered_projects"] == 0]
+        top_rows = covered_rows[:top_n]
+        if len(top_rows) < top_n:
+            top_rows.extend(uncovered_rows[: top_n - len(top_rows)])
+        display_strategy = "covered-first"
+    else:
+        top_rows = all_rows[:top_n]
+        display_strategy = "global-frequency"
 
     report = {
         "run_id": run_dir.name,
@@ -489,6 +498,7 @@ def build_module_success_table(
         "covered_case_count": sum(1 for case_id in case_ids if case_id in result_map),
         "skipped_case_count": len(skipped_case_ids),
         "skipped_case_ids": skipped_case_ids,
+        "display_strategy": display_strategy,
         "rows": top_rows,
         "top_rows": top_rows,
         "all_rows": all_rows,
@@ -504,6 +514,7 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
     covered_case_count = report.get("covered_case_count", 0)
     total_cohort_cases = report.get("total_cohort_cases", 0)
     skipped_case_count = report.get("skipped_case_count", 0)
+    display_strategy = report.get("display_strategy", "global-frequency")
     suffix_parts: list[str] = []
     if report.get("paper_compatible"):
         suffix_parts.append("paper")
@@ -535,6 +546,7 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
             f"Cohort: `{cohort}`",
             f"Covered cases: `{covered_case_count}/{total_cohort_cases}`",
             f"Skipped unreadable cases: `{skipped_case_count}`",
+            f"Display strategy: `{display_strategy}`",
             f"APD rate denominator: `covered projects`{' within the paper cohort' if report.get('paper_compatible') else ''}",
             "",
             "| Module Name | # Projects | APD |",

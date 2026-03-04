@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -83,6 +84,12 @@ class Settings:
     package_metadata_dir: Path
     workspace_memory_dir: Path
     prompts_dir: Path
+    external_tools_dir: Path = Path(".")
+    pyego_root: Path = Path(".")
+    readpye_root: Path = Path(".")
+    pyego_python: str = sys.executable
+    readpye_python: str = sys.executable
+    readpye_language_dir: str = ""
     ollama_base_url: str = "http://127.0.0.1:11434"
     docker_host: str = ""
     resolver: ResolverName = "apd"
@@ -150,6 +157,12 @@ class Settings:
         package_metadata_dir = data_dir / "package_metadata"
         workspace_memory_dir = data_dir / "experimental_memory"
         prompts_dir = root / "src" / "agentic_python_dependency" / "prompts"
+        external_tools_dir = root / "external"
+        pyego_root = Path(os.getenv("APD_PYEGO_ROOT", str(external_tools_dir / "PyEGo"))).resolve()
+        readpye_root = Path(os.getenv("APD_READPYE_ROOT", str(external_tools_dir / "ReadPyE"))).resolve()
+        pyego_python = os.getenv("APD_PYEGO_PYTHON", sys.executable)
+        readpye_python = os.getenv("APD_READPYE_PYTHON", sys.executable)
+        readpye_language_dir = os.getenv("APD_READPYE_LANGDIR", "")
         resolver = normalize_resolver(resolver_override or os.getenv("APD_RESOLVER"))
         preset = normalize_preset(preset_override or os.getenv("APD_PRESET"))
         preset_config = get_preset_config(preset)
@@ -217,6 +230,12 @@ class Settings:
             package_metadata_dir=package_metadata_dir,
             workspace_memory_dir=workspace_memory_dir,
             prompts_dir=prompts_dir,
+            external_tools_dir=external_tools_dir,
+            pyego_root=pyego_root,
+            readpye_root=readpye_root,
+            pyego_python=pyego_python,
+            readpye_python=readpye_python,
+            readpye_language_dir=readpye_language_dir,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
             docker_host=os.getenv("DOCKER_HOST", ""),
             resolver=resolver,

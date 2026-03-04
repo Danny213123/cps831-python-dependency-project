@@ -583,7 +583,6 @@ def build_module_success_table(
     result_map = {item.get("case_id", ""): item for item in results}
     counts: dict[str, int] = defaultdict(int)
     successes: dict[str, int] = defaultdict(int)
-    covered: dict[str, int] = defaultdict(int)
     skipped_case_ids: list[str] = []
     all_rows: list[dict[str, Any]] = []
 
@@ -618,37 +617,20 @@ def build_module_success_table(
             for module in modules:
                 module_name = canonical_module_name(module, grouping)
                 counts[module_name] += 1
-                if item is not None:
-                    covered[module_name] += 1
                 if item is not None and item.get("success", False):
                     successes[module_name] += 1
 
     for module_name, project_count in sorted(counts.items(), key=lambda entry: (-entry[1], entry[0])):
         success_count = successes.get(module_name, 0)
-        covered_count = covered.get(module_name, 0)
-        denominator = covered_count if paper_compatible and covered_count else project_count
-        success_rate = (success_count / denominator * 100.0) if denominator else 0.0
+        success_rate = (success_count / project_count * 100.0) if project_count else 0.0
         all_rows.append(
             {
                 "module_name": module_name,
                 "projects": project_count,
-                "covered_projects": covered_count,
                 "successes": success_count,
-                "coverage_rate": round((covered_count / project_count * 100.0), 2) if project_count else 0.0,
                 "apd_success_rate": round(success_rate, 2),
-                "apd_rate_denominator": denominator,
             }
         )
-    if paper_compatible and any(row["covered_projects"] > 0 for row in all_rows):
-        covered_rows = [row for row in all_rows if row["covered_projects"] > 0]
-        uncovered_rows = [row for row in all_rows if row["covered_projects"] == 0]
-        top_rows = covered_rows[:top_n]
-        if len(top_rows) < top_n:
-            top_rows.extend(uncovered_rows[: top_n - len(top_rows)])
-        display_strategy = "covered-first"
-    else:
-        top_rows = all_rows[:top_n]
-        display_strategy = "global-frequency"
 
     report = {
         "run_id": run_dir.name,
@@ -660,9 +642,9 @@ def build_module_success_table(
         "covered_case_count": sum(1 for case_id in case_ids if case_id in result_map),
         "skipped_case_count": len(skipped_case_ids),
         "skipped_case_ids": skipped_case_ids,
-        "display_strategy": display_strategy,
-        "rows": top_rows,
-        "top_rows": top_rows,
+        "display_strategy": "all-modules",
+        "rows": all_rows,
+        "top_rows": all_rows,
         "all_rows": all_rows,
     }
     write_module_success_artifacts(run_dir, report)
@@ -670,7 +652,7 @@ def build_module_success_table(
 
 
 def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> None:
-    rows = report["top_rows"]
+    rows = report["all_rows"]
     all_rows = report["all_rows"]
     cohort = report.get("cohort", "run")
     covered_case_count = report.get("covered_case_count", 0)
@@ -691,10 +673,7 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
             fieldnames=[
                 "module_name",
                 "projects",
-                "covered_projects",
                 "successes",
-                "coverage_rate",
-                "apd_rate_denominator",
                 "apd_success_rate",
             ],
         )
@@ -709,7 +688,8 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
             f"Covered cases: `{covered_case_count}/{total_cohort_cases}`",
             f"Skipped unreadable cases: `{skipped_case_count}`",
             f"Display strategy: `{display_strategy}`",
-            f"APD rate denominator: `covered projects`{' within the paper cohort' if report.get('paper_compatible') else ''}",
+            f"APD rate denominator: `all projects in the selected cohort`",
+            f"Modules listed: `{len(rows)}`",
             "",
             "| Module Name | # Projects | APD |",
             "| --- | ---: | ---: |",

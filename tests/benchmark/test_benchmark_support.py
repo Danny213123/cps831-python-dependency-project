@@ -291,7 +291,7 @@ def test_build_module_success_table_supports_paper_compatible_cohort(tmp_path: P
     assert (run_dir / "module-success-paper.md").exists()
 
 
-def test_build_module_success_table_uses_covered_projects_for_paper_preview_rates(tmp_path: Path) -> None:
+def test_build_module_success_table_uses_all_projects_for_paper_rates(tmp_path: Path) -> None:
     settings = Settings.from_env(project_root=tmp_path)
     root = make_dataset(settings)
     write_case(root, "case1")
@@ -322,12 +322,11 @@ def test_build_module_success_table_uses_covered_projects_for_paper_preview_rate
     report = build_module_success_table(run_dir, dataset, top_n=5, paper_compatible=True)
 
     assert report["rows"][0]["projects"] == 3
-    assert report["rows"][0]["covered_projects"] == 1
-    assert report["rows"][0]["apd_rate_denominator"] == 1
-    assert report["rows"][0]["apd_success_rate"] == 100.0
+    assert report["rows"][0]["successes"] == 1
+    assert report["rows"][0]["apd_success_rate"] == 33.33
 
 
-def test_build_module_success_table_prefers_covered_rows_for_partial_paper_preview(tmp_path: Path) -> None:
+def test_build_module_success_table_lists_all_modules_for_partial_paper_preview(tmp_path: Path) -> None:
     settings = Settings.from_env(project_root=tmp_path)
     root = make_dataset(settings)
     write_case(root, "case1")
@@ -360,9 +359,8 @@ def test_build_module_success_table_prefers_covered_rows_for_partial_paper_previ
     dataset = GistableDataset(settings)
     report = build_module_success_table(run_dir, dataset, top_n=2, paper_compatible=True)
 
-    assert report["display_strategy"] == "covered-first"
-    assert report["rows"][0]["module_name"] == "requests"
-    assert report["rows"][0]["covered_projects"] == 1
+    assert report["display_strategy"] == "all-modules"
+    assert [row["module_name"] for row in report["rows"][:2]] == ["django", "requests"]
 
 
 def test_build_module_success_table_skips_unreadable_paper_case(tmp_path: Path, monkeypatch) -> None:

@@ -904,7 +904,11 @@ class TerminalUI:
         self._show_status_dialog(f"Preset switched to {selected}.")
 
     def _choose_resolver(self) -> None:
-        options = [("apd", "apd"), ("pyego", "pyego"), ("readpye", "readpye")]
+        options = [
+            ("apd", "apd"),
+            ("pyego", "pyego (official only)"),
+            ("readpye", "readpye (official repo if available)"),
+        ]
         if self._use_prompt_toolkit:
             selected = radiolist_dialog(
                 title="Select resolver",

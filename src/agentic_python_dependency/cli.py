@@ -759,6 +759,26 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
     docker_path = shutil.which("docker")
     add_check("docker_cli", "ok" if docker_path else "missing", docker_path or "docker not found on PATH")
 
+    pyego_entrypoint = settings.pyego_root / "PyEGo.py"
+    add_check(
+        "pyego_repo",
+        "ok" if pyego_entrypoint.exists() else "warning",
+        str(pyego_entrypoint) if pyego_entrypoint.exists() else f"missing: {pyego_entrypoint}",
+    )
+
+    readpye_entrypoint = settings.readpye_root / "run.py"
+    add_check(
+        "readpye_repo",
+        "ok" if readpye_entrypoint.exists() else "warning",
+        str(readpye_entrypoint) if readpye_entrypoint.exists() else f"missing: {readpye_entrypoint}",
+    )
+    if settings.resolver == "readpye":
+        add_check(
+            "readpye_langdir",
+            "ok" if settings.readpye_language_dir else "warning",
+            settings.readpye_language_dir or "APD_READPYE_LANGDIR not configured",
+        )
+
     ollama_path = shutil.which("ollama")
     add_check("ollama_cli", "ok" if ollama_path else "missing", ollama_path or "ollama not found on PATH")
 
@@ -823,6 +843,10 @@ def doctor_command(settings: Settings, ref: str | None) -> int:
     print(f"[INFO] repair_model: {settings.repair_model}")
     print(f"[INFO] adjudication_model: {settings.adjudication_model}")
     print(f"[INFO] llm_cache: {'disabled' if settings.disable_llm_cache else 'enabled'}")
+    print(f"[INFO] pyego_root: {settings.pyego_root}")
+    print(f"[INFO] readpye_root: {settings.readpye_root}")
+    if settings.readpye_language_dir:
+        print(f"[INFO] readpye_language_dir: {settings.readpye_language_dir}")
     for check in report["checks"]:
         status = check["status"].upper()
         print(f"[{status}] {check['name']}: {check['detail']}")

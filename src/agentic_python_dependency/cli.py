@@ -94,6 +94,28 @@ def format_model_summary(settings: Settings) -> str:
     )
 
 
+def summary_defaults_from_settings(settings: Settings) -> dict[str, object]:
+    stage_models = settings.active_stage_models()
+    return {
+        "resolver": settings.resolver,
+        "preset": settings.preset,
+        "prompt_profile": settings.prompt_profile,
+        "model_profile": settings.model_profile,
+        "use_moe": settings.use_moe,
+        "use_rag": settings.use_rag,
+        "use_langchain": settings.use_langchain,
+        "rag_mode": settings.rag_mode,
+        "structured_prompting": settings.structured_prompting,
+        "research_bundle": settings.research_bundle,
+        "research_features": list(settings.research_features),
+        "extraction_model": stage_models["extract"],
+        "runner_model": stage_models["runner"],
+        "version_model": stage_models["version"],
+        "repair_model": stage_models["repair"],
+        "adjudication_model": stage_models["adjudicate"],
+    }
+
+
 class BenchmarkObserver(Protocol):
     def start(
         self,
@@ -1230,7 +1252,9 @@ def run_case_batch(
 
     restored_state = load_run_state(run_dir)
     started_at = time.monotonic()
+    restored_elapsed_seconds = float(restored_state.get("elapsed_seconds", 0.0) or 0.0)
     warnings_path = run_dir / "warnings.log"
+    summary_defaults = summary_defaults_from_settings(settings)
 
     completed_case_ids = [case_id for case_id in case_ids if (run_dir / case_id / "result.json").exists()]
     completed_case_id_set = set(completed_case_ids)
@@ -1250,6 +1274,49 @@ def run_case_batch(
     _write_gist_match_detailed_table(gist_match_detailed_csv_path, runtime_rows)
     completed_successes = sum(1 for result in completed_results if bool(result.get("success", False)))
     completed_failures = len(completed_results) - completed_successes
+    if not case_ids:
+        summary = summarize_run(
+            run_dir,
+            total_elapsed_seconds=restored_elapsed_seconds + (time.monotonic() - started_at),
+            run_defaults=summary_defaults,
+        )
+        write_run_state(
+            run_dir,
+            {
+                "run_id": active_run_id,
+                "status": "empty",
+                "resolver": settings.resolver,
+                "preset": settings.preset,
+                "benchmark_source": settings.benchmark_case_source,
+                "prompt_profile": settings.prompt_profile,
+                "research_bundle": settings.research_bundle,
+                "research_features": list(settings.research_features),
+                "jobs": jobs,
+                "target": target_label,
+                "total": 0,
+                "completed": 0,
+                "successes": 0,
+                "failures": 0,
+                "elapsed_seconds": summary.total_wall_clock_time,
+                "started_at": str(restored_state.get("started_at", "") or datetime.now(timezone.utc).isoformat()),
+                "last_updated_at": datetime.now(timezone.utc).isoformat(),
+                "current_cases": [],
+                "last_case_id": "",
+                "last_status": "no_cases_selected",
+                "summary_path": str(run_dir / "summary.json"),
+                "warnings_path": "",
+                "stop_requested": False,
+                "last_error": "No benchmark cases were selected for this run.",
+            },
+        )
+        if notify_paths:
+            _notify_path("Summary written", run_dir / "summary.json")
+            _notify_path("Run-vs-CSV table written", run_dir / "run-vs-csv.csv")
+            _notify_path("Gist match table written", run_dir / "gistid-matches.csv")
+            _notify_path("Gist detailed match table written", run_dir / "gistid-matches-detailed.csv")
+        print("[ERROR] no benchmark cases were selected for this run", file=sys.stderr)
+        return 2
+
     inner_observer = observer or BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
     progress_observer = PersistentBenchmarkObserver(inner_observer, run_dir, restored_state)
     progress_observer.start(
@@ -1331,8 +1398,11 @@ def run_case_batch(
         progress_observer.abort(exc)
         raise
 
-    restored_elapsed_seconds = float(restored_state.get("elapsed_seconds", 0.0) or 0.0)
-    summary = summarize_run(run_dir, total_elapsed_seconds=restored_elapsed_seconds + (time.monotonic() - started_at))
+    summary = summarize_run(
+        run_dir,
+        total_elapsed_seconds=restored_elapsed_seconds + (time.monotonic() - started_at),
+        run_defaults=summary_defaults,
+    )
     non_empty_warnings_path = warnings_path if warnings_path.exists() and warnings_path.stat().st_size > 0 else None
     completed_total = len([case_id for case_id in case_ids if (run_dir / case_id / "result.json").exists()])
     final_status = "completed" if completed_total >= len(case_ids) else "paused"
@@ -1420,7 +1490,10 @@ def run_project(
 
 
 def summarize_command(settings: Settings, run_id: str) -> int:
-    summary = summarize_run(settings.artifacts_dir / run_id)
+    summary = summarize_run(
+        settings.artifacts_dir / run_id,
+        run_defaults=load_run_state(settings.artifacts_dir / run_id),
+    )
     _notify_path("Summary written", settings.artifacts_dir / run_id / "summary.json")
     return 0
 

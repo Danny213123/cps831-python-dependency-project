@@ -171,8 +171,13 @@ def build_timeline_view(run_dir: Path) -> dict[str, Any]:
     return report
 
 
-def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> BenchmarkSummary:
+def summarize_run(
+    run_dir: Path,
+    total_elapsed_seconds: float | None = None,
+    run_defaults: dict[str, Any] | None = None,
+) -> BenchmarkSummary:
     results = load_run_results(run_dir)
+    defaults = run_defaults if isinstance(run_defaults, dict) else {}
     total_cases = len(results)
     successes = sum(1 for item in results if item["success"])
     failures = total_cases - successes
@@ -185,22 +190,28 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     total_wall_clock = total_elapsed_seconds if total_elapsed_seconds is not None else summed_wall_clock
     transitions: dict[str, int] = {}
     dependency_reason_counts: dict[str, int] = {}
-    resolver = results[0].get("resolver", "apdr") if results else "apdr"
-    preset = results[0].get("preset", "optimized") if results else "optimized"
-    prompt_profile = results[0].get("prompt_profile", "optimized") if results else "optimized"
-    model_profile = results[0].get("model_profile", "gemma-moe") if results else "gemma-moe"
-    use_moe = bool(results[0].get("use_moe", True)) if results else True
-    use_rag = bool(results[0].get("use_rag", True)) if results else True
-    use_langchain = bool(results[0].get("use_langchain", True)) if results else True
-    rag_mode = str(results[0].get("rag_mode", "pypi")) if results else "pypi"
-    structured_prompting = bool(results[0].get("structured_prompting", False)) if results else False
-    research_bundle = str(results[0].get("research_bundle", "baseline")) if results else "baseline"
-    research_features = list(results[0].get("research_features", [])) if results else []
-    extraction_model = results[0].get("extraction_model", "gemma3:4b") if results else "gemma3:4b"
-    runner_model = results[0].get("runner_model", "gemma3:12b") if results else "gemma3:12b"
-    version_model = results[0].get("version_model", runner_model) if results else "gemma3:12b"
-    repair_model = results[0].get("repair_model", runner_model) if results else "gemma3:12b"
-    adjudication_model = results[0].get("adjudication_model", runner_model) if results else "gemma3:12b"
+    def _meta(key: str, fallback: Any) -> Any:
+        if results:
+            return results[0].get(key, fallback)
+        return defaults.get(key, fallback)
+
+    resolver = str(_meta("resolver", "apdr"))
+    preset = str(_meta("preset", "optimized"))
+    prompt_profile = str(_meta("prompt_profile", "optimized"))
+    model_profile = str(_meta("model_profile", "gemma-moe"))
+    use_moe = bool(_meta("use_moe", True))
+    use_rag = bool(_meta("use_rag", True))
+    use_langchain = bool(_meta("use_langchain", True))
+    rag_mode = str(_meta("rag_mode", "pypi"))
+    structured_prompting = bool(_meta("structured_prompting", False))
+    research_bundle = str(_meta("research_bundle", "baseline"))
+    raw_features = _meta("research_features", [])
+    research_features = list(raw_features) if isinstance(raw_features, (list, tuple)) else []
+    extraction_model = str(_meta("extraction_model", "gemma3:4b"))
+    runner_model = str(_meta("runner_model", "gemma3:12b"))
+    version_model = str(_meta("version_model", runner_model))
+    repair_model = str(_meta("repair_model", runner_model))
+    adjudication_model = str(_meta("adjudication_model", runner_model))
     research_case_count = sum(1 for item in results if bool(item.get("research_path", False)))
     candidate_plan_attempts = sum(int(item.get("candidate_plan_count", 0) or 0) for item in results)
     selected_candidate_ranks = [float(item.get("selected_candidate_rank", 0) or 0) for item in results if item.get("selected_candidate_rank")]

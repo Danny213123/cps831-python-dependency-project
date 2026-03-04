@@ -1,3 +1,4 @@
+import json
 import time
 import warnings
 from pathlib import Path
@@ -18,6 +19,7 @@ from agentic_python_dependency.cli import (
     redirect_runtime_warnings,
     resolve_trace_path,
     main,
+    run_case_batch,
 )
 from agentic_python_dependency.config import Settings
 
@@ -409,6 +411,38 @@ def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, m
     assert names["docker_cli"]["status"] == "missing"
     assert names["ollama_server"]["status"] == "warning"
     assert names["gistable_dataset"]["status"] == "warning"
+
+
+def test_run_case_batch_fails_when_no_cases_are_selected(tmp_path: Path, monkeypatch) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    run_id = "empty-run"
+
+    class DummyDataset:
+        def __init__(self, _settings: Settings):
+            return None
+
+        def fetch(self, _ref: str | None) -> None:
+            return None
+
+    monkeypatch.setattr("agentic_python_dependency.cli.GistableDataset", DummyDataset)
+    monkeypatch.setattr("agentic_python_dependency.cli.load_official_csv_lookup", lambda _settings: {})
+
+    exit_code = run_case_batch(
+        settings,
+        ref=None,
+        case_ids=[],
+        run_id=run_id,
+        jobs=1,
+        notify_paths=False,
+    )
+
+    assert exit_code == 2
+    run_dir = settings.artifacts_dir / run_id
+    summary_payload = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary_payload["total_cases"] == 0
+    assert summary_payload["preset"] == "research"
+    state_payload = load_run_state(run_dir)
+    assert state_payload["status"] == "empty"
 
 
 def test_format_progress_bar_renders_partial_progress() -> None:

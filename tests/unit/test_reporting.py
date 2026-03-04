@@ -67,6 +67,42 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
     assert (run_dir / "timeline.md").exists()
 
 
+def test_summarize_run_uses_run_defaults_when_no_results_exist(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run-empty"
+    run_dir.mkdir(parents=True)
+
+    summary = summarize_run(
+        run_dir,
+        run_defaults={
+            "resolver": "apdr",
+            "preset": "research",
+            "prompt_profile": "research-rag",
+            "research_bundle": "enhanced",
+            "research_features": ["dynamic_aliases", "repair_memory"],
+            "model_profile": "gemma-moe",
+            "use_moe": True,
+            "use_rag": True,
+            "use_langchain": True,
+            "rag_mode": "hybrid",
+            "structured_prompting": True,
+            "extraction_model": "gemma3:4b",
+            "runner_model": "gemma3:12b",
+            "version_model": "gemma3:12b",
+            "repair_model": "gemma3:12b",
+            "adjudication_model": "gemma3:12b",
+        },
+    )
+
+    assert summary.total_cases == 0
+    assert summary.preset == "research"
+    assert summary.prompt_profile == "research-rag"
+    assert summary.research_bundle == "enhanced"
+    assert summary.research_features == ["dynamic_aliases", "repair_memory"]
+    payload = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert payload["preset"] == "research"
+    assert payload["total_cases"] == 0
+
+
 def test_write_module_success_artifacts_uses_raw_suffix(tmp_path: Path) -> None:
     run_dir = tmp_path / "run123"
     run_dir.mkdir(parents=True)

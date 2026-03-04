@@ -7,6 +7,19 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-03-04
+
+### Changed
+
+- Updated benchmark summary generation to use active run metadata defaults when a run has no completed case artifacts, so preset/profile/resolver fields remain accurate in `summary.json`.
+- Updated the standalone summary command to read run-state defaults, keeping regenerated summaries consistent with the original run configuration.
+
+### Fixed
+
+- Fixed a zero-case benchmark bug where runs could exit with status `0` and appear completed even when no cases were selected.
+- Fixed zero-case runs being mislabeled as `optimized` by default in `summary.json`; summaries now preserve the selected preset (including `research`) from run settings/state.
+- Added explicit empty-run handling and persisted `run-state` status `empty` with a clear error marker to avoid silent no-op benchmark runs.
+
 ## [1.1.1] - 2026-03-04
 
 ### Added

@@ -27,7 +27,7 @@ Rules:
 Target Python:
 {target_python}
 
-Enabled experimental features:
+Enabled research features:
 {enabled_features}
 
 Candidate payload:

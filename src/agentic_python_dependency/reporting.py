@@ -185,7 +185,7 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     total_wall_clock = total_elapsed_seconds if total_elapsed_seconds is not None else summed_wall_clock
     transitions: dict[str, int] = {}
     dependency_reason_counts: dict[str, int] = {}
-    resolver = results[0].get("resolver", "apd") if results else "apd"
+    resolver = results[0].get("resolver", "apdr") if results else "apdr"
     preset = results[0].get("preset", "optimized") if results else "optimized"
     prompt_profile = results[0].get("prompt_profile", "optimized") if results else "optimized"
     model_profile = results[0].get("model_profile", "gemma-moe") if results else "gemma-moe"
@@ -194,14 +194,14 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     use_langchain = bool(results[0].get("use_langchain", True)) if results else True
     rag_mode = str(results[0].get("rag_mode", "pypi")) if results else "pypi"
     structured_prompting = bool(results[0].get("structured_prompting", False)) if results else False
-    experimental_bundle = str(results[0].get("experimental_bundle", "baseline")) if results else "baseline"
-    experimental_features = list(results[0].get("experimental_features", [])) if results else []
+    research_bundle = str(results[0].get("research_bundle", "baseline")) if results else "baseline"
+    research_features = list(results[0].get("research_features", [])) if results else []
     extraction_model = results[0].get("extraction_model", "gemma3:4b") if results else "gemma3:4b"
     runner_model = results[0].get("runner_model", "gemma3:12b") if results else "gemma3:12b"
     version_model = results[0].get("version_model", runner_model) if results else "gemma3:12b"
     repair_model = results[0].get("repair_model", runner_model) if results else "gemma3:12b"
     adjudication_model = results[0].get("adjudication_model", runner_model) if results else "gemma3:12b"
-    experimental_case_count = sum(1 for item in results if bool(item.get("experimental_path", False)))
+    research_case_count = sum(1 for item in results if bool(item.get("research_path", False)))
     candidate_plan_attempts = sum(int(item.get("candidate_plan_count", 0) or 0) for item in results)
     selected_candidate_ranks = [float(item.get("selected_candidate_rank", 0) or 0) for item in results if item.get("selected_candidate_rank")]
     repair_cycle_count = sum(int(item.get("repair_cycle_count", 0) or 0) for item in results)
@@ -244,8 +244,8 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         use_langchain=use_langchain,
         rag_mode=rag_mode,
         structured_prompting=structured_prompting,
-        experimental_bundle=experimental_bundle,
-        experimental_features=experimental_features,
+        research_bundle=research_bundle,
+        research_features=research_features,
         extraction_model=extraction_model,
         runner_model=runner_model,
         version_model=version_model,
@@ -255,7 +255,7 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         total_wall_clock_human=format_duration(total_wall_clock),
         transitions=transitions,
         dependency_reason_counts=dependency_reason_counts,
-        experimental_case_count=experimental_case_count,
+        research_case_count=research_case_count,
         candidate_plan_attempts=candidate_plan_attempts,
         average_candidate_rank_selected=(
             sum(selected_candidate_ranks) / len(selected_candidate_ranks) if selected_candidate_ranks else 0.0
@@ -315,8 +315,8 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Resolver: `{summary.resolver}`",
         f"- Preset: `{summary.preset}`",
         f"- Prompt profile: `{summary.prompt_profile}`",
-        f"- Experimental bundle: `{summary.experimental_bundle}`",
-        f"- Experimental features: `{', '.join(summary.experimental_features) or 'none'}`",
+        f"- Research bundle: `{summary.research_bundle}`",
+        f"- Research features: `{', '.join(summary.research_features) or 'none'}`",
         f"- Model profile: `{summary.model_profile}`",
         f"- Runtime: `{'moe' if summary.use_moe else 'single'}` / `{'rag' if summary.use_rag else 'no-rag'}` / `{'langchain' if summary.use_langchain else 'direct'}`",
         f"- RAG mode: `{summary.rag_mode}`",
@@ -326,7 +326,7 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Success rate: `{summary.success_rate:.2%}`",
         f"- Initial ImportErrors: `{summary.initial_import_errors}`",
         f"- Final ImportErrors: `{summary.final_import_errors}`",
-        f"- Experimental cases: `{summary.experimental_case_count}`",
+        f"- Research cases: `{summary.research_case_count}`",
         f"- Candidate plan attempts: `{summary.candidate_plan_attempts}`",
         f"- Average selected candidate rank: `{summary.average_candidate_rank_selected:.2f}`",
         f"- Repair cycles: `{summary.repair_cycle_count}`",
@@ -376,8 +376,8 @@ def write_results_artifacts(run_dir: Path, results: list[dict[str, Any]]) -> Non
                 "final_error_category": row.get("final_error_category", ""),
                 "dependencies": ", ".join(str(item) for item in row.get("dependencies", [])),
                 "dependency_reason": row.get("dependency_reason", ""),
-                "experimental_bundle": row.get("experimental_bundle", "baseline"),
-                "experimental_features": ",".join(str(item) for item in row.get("experimental_features", [])),
+                "research_bundle": row.get("research_bundle", "baseline"),
+                "research_features": ",".join(str(item) for item in row.get("research_features", [])),
                 "selected_candidate_rank": row.get("selected_candidate_rank", ""),
                 "strategy_type": row.get("strategy_type", ""),
                 "retry_severity": row.get("retry_severity", ""),
@@ -403,8 +403,8 @@ def write_results_artifacts(run_dir: Path, results: list[dict[str, Any]]) -> Non
                 "final_error_category",
                 "dependencies",
                 "dependency_reason",
-                "experimental_bundle",
-                "experimental_features",
+                "research_bundle",
+                "research_features",
                 "selected_candidate_rank",
                 "strategy_type",
                 "retry_severity",
@@ -599,7 +599,7 @@ def build_module_success_table(
         else:
             result = result_map.get(case_id, {})
             raw_source = str(result.get("case_source", "") or "")
-            case_source = raw_source if raw_source in {"all-gists", "dockerized-gists"} else None
+            case_source = raw_source if raw_source in {"all-gists", "dockerized-gists", "competition-run"} else None
             snippet_path = dataset.snippet_path_for_case(case_id, ref, case_source=case_source)
         if snippet_path is None:
             return case_id, None
@@ -633,7 +633,7 @@ def build_module_success_table(
                 "module_name": module_name,
                 "projects": project_count,
                 "successes": success_count,
-                "apd_success_rate": round(success_rate, 2),
+                "apdr_success_rate": round(success_rate, 2),
             }
         )
 
@@ -679,28 +679,28 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
                 "module_name",
                 "projects",
                 "successes",
-                "apd_success_rate",
+                "apdr_success_rate",
             ],
         )
         writer.writeheader()
         writer.writerows(all_rows)
 
-        lines = [
-            "# Module Success Table",
-            "",
-            f"Run ID: `{report['run_id']}`",
-            f"Cohort: `{cohort}`",
-            f"Covered cases: `{covered_case_count}/{total_cohort_cases}`",
-            f"Skipped unreadable cases: `{skipped_case_count}`",
-            f"Display strategy: `{display_strategy}`",
-            f"APD rate denominator: `all projects in the selected cohort`",
-            f"Modules listed: `{len(rows)}`",
-            "",
-            "| Module Name | # Projects | APD |",
-            "| --- | ---: | ---: |",
-        ]
+    lines = [
+        "# Module Success Table",
+        "",
+        f"Run ID: `{report['run_id']}`",
+        f"Cohort: `{cohort}`",
+        f"Covered cases: `{covered_case_count}/{total_cohort_cases}`",
+        f"Skipped unreadable cases: `{skipped_case_count}`",
+        f"Display strategy: `{display_strategy}`",
+        f"APDR rate denominator: `all projects in the selected cohort`",
+        f"Modules listed: `{len(rows)}`",
+        "",
+        "| Module Name | # Projects | APDR |",
+        "| --- | ---: | ---: |",
+    ]
     for row in rows:
         lines.append(
-            f"| {row['module_name']} | {row['projects']} | {row['apd_success_rate']:.2f} |"
+            f"| {row['module_name']} | {row['projects']} | {row['apdr_success_rate']:.2f} |"
         )
     (run_dir / f"module-success{suffix}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

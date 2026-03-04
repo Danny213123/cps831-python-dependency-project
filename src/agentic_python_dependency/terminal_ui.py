@@ -22,7 +22,7 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Box, Frame
 
 from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
-from agentic_python_dependency.presets import EXPERIMENTAL_BUNDLE_DEFAULTS, EXPERIMENTAL_FEATURES, PRESET_CONFIGS
+from agentic_python_dependency.presets import RESEARCH_BUNDLE_DEFAULTS, RESEARCH_FEATURES, PRESET_CONFIGS
 
 
 ActionCallback = Callable[..., int]
@@ -98,11 +98,11 @@ class TerminalBenchmarkDashboard:
         self.completed = 0
         self.successes = 0
         self.failures = 0
-        self.resolver = "apd"
+        self.resolver = "apdr"
         self.preset = "optimized"
         self.prompt_profile = "optimized"
-        self.experimental_bundle = "baseline"
-        self.experimental_features: tuple[str, ...] = ()
+        self.research_bundle = "baseline"
+        self.research_features: tuple[str, ...] = ()
         self.benchmark_source = "all-gists"
         self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
         self.jobs = 1
@@ -134,8 +134,8 @@ class TerminalBenchmarkDashboard:
         preset: str,
         prompt_profile: str,
         model_summary: str,
-        experimental_bundle: str = "baseline",
-        experimental_features: tuple[str, ...] = (),
+        research_bundle: str = "baseline",
+        research_features: tuple[str, ...] = (),
         benchmark_source: str = "all-gists",
         jobs: int,
         target: str,
@@ -150,8 +150,8 @@ class TerminalBenchmarkDashboard:
         self.resolver = resolver
         self.preset = preset
         self.prompt_profile = prompt_profile
-        self.experimental_bundle = experimental_bundle
-        self.experimental_features = tuple(experimental_features)
+        self.research_bundle = research_bundle
+        self.research_features = tuple(research_features)
         self.benchmark_source = benchmark_source
         self.model_summary = model_summary
         self.jobs = jobs
@@ -167,7 +167,7 @@ class TerminalBenchmarkDashboard:
             while not self._stop_event.wait(self.refresh_interval):
                 self._refresh()
 
-        self._thread = threading.Thread(target=_refresh_loop, name="apd-ui-benchmark-refresh", daemon=True)
+        self._thread = threading.Thread(target=_refresh_loop, name="apdr-ui-benchmark-refresh", daemon=True)
         self._thread.start()
 
     def case_started(self, case_id: str) -> None:
@@ -234,7 +234,7 @@ class TerminalBenchmarkDashboard:
         body = Box(
             body=Frame(
                 body=Window(content=control, always_hide_cursor=True, wrap_lines=False),
-                title="APD Benchmark Dashboard",
+                title="APDR Benchmark Dashboard",
                 style="class:frame",
             ),
             padding=1,
@@ -251,7 +251,7 @@ class TerminalBenchmarkDashboard:
             assert self._app is not None
             self._app.run(set_exception_handler=False)
 
-        self._app_thread = threading.Thread(target=_runner, name="apd-ui-benchmark-app", daemon=True)
+        self._app_thread = threading.Thread(target=_runner, name="apdr-ui-benchmark-app", daemon=True)
         self._app_thread.start()
 
     def _formatted_text(self) -> AnyFormattedText:
@@ -263,13 +263,13 @@ class TerminalBenchmarkDashboard:
         eta = _format_eta(self._eta_seconds(elapsed_seconds))
         bar = _format_progress_bar(self.completed, self.total)
         fragments: list[tuple[str, str]] = [
-            ("class:headline", "APD benchmark in progress\n"),
+            ("class:headline", "APDR benchmark in progress\n"),
             ("class:muted", "Use Ctrl+C only if you intend to stop the benchmark process itself.\n\n"),
             ("class:label", "Run ID       "), ("class:value", f"{self.run_id}\n"),
             ("class:label", "Target       "), ("class:value", f"{self.target}\n"),
             ("class:label", "Resolver     "), ("class:value", f"{self.resolver}\n"),
             ("class:label", "Preset       "), ("class:value", f"{self.preset}\n"),
-            ("class:label", "Exp bundle   "), ("class:value", f"{self.experimental_bundle}\n"),
+            ("class:label", "Research     "), ("class:value", f"{self.research_bundle}\n"),
             ("class:label", "Prompt       "), ("class:value", f"{self.prompt_profile}\n"),
             ("class:label", "Source       "), ("class:value", f"{self.benchmark_source}\n"),
             ("class:label", "Models       "), ("class:value", f"{getattr(self, 'model_summary', 'default')}\n"),
@@ -291,18 +291,18 @@ class TerminalBenchmarkDashboard:
             ("", "    "),
             ("class:accent", f"ETA: {eta}\n"),
         ]
-        if self.experimental_features:
+        if self.research_features:
             fragments.extend(
                 [
-                    ("class:label", "Exp feats    "),
-                    ("class:value", f"{', '.join(self.experimental_features)}\n"),
+                    ("class:label", "Research feats "),
+                    ("class:value", f"{', '.join(self.research_features)}\n"),
                 ]
             )
         if self._cancel_requested:
             fragments.extend(
                 [
                     ("class:bad", "\nStop requested\n"),
-                    ("class:muted", "APD will stop scheduling new cases and exit after the active work finishes.\n"),
+                    ("class:muted", "APDR will stop scheduling new cases and exit after the active work finishes.\n"),
                 ]
             )
         if self.current_cases:
@@ -337,13 +337,13 @@ class TerminalBenchmarkDashboard:
         eta = _format_eta(self._eta_seconds(elapsed_seconds))
         lines = [
             "=" * 80,
-            "APD Benchmark Dashboard",
+            "APDR Benchmark Dashboard",
             "=" * 80,
             f"Run ID: {self.run_id}",
             f"Target: {self.target}",
             f"Resolver: {self.resolver}",
             f"Preset: {self.preset}",
-            f"Experimental bundle: {self.experimental_bundle}",
+            f"Research bundle: {self.research_bundle}",
             f"Prompt profile: {self.prompt_profile}",
             f"Benchmark source: {self.benchmark_source}",
             f"Models: {getattr(self, 'model_summary', 'default')}",
@@ -357,10 +357,10 @@ class TerminalBenchmarkDashboard:
             ),
             f"Speed: {seconds_per_case}    ETA: {eta}",
         ]
-        if self.experimental_features:
-            lines.append(f"Experimental features: {', '.join(self.experimental_features)}")
+        if self.research_features:
+            lines.append(f"Research features: {', '.join(self.research_features)}")
         if self._cancel_requested:
-            lines.append("Stop requested: APD will stop after the current active cases finish.")
+            lines.append("Stop requested: APDR will stop after the current active cases finish.")
         if self.current_cases:
             lines.append("Active cases:")
             lines.extend(f"  - {case_id}" for case_id in self.current_cases[: min(6, len(self.current_cases))])
@@ -421,7 +421,7 @@ class TerminalUI:
     def _run_prompt_toolkit(self) -> int:
         while True:
             choice = button_dialog(
-                title="APD Command Center",
+                title="APDR Command Center",
                 text=self._menu_dialog_text(),
                 buttons=[
                     ("Run", "run"),
@@ -433,7 +433,7 @@ class TerminalUI:
                 style=UI_STYLE,
             ).run()
             if choice in {None, "quit"}:
-                message_dialog(title="APD", text="Exiting APD UI.", style=UI_STYLE).run()
+                message_dialog(title="APDR", text="Exiting APDR UI.", style=UI_STYLE).run()
                 return 0
             exit_code = self._dispatch_choice(choice)
             if choice in {"run", "report"} and exit_code >= 0:
@@ -446,7 +446,7 @@ class TerminalUI:
             self._print_menu()
             choice = self.input_fn("\nSelect an option: ").strip().lower()
             if choice in {"q", "quit", "8"}:
-                self.output("\nExiting APD UI.")
+                self.output("\nExiting APDR UI.")
                 return 0
             exit_code = self._dispatch_choice(choice)
             if choice in {"1", "2", "3", "4"} and exit_code >= 0:
@@ -580,7 +580,7 @@ class TerminalUI:
                     ("Resolver", "v"),
                     ("Preset", "p"),
                     ("Models", "m"),
-                    ("Experimental", "x"),
+                    ("Research", "x"),
                     ("Runtime", "r"),
                     ("Benchmark source", "s"),
                     ("Fresh run", "f"),
@@ -598,7 +598,7 @@ class TerminalUI:
             elif choice == "m":
                 self._choose_model_profile()
             elif choice == "x":
-                self._configure_experimental()
+                self._configure_research()
             elif choice == "r":
                 self._configure_runtime()
             elif choice == "s":
@@ -615,7 +615,7 @@ class TerminalUI:
         self.output("  1. Change resolver")
         self.output("  2. Change preset")
         self.output("  3. Change model bundle")
-        self.output("  4. Configure experimental bundle/features")
+        self.output("  4. Configure research bundle/features")
         self.output("  5. Runtime controls")
         self.output("  6. Change benchmark source")
         self.output("  7. Toggle fresh run / no LLM cache")
@@ -629,7 +629,7 @@ class TerminalUI:
         elif choice == "3":
             self._choose_model_profile()
         elif choice == "4":
-            self._configure_experimental()
+            self._configure_research()
         elif choice == "5":
             self._configure_runtime()
         elif choice == "6":
@@ -693,16 +693,16 @@ class TerminalUI:
             self.settings.prompt_profile = preset_config.prompt_profile
             self.settings.max_attempts = preset_config.max_attempts
             self.settings.default_module_grouping = preset_config.reporting_grouping
-        saved_bundle = str(run_entry.get("experimental_bundle", "") or "")
-        if saved_bundle in EXPERIMENTAL_BUNDLE_DEFAULTS:
-            self.settings.experimental_bundle = saved_bundle
-        saved_features = run_entry.get("experimental_features", [])
+        saved_bundle = str(run_entry.get("research_bundle", "") or "")
+        if saved_bundle in RESEARCH_BUNDLE_DEFAULTS:
+            self.settings.research_bundle = saved_bundle
+        saved_features = run_entry.get("research_features", [])
         if isinstance(saved_features, list):
-            self.settings.experimental_features = tuple(
-                feature for feature in saved_features if feature in EXPERIMENTAL_FEATURES
+            self.settings.research_features = tuple(
+                feature for feature in saved_features if feature in RESEARCH_FEATURES
             )
         saved_benchmark_source = str(run_entry.get("benchmark_source", "") or "")
-        if saved_benchmark_source in {"all-gists", "dockerized-gists"}:
+        if saved_benchmark_source in {"all-gists", "dockerized-gists", "competition-run"}:
             self.settings.benchmark_case_source = saved_benchmark_source
         if not self._validate_runtime_selection():
             return 1
@@ -867,13 +867,13 @@ class TerminalUI:
                 continue
             target = str(state.get("target", "benchmark") or "benchmark")
             jobs = int(state.get("jobs", 1) or 1)
-            resolver = str(state.get("resolver", "apd") or "apd")
+            resolver = str(state.get("resolver", "apdr") or "apdr")
             preset = str(state.get("preset", "optimized") or "optimized")
-            experimental_bundle = str(state.get("experimental_bundle", "baseline") or "baseline")
+            research_bundle = str(state.get("research_bundle", "baseline") or "baseline")
             benchmark_source = str(state.get("benchmark_source", "all-gists") or "all-gists")
             label = (
                 f"{run_id} [{status}] {completed}/{total} target={target} jobs={jobs} "
-                f"resolver={resolver} preset={preset}/{experimental_bundle} source={benchmark_source}"
+                f"resolver={resolver} preset={preset}/{research_bundle} source={benchmark_source}"
             )
             entries.append(
                 {
@@ -886,9 +886,9 @@ class TerminalUI:
                     "jobs": jobs,
                     "resolver": resolver,
                     "preset": preset,
-                    "experimental_bundle": experimental_bundle,
+                    "research_bundle": research_bundle,
                     "benchmark_source": benchmark_source,
-                    "experimental_features": state.get("experimental_features", []),
+                    "research_features": state.get("research_features", []),
                 }
             )
         return entries
@@ -914,8 +914,8 @@ class TerminalUI:
         return entries
 
     def _validate_runtime_selection(self) -> bool:
-        if self.settings.preset == "experimental" and self.settings.resolver != "apd":
-            self._show_status_dialog("The experimental preset is only supported with the apd resolver.")
+        if self.settings.preset in {"research", "experimental"} and self.settings.resolver != "apdr":
+            self._show_status_dialog("Research and experimental presets are only supported with the apdr resolver.")
             return False
         return True
 
@@ -985,7 +985,7 @@ class TerminalUI:
         if self._use_prompt_toolkit:
             selected = radiolist_dialog(
                 title="Retry failed cases",
-                text="Choose a prior run and APD will rerun only its failed benchmark cases.",
+                text="Choose a prior run and APDR will rerun only its failed benchmark cases.",
                 values=[(str(entry["run_id"]), str(entry["label"])) for entry in run_entries],
                 default=str(run_entries[0]["run_id"]),
                 style=UI_STYLE,
@@ -1036,16 +1036,16 @@ class TerminalUI:
         self.settings.prompt_profile = preset_config.prompt_profile
         self.settings.max_attempts = preset_config.max_attempts
         self.settings.default_module_grouping = preset_config.reporting_grouping
-        if selected == "experimental" and self.settings.resolver != "apd":
-            self.settings.resolver = "apd"
-        if selected != "experimental":
-            self.settings.experimental_bundle = "baseline"
-            self.settings.experimental_features = ()
+        if selected in {"research", "experimental"} and self.settings.resolver != "apdr":
+            self.settings.resolver = "apdr"
+        if selected != "research":
+            self.settings.research_bundle = "baseline"
+            self.settings.research_features = ()
         self._show_status_dialog(f"Preset switched to {selected}.")
 
     def _choose_resolver(self) -> None:
         options = [
-            ("apd", "apd"),
+            ("apdr", "apdr"),
             ("pyego", "pyego (official only)"),
             ("readpye", "readpye (official repo if available)"),
         ]
@@ -1073,25 +1073,26 @@ class TerminalUI:
                 return
             selected = visible_resolvers[index]
         self.settings.resolver = selected
-        if selected != "apd" and self.settings.preset == "experimental":
+        if selected != "apdr" and self.settings.preset in {"research", "experimental"}:
             self.settings.preset = "accuracy"
             preset_config = PRESET_CONFIGS["accuracy"]
             self.settings.prompt_profile = preset_config.prompt_profile
             self.settings.max_attempts = preset_config.max_attempts
             self.settings.default_module_grouping = preset_config.reporting_grouping
-            self.settings.experimental_bundle = "baseline"
-            self.settings.experimental_features = ()
+            self.settings.research_bundle = "baseline"
+            self.settings.research_features = ()
         self._show_status_dialog(f"Resolver switched to {selected}.")
 
     def _choose_benchmark_source(self) -> None:
         options = [
             ("all-gists", "all-gists (default)"),
             ("dockerized-gists", "dockerized-gists"),
+            ("competition-run", "competition-run (all-gists filtered by official CSV gist ids)"),
         ]
         if self._use_prompt_toolkit:
             selected = radiolist_dialog(
                 title="Benchmark source",
-                text="Choose which Gistable case collection APD runs.",
+                text="Choose which Gistable case collection APDR runs.",
                 values=options,
                 default=self.settings.benchmark_case_source,
                 style=UI_STYLE,
@@ -1114,42 +1115,42 @@ class TerminalUI:
         self.settings.benchmark_case_source = selected
         self._show_status_dialog(f"Benchmark source switched to {selected}.")
 
-    def _configure_experimental(self) -> None:
-        if self.settings.preset != "experimental":
-            self._show_status_dialog("Experimental controls are only available when the preset is experimental.")
+    def _configure_research(self) -> None:
+        if self.settings.preset != "research":
+            self._show_status_dialog("Research controls are only available when the preset is research.")
             return
         if self._use_prompt_toolkit:
             bundle = radiolist_dialog(
-                title="Experimental bundle",
-                text="Choose the experimental bundle for the next runs.",
-                values=[(bundle_name, bundle_name) for bundle_name in EXPERIMENTAL_BUNDLE_DEFAULTS],
-                default=self.settings.experimental_bundle,
+                title="Research bundle",
+                text="Choose the research bundle for the next runs.",
+                values=[(bundle_name, bundle_name) for bundle_name in RESEARCH_BUNDLE_DEFAULTS],
+                default=self.settings.research_bundle,
                 style=UI_STYLE,
             ).run()
             if bundle is None:
                 return
             selected_features = checkboxlist_dialog(
-                title="Experimental features",
-                text="Enable or disable experimental feature flags.",
-                values=[(feature, feature) for feature in EXPERIMENTAL_FEATURES],
-                default_values=list(self.settings.experimental_features or EXPERIMENTAL_BUNDLE_DEFAULTS[bundle]),
+                title="Research features",
+                text="Enable or disable research feature flags.",
+                values=[(feature, feature) for feature in RESEARCH_FEATURES],
+                default_values=list(self.settings.research_features or RESEARCH_BUNDLE_DEFAULTS[bundle]),
                 style=UI_STYLE,
             ).run()
             if selected_features is None:
                 return
         else:
-            bundle = self._prompt_choice("Experimental bundle", list(EXPERIMENTAL_BUNDLE_DEFAULTS), self.settings.experimental_bundle)
-            default_value = ",".join(self.settings.experimental_features or EXPERIMENTAL_BUNDLE_DEFAULTS[bundle])
-            raw_features = self._prompt_optional("Experimental features (comma-separated)", default_value)
+            bundle = self._prompt_choice("Research bundle", list(RESEARCH_BUNDLE_DEFAULTS), self.settings.research_bundle)
+            default_value = ",".join(self.settings.research_features or RESEARCH_BUNDLE_DEFAULTS[bundle])
+            raw_features = self._prompt_optional("Research features (comma-separated)", default_value)
             selected_features = tuple(
-                feature.strip() for feature in raw_features.split(",") if feature.strip() in EXPERIMENTAL_FEATURES
+                feature.strip() for feature in raw_features.split(",") if feature.strip() in RESEARCH_FEATURES
             )
-        self.settings.experimental_bundle = bundle
-        self.settings.experimental_features = tuple(
-            feature for feature in selected_features if feature in EXPERIMENTAL_FEATURES
+        self.settings.research_bundle = bundle
+        self.settings.research_features = tuple(
+            feature for feature in selected_features if feature in RESEARCH_FEATURES
         )
         self._show_status_dialog(
-            f"Experimental bundle set to {bundle} with {len(self.settings.experimental_features)} feature(s)."
+            f"Research bundle set to {bundle} with {len(self.settings.research_features)} feature(s)."
         )
 
     def _choose_model_profile(self) -> None:
@@ -1280,7 +1281,7 @@ class TerminalUI:
 
     def _menu_dialog_text(self) -> AnyFormattedText:
         return HTML(
-            "<b><ansibrightyellow>APD Command Center</ansibrightyellow></b>\n"
+            "<b><ansibrightyellow>APDR Command Center</ansibrightyellow></b>\n"
             "<style fg='#98c1d9'>Run, report, and configure without memorizing commands.</style>\n\n"
             f"<b>Preset/Resolver:</b> {self.settings.preset} / {self.settings.resolver}\n"
             f"<b>Benchmark source:</b> {self.settings.benchmark_case_source}\n"
@@ -1289,8 +1290,8 @@ class TerminalUI:
             f"<b>Runtime:</b> MoE {'on' if self.settings.use_moe else 'off'} | "
             f"RAG {'on' if self.settings.use_rag else 'off'} | "
             f"LangChain {'on' if self.settings.use_langchain else 'off'}\n"
-            f"<b>Experimental:</b> {self.settings.experimental_bundle} "
-            f"({len(self.settings.experimental_features)} feature(s))\n"
+            f"<b>Research:</b> {self.settings.research_bundle} "
+            f"({len(self.settings.research_features)} feature(s))\n"
             f"<b>Fresh run:</b> {'on' if self._fresh_run else 'off'} | "
             f"<b>Trace LLM:</b> {'on' if self.settings.trace_llm else 'off'}\n"
             f"<b>Artifacts:</b> {self.settings.artifacts_dir}"
@@ -1298,7 +1299,7 @@ class TerminalUI:
 
     def _show_status_dialog(self, text: str) -> None:
         if self._use_prompt_toolkit:
-            message_dialog(title="APD", text=text, style=UI_STYLE).run()
+            message_dialog(title="APDR", text=text, style=UI_STYLE).run()
         else:
             self.output(f"\n{text}")
 
@@ -1311,7 +1312,7 @@ class TerminalUI:
 
     def _prompt_optional(self, label: str, default: str) -> str:
         if self._use_prompt_toolkit:
-            value = input_dialog(title="APD", text=f"{label} [{default}]", style=UI_STYLE).run()
+            value = input_dialog(title="APDR", text=f"{label} [{default}]", style=UI_STYLE).run()
             if value is None:
                 return default
             return value.strip() or default
@@ -1329,7 +1330,7 @@ class TerminalUI:
     def _prompt_choice(self, label: str, choices: list[str], default: str) -> str:
         if self._use_prompt_toolkit:
             selected = radiolist_dialog(
-                title="APD",
+                title="APDR",
                 text=label,
                 values=[(choice, choice) for choice in choices],
                 default=default,
@@ -1353,7 +1354,7 @@ class TerminalUI:
 
     def _print_header(self) -> None:
         width = max(72, min(shutil.get_terminal_size((90, 20)).columns, 110))
-        title = "Agentic Python Dependency"
+        title = "APDR Command Center"
         self.output("=" * width)
         self.output(title.center(width))
         self.output("=" * width)
@@ -1361,8 +1362,8 @@ class TerminalUI:
         self.output(f"Resolver: {self.settings.resolver}")
         self.output(f"Benchmark source: {self.settings.benchmark_case_source}")
         self.output(f"Model bundle: {self.settings.model_profile}")
-        self.output(f"Experimental bundle: {self.settings.experimental_bundle}")
-        self.output(f"Experimental features: {', '.join(self.settings.experimental_features) or 'none'}")
+        self.output(f"Research bundle: {self.settings.research_bundle}")
+        self.output(f"Research features: {', '.join(self.settings.research_features) or 'none'}")
         self.output(f"MoE: {'on' if self.settings.use_moe else 'off'}")
         self.output(f"RAG: {'on' if self.settings.use_rag else 'off'}")
         self.output(f"LangChain: {'on' if self.settings.use_langchain else 'off'}")

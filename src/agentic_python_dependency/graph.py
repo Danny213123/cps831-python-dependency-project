@@ -17,7 +17,7 @@ from agentic_python_dependency.benchmark.gistable import GistableDataset
 from agentic_python_dependency.config import Settings
 from agentic_python_dependency.presets import (
     COMPATIBILITY_SENSITIVE_PACKAGES,
-    ExperimentalFeatureName,
+    ResearchFeatureName,
     get_preset_config,
 )
 from agentic_python_dependency.router import OllamaPromptRunner
@@ -45,6 +45,8 @@ from agentic_python_dependency.tools.docker_executor import DockerExecutor
 from agentic_python_dependency.tools.dynamic_imports import collect_dynamic_import_candidates
 from agentic_python_dependency.tools.error_classifier import classify_error
 from agentic_python_dependency.tools.import_extractor import (
+    PY2_STDLIB_EXTRAS,
+    STDLIB_MODULES,
     discover_python_files,
     extract_import_roots_from_code,
     filter_third_party_imports,
@@ -62,7 +64,7 @@ from agentic_python_dependency.tools.official_baselines import (
 )
 from agentic_python_dependency.tools.package_metadata import PackageMetadataStore
 from agentic_python_dependency.tools.pypi_store import PyPIMetadataStore
-from agentic_python_dependency.tools.rag_context import build_experimental_rag_context, summarize_rag_context
+from agentic_python_dependency.tools.rag_context import build_research_rag_context, summarize_rag_context
 from agentic_python_dependency.tools.repair_feedback import append_feedback_event, summarize_feedback_memory
 from agentic_python_dependency.tools.repo_aliases import build_repo_alias_candidates
 from agentic_python_dependency.tools.repo_evidence import build_repo_evidence
@@ -201,20 +203,72 @@ def _is_python3_syntax_compatible(source: str) -> bool:
     return True
 
 
+VALID_DOCKER_PYTHON_TAGS = {
+    "2.7.13",
+    "2.7.14",
+    "2.7.15",
+    "2.7.16",
+    "2.7.17",
+    "2.7.18",
+    "3.5",
+    "3.5.10",
+    "3.6",
+    "3.6.15",
+    "3.7",
+    "3.7.17",
+    "3.8",
+    "3.8.20",
+    "3.9",
+    "3.9.21",
+    "3.10",
+    "3.10.16",
+    "3.11",
+    "3.11.12",
+    "3.12",
+    "3.12.9",
+    "3.13",
+    "3.13.2",
+}
+
+
+def snap_to_valid_docker_tag(version: str) -> str | None:
+    if version in VALID_DOCKER_PYTHON_TAGS:
+        return version
+    parts = version.split(".")
+    if len(parts) >= 2:
+        major_minor = f"{parts[0]}.{parts[1]}"
+        if major_minor in VALID_DOCKER_PYTHON_TAGS:
+            return major_minor
+    return None
+
+
+def _has_python2_only_imports(extracted_imports: list[str]) -> bool:
+    return bool(set(extracted_imports) & PY2_STDLIB_EXTRAS)
+
+
 def reconcile_inferred_target_python(
     inferred_version: str | None,
     *,
     benchmark_target_python: str,
     source_text: str,
+    extracted_imports: list[str] | None = None,
 ) -> tuple[str | None, str | None]:
     if not inferred_version:
         return None, None
+    snapped = snap_to_valid_docker_tag(inferred_version)
+    if snapped is None:
+        if benchmark_target_python:
+            return benchmark_target_python, "benchmark_dockerfile_invalid_version"
+        return "3.12", "default_fallback_invalid_version"
+    inferred_version = snapped
     inferred_major = inferred_version.split(".", 1)[0]
     benchmark_major = benchmark_target_python.split(".", 1)[0] if benchmark_target_python else ""
     if inferred_major == benchmark_major:
         return inferred_version, "llm_prompt_a"
     if benchmark_major == "2" and inferred_major == "3" and not _is_python3_syntax_compatible(source_text):
         return benchmark_target_python, "benchmark_dockerfile_syntax_guardrail"
+    if benchmark_major == "2" and inferred_major == "3" and extracted_imports and _has_python2_only_imports(extracted_imports):
+        return benchmark_target_python, "python2_import_signal"
     return inferred_version, "llm_prompt_a"
 
 
@@ -237,11 +291,11 @@ def route_after_classification(state: ResolutionState, max_attempts: int) -> str
     return "finalize_result"
 
 
-def route_after_experimental_plan_selection(state: ResolutionState) -> str:
+def route_after_research_plan_selection(state: ResolutionState) -> str:
     return "materialize_execution_context" if state.get("selected_candidate_plan") else "finalize_result"
 
 
-def route_after_experimental_classification(state: ResolutionState, settings: Settings) -> str:
+def route_after_research_classification(state: ResolutionState, settings: Settings) -> str:
     decision = state.get("retry_decision")
     execution = state["last_execution"]
     if state["current_attempt"] >= settings.max_attempts:
@@ -252,7 +306,7 @@ def route_after_experimental_classification(state: ResolutionState, settings: Se
         if state.get("remaining_candidate_plans"):
             return "select_next_candidate_plan"
         if state.get("repair_cycle_count", 0) < settings.repair_cycle_limit:
-            return "repair_prompt_c_experimental"
+            return "repair_prompt_c_research"
         return "finalize_result"
     if decision.candidate_fallback_allowed and settings.allow_candidate_fallback_before_repair and state.get("remaining_candidate_plans"):
         return "select_next_candidate_plan"
@@ -260,11 +314,11 @@ def route_after_experimental_classification(state: ResolutionState, settings: Se
     if decision.repair_retry_budget:
         repair_budget = min(repair_budget, decision.repair_retry_budget)
     if decision.repair_allowed and state.get("repair_cycle_count", 0) < repair_budget:
-        return "repair_prompt_c_experimental"
+        return "repair_prompt_c_research"
     return "finalize_result"
 
 
-def route_after_experimental_repair(state: ResolutionState) -> str:
+def route_after_research_repair(state: ResolutionState) -> str:
     return "select_next_candidate_plan" if state.get("candidate_plans") else "finalize_result"
 
 
@@ -333,7 +387,7 @@ def build_snippet_import_command() -> str:
 def build_snippet_stub_argv_command(max_index: int) -> str:
     args = ["'snippet.py'"]
     for index in range(1, max_index + 1):
-        args.append(f"'/tmp/apd-arg{index}'")
+        args.append(f"'/tmp/apdr-arg{index}'")
     return (
         "python - <<'PY'\n"
         "import os\n"
@@ -341,7 +395,7 @@ def build_snippet_stub_argv_command(max_index: int) -> str:
         "import runpy\n"
         "for key, value in [('MPLBACKEND', 'Agg'), ('SDL_VIDEODRIVER', 'dummy'), ('QT_QPA_PLATFORM', 'offscreen')]:\n"
         "    os.environ.setdefault(key, value)\n"
-        "for path, payload in [('/tmp/apd-arg1', b'apd'), ('/tmp/apd-arg2', b'apd')]:\n"
+        "for path, payload in [('/tmp/apdr-arg1', b'apdr'), ('/tmp/apdr-arg2', b'apdr')]:\n"
         "    with open(path, 'wb') as handle:\n"
         "        handle.write(payload)\n"
         f"sys.argv = [{', '.join(args)}]\n"
@@ -364,8 +418,8 @@ def infer_benchmark_validation_profile(source_code: str, extracted_imports: list
                 return ("argv_stub", build_snippet_stub_argv_command(max_index))
         return (
             "cli_help",
-            "python snippet.py --help >/tmp/apd-help.txt 2>&1 || "
-            "python snippet.py -h >/tmp/apd-help.txt 2>&1 || "
+            "python snippet.py --help >/tmp/apdr-help.txt 2>&1 || "
+            "python snippet.py -h >/tmp/apdr-help.txt 2>&1 || "
             f"{build_snippet_import_command()}",
         )
     import_only_tokens = (
@@ -646,16 +700,19 @@ class ResolutionWorkflow:
         return normalize_candidate_packages_with_sources(packages, extracted_imports)
 
     def _uses_full_apd(self) -> bool:
-        return self.settings.resolver == "apd"
+        return self.settings.resolver == "apdr"
 
     def _resolver_uses_rag(self) -> bool:
         return self.settings.use_rag and self.settings.resolver != "readpye"
 
+    def _is_research(self) -> bool:
+        return self.settings.preset == "research"
+
     def _is_experimental(self) -> bool:
         return self.settings.preset == "experimental"
 
-    def _experimental_feature_enabled(self, feature: ExperimentalFeatureName) -> bool:
-        return self._is_experimental() and self.settings.experimental_feature_enabled(feature)
+    def _research_feature_enabled(self, feature: ResearchFeatureName) -> bool:
+        return self._is_research() and self.settings.research_feature_enabled(feature)
 
     @staticmethod
     def _write_json_artifact(state: ResolutionState, filename: str, payload: Any) -> None:
@@ -679,11 +736,11 @@ class ResolutionWorkflow:
     def _allowed_versions_map(options: list[PackageVersionOptions]) -> dict[str, set[str]]:
         return {normalize_package_name(option.package): set(option.versions) for option in options}
 
-    def _experimental_allowed_packages(self, state: ResolutionState) -> set[str]:
+    def _research_allowed_packages(self, state: ResolutionState) -> set[str]:
         return {normalize_package_name(package) for package in state.get("inferred_packages", [])}
 
-    def _experimental_bundle_name(self) -> str:
-        return self.settings.experimental_bundle if self._is_experimental() else "baseline"
+    def _research_bundle_name(self) -> str:
+        return self.settings.research_bundle if self._is_research() else "baseline"
 
     @staticmethod
     def _strategy_type_from(previous: list[str], current: list[str]) -> str:
@@ -745,7 +802,7 @@ class ResolutionWorkflow:
             else "# no inferred third-party dependencies\n"
         )
 
-    def _default_experimental_plans(self, state: ResolutionState) -> list[CandidatePlan]:
+    def _default_research_plans(self, state: ResolutionState) -> list[CandidatePlan]:
         options = state.get("version_options", [])
         if not state.get("inferred_packages"):
             state["dependency_reason"] = "stdlib_only"
@@ -794,8 +851,8 @@ class ResolutionWorkflow:
             resolver=self.settings.resolver,
             preset=self.settings.preset,
             prompt_profile=self.settings.prompt_profile,
-            experimental_bundle=self.settings.experimental_bundle,
-            experimental_features=self.settings.experimental_features,
+            research_bundle=self.settings.research_bundle,
+            research_features=self.settings.research_features,
             dependency_reason="",
             candidate_provenance={},
             repair_outcome="",
@@ -823,7 +880,7 @@ class ResolutionWorkflow:
             selected_candidate_rank=None,
             repair_cycle_count=0,
             structured_outputs={},
-            experimental_path=self._is_experimental(),
+            research_path=self._is_research(),
             structured_prompt_failures=0,
         )
 
@@ -850,8 +907,8 @@ class ResolutionWorkflow:
             resolver=self.settings.resolver,
             preset=self.settings.preset,
             prompt_profile=self.settings.prompt_profile,
-            experimental_bundle=self.settings.experimental_bundle,
-            experimental_features=self.settings.experimental_features,
+            research_bundle=self.settings.research_bundle,
+            research_features=self.settings.research_features,
             dependency_reason="",
             candidate_provenance={},
             repair_outcome="",
@@ -879,19 +936,19 @@ class ResolutionWorkflow:
             selected_candidate_rank=None,
             repair_cycle_count=0,
             structured_outputs={},
-            experimental_path=self._is_experimental(),
+            research_path=self._is_research(),
             structured_prompt_failures=0,
         )
 
     def run(self, state: ResolutionState) -> ResolutionState:
         try:
-            graph = self.build_experimental_graph() if self._is_experimental() else self.build_graph()
+            graph = self.build_research_graph() if self._is_research() else self.build_graph()
             return graph.invoke(
                 state,
                 config={"recursion_limit": infer_graph_recursion_limit(self.settings.max_attempts)},
             )
         except ImportError:  # pragma: no cover - fallback for environments without langgraph
-            return self._run_experimental_fallback(state) if self._is_experimental() else self._run_fallback(state)
+            return self._run_research_fallback(state) if self._is_research() else self._run_fallback(state)
 
     def _run_fallback(self, state: ResolutionState) -> ResolutionState:
         current = state
@@ -918,7 +975,7 @@ class ResolutionWorkflow:
             if route_after_normalize(current) == "finalize_result":
                 return self.finalize_result(current)
 
-    def _run_experimental_fallback(self, state: ResolutionState) -> ResolutionState:
+    def _run_research_fallback(self, state: ResolutionState) -> ResolutionState:
         current = state
         current = self.load_target(current)
         current = self.extract_imports(current)
@@ -947,7 +1004,7 @@ class ResolutionWorkflow:
             if route_after_execute(current) == "finalize_result":
                 return self.finalize_result(current)
             current = self.classify_outcome(current)
-            next_step = route_after_experimental_classification(current, self.settings)
+            next_step = route_after_research_classification(current, self.settings)
             if next_step == "finalize_result":
                 return self.finalize_result(current)
             if next_step == "select_next_candidate_plan":
@@ -956,8 +1013,8 @@ class ResolutionWorkflow:
                     return self.finalize_result(current)
                 continue
             current = self.build_repair_memory_summary(current)
-            current = self.repair_prompt_c_experimental(current)
-            if route_after_experimental_repair(current) == "finalize_result":
+            current = self.repair_prompt_c_research(current)
+            if route_after_research_repair(current) == "finalize_result":
                 return self.finalize_result(current)
             current = self.select_next_candidate_plan(current)
             if not current.get("selected_candidate_plan"):
@@ -1005,7 +1062,7 @@ class ResolutionWorkflow:
         graph.add_edge("finalize_result", END)
         return graph.compile()
 
-    def build_experimental_graph(self):
+    def build_research_graph(self):
         from langgraph.graph import END, START, StateGraph
 
         graph = StateGraph(ResolutionState)
@@ -1030,7 +1087,7 @@ class ResolutionWorkflow:
         graph.add_node("execute_candidate", self.execute_candidate)
         graph.add_node("classify_outcome", self.classify_outcome)
         graph.add_node("build_repair_memory_summary", self.build_repair_memory_summary)
-        graph.add_node("repair_prompt_c_experimental", self.repair_prompt_c_experimental)
+        graph.add_node("repair_prompt_c_research", self.repair_prompt_c_research)
         graph.add_node("finalize_result", self.finalize_result)
 
         graph.add_edge(START, "load_target")
@@ -1056,7 +1113,7 @@ class ResolutionWorkflow:
         graph.add_edge("generate_candidate_plans", "select_next_candidate_plan")
         graph.add_conditional_edges(
             "select_next_candidate_plan",
-            route_after_experimental_plan_selection,
+            route_after_research_plan_selection,
             {"materialize_execution_context": "materialize_execution_context", "finalize_result": "finalize_result"},
         )
         graph.add_edge("materialize_execution_context", "execute_candidate")
@@ -1067,17 +1124,17 @@ class ResolutionWorkflow:
         )
         graph.add_conditional_edges(
             "classify_outcome",
-            lambda state: route_after_experimental_classification(state, self.settings),
+            lambda state: route_after_research_classification(state, self.settings),
             {
                 "select_next_candidate_plan": "select_next_candidate_plan",
-                "repair_prompt_c_experimental": "build_repair_memory_summary",
+                "repair_prompt_c_research": "build_repair_memory_summary",
                 "finalize_result": "finalize_result",
             },
         )
-        graph.add_edge("build_repair_memory_summary", "repair_prompt_c_experimental")
+        graph.add_edge("build_repair_memory_summary", "repair_prompt_c_research")
         graph.add_conditional_edges(
-            "repair_prompt_c_experimental",
-            route_after_experimental_repair,
+            "repair_prompt_c_research",
+            route_after_research_repair,
             {"select_next_candidate_plan": "select_next_candidate_plan", "finalize_result": "finalize_result"},
         )
         graph.add_edge("finalize_result", END)
@@ -1124,7 +1181,11 @@ class ResolutionWorkflow:
         if state["mode"] == "gistable":
             source = state["source_files"].get("snippet.py", "")
             profile, command = infer_benchmark_validation_profile(source, state["extracted_imports"])
-            if profile == "docker_cmd" and not command and state["benchmark_case"].case_source == "all-gists":
+            if (
+                profile == "docker_cmd"
+                and not command
+                and state["benchmark_case"].case_source in {"all-gists", "competition-run"}
+            ):
                 profile = "snippet_exec"
                 command = "python snippet.py"
             state["current_runtime_profile"] = profile
@@ -1132,7 +1193,7 @@ class ResolutionWorkflow:
         return state
 
     def extract_dynamic_imports(self, state: ResolutionState) -> ResolutionState:
-        if not self._experimental_feature_enabled("dynamic_imports"):
+        if not self._research_feature_enabled("dynamic_imports"):
             state["dynamic_import_candidates"] = []
             return state
         project_root = state["project_target"].root_dir if state["mode"] == "project" else None
@@ -1147,7 +1208,7 @@ class ResolutionWorkflow:
         return state
 
     def gather_repo_evidence(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental() or not self.settings.repo_evidence_enabled:
+        if not self._is_research() or not self.settings.repo_evidence_enabled:
             state["repo_evidence"] = {}
             return state
         evidence = build_repo_evidence(state)
@@ -1156,7 +1217,7 @@ class ResolutionWorkflow:
         return state
 
     def build_dynamic_alias_candidates(self, state: ResolutionState) -> ResolutionState:
-        if not self._experimental_feature_enabled("dynamic_aliases"):
+        if not self._research_feature_enabled("dynamic_aliases"):
             state["repo_alias_candidates"] = {}
             state["top_level_module_map"] = {}
             return state
@@ -1174,17 +1235,17 @@ class ResolutionWorkflow:
         return state
 
     def infer_package_candidates(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return self.infer_packages_prompt_a(state)
 
-        if not self._experimental_feature_enabled("multipass_inference"):
+        if not self._research_feature_enabled("multipass_inference"):
             state = self.infer_packages_prompt_a(state)
             state["inference_candidates"] = [
                 InferenceCandidate(
                     package=package,
                     confidence=1.0 if state.get("candidate_provenance", {}).get(package) != "llm" else 0.9,
                     sources=[state.get("candidate_provenance", {}).get(package, "llm")],
-                    reason="baseline experimental inference",
+                    reason="baseline research inference",
                     accepted=True,
                 )
                 for package in state.get("inferred_packages", [])
@@ -1240,8 +1301,18 @@ class ResolutionWorkflow:
                 inferred_python_version,
                 benchmark_target_python=state.get("benchmark_target_python", ""),
                 source_text=code,
+                extracted_imports=state.get("extracted_imports", []),
             )
             state["inferred_target_python"] = inferred_python_version
+            if (
+                state.get("structured_prompt_failures", 0) > 0
+                and version_source == "llm_prompt_a"
+                and (self._is_experimental() or self._is_research())
+            ):
+                benchmark_py = state.get("benchmark_target_python", "")
+                if benchmark_py:
+                    resolved_python_version = benchmark_py
+                    version_source = "benchmark_dockerfile_structured_fallback"
             if resolved_python_version:
                 state["target_python"] = resolved_python_version
             if version_source:
@@ -1271,6 +1342,8 @@ class ResolutionWorkflow:
             package = str(item.get("package", "")).strip()
             if not looks_like_package_name(package):
                 continue
+            if package in STDLIB_MODULES:
+                continue
             candidate_sources.setdefault(package, set()).add("llm")
             candidate_confidence[package] = max(candidate_confidence.get(package, 0.0), float(item.get("confidence", 0.0) or 0.0))
             if item.get("evidence"):
@@ -1291,9 +1364,9 @@ class ResolutionWorkflow:
         return state
 
     def cross_validate_packages(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
-        if not self._experimental_feature_enabled("multipass_inference"):
+        if not self._research_feature_enabled("multipass_inference"):
             return state
         candidates = state.get("inference_candidates", [])
         if not candidates:
@@ -1319,7 +1392,7 @@ class ResolutionWorkflow:
                 target_python=state.get("target_python", ""),
                 candidate_payload=candidates_json,
                 repo_evidence=json.dumps(state.get("repo_evidence", {}), indent=2)[:2500],
-                enabled_features=", ".join(state.get("experimental_features", ())),
+                enabled_features=", ".join(state.get("research_features", ())),
             )
             self._trace_request(state, "extract", prompt_text)
             raw_output = self.prompt_runner.invoke_template(
@@ -1329,7 +1402,7 @@ class ResolutionWorkflow:
                     "target_python": state.get("target_python", ""),
                     "candidate_payload": candidates_json,
                     "repo_evidence": json.dumps(state.get("repo_evidence", {}), indent=2)[:2500],
-                    "enabled_features": ", ".join(state.get("experimental_features", ())),
+                    "enabled_features": ", ".join(state.get("research_features", ())),
                 },
             )
             self._trace_response(state, "extract", raw_output)
@@ -1369,11 +1442,11 @@ class ResolutionWorkflow:
         return state
 
     def build_rag_context(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
         pypi_evidence = state.get("pypi_evidence", {})
         repo_evidence = state.get("repo_evidence", {})
-        rag_context = build_experimental_rag_context(
+        rag_context = build_research_rag_context(
             state,
             repo_evidence=repo_evidence,
             pypi_evidence=pypi_evidence,
@@ -1384,8 +1457,8 @@ class ResolutionWorkflow:
 
     def infer_packages_prompt_a(self, state: ResolutionState) -> ResolutionState:
         extracted_imports = state.get("extracted_imports", [])
-        if self._is_experimental():
-            return self._infer_packages_prompt_a_experimental(state, extracted_imports)
+        if self._is_research():
+            return self._infer_packages_prompt_a_research(state, extracted_imports)
         if not self._uses_full_apd():
             provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
             normalized = sorted(provenance, key=str.lower)
@@ -1438,8 +1511,18 @@ class ResolutionWorkflow:
                     inferred_python_version,
                     benchmark_target_python=state.get("benchmark_target_python", ""),
                     source_text=code,
+                    extracted_imports=state.get("extracted_imports", []),
                 )
                 state["inferred_target_python"] = inferred_python_version
+                if (
+                    state.get("structured_prompt_failures", 0) > 0
+                    and version_source == "llm_prompt_a"
+                    and (self._is_experimental() or self._is_research())
+                ):
+                    benchmark_py = state.get("benchmark_target_python", "")
+                    if benchmark_py:
+                        resolved_python_version = benchmark_py
+                        version_source = "benchmark_dockerfile_structured_fallback"
                 if resolved_python_version:
                     state["target_python"] = resolved_python_version
                 if version_source:
@@ -1473,7 +1556,7 @@ class ResolutionWorkflow:
         state["candidate_provenance"] = provenance
         return state
 
-    def _infer_packages_prompt_a_experimental(
+    def _infer_packages_prompt_a_research(
         self, state: ResolutionState, extracted_imports: list[str]
     ) -> ResolutionState:
         if not self._uses_full_apd():
@@ -1530,8 +1613,18 @@ class ResolutionWorkflow:
                 inferred_python_version,
                 benchmark_target_python=state.get("benchmark_target_python", ""),
                 source_text=code,
+                extracted_imports=state.get("extracted_imports", []),
             )
             state["inferred_target_python"] = inferred_python_version
+            if (
+                state.get("structured_prompt_failures", 0) > 0
+                and version_source == "llm_prompt_a"
+                and (self._is_experimental() or self._is_research())
+            ):
+                benchmark_py = state.get("benchmark_target_python", "")
+                if benchmark_py:
+                    resolved_python_version = benchmark_py
+                    version_source = "benchmark_dockerfile_structured_fallback"
             if resolved_python_version:
                 state["target_python"] = resolved_python_version
             if version_source:
@@ -1595,7 +1688,7 @@ class ResolutionWorkflow:
         state["applied_compatibility_policy"] = {
             option.package: option.policy_notes for option in options if option.policy_notes
         }
-        if self._is_experimental():
+        if self._is_research():
             pypi_evidence = {
                 "packages": [
                     {
@@ -1614,12 +1707,12 @@ class ResolutionWorkflow:
         return state
 
     def retrieve_version_specific_metadata(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
         if not (
-            self._experimental_feature_enabled("transitive_conflicts")
-            or self._experimental_feature_enabled("version_negotiation")
-            or self._experimental_feature_enabled("dynamic_aliases")
+            self._research_feature_enabled("transitive_conflicts")
+            or self._research_feature_enabled("version_negotiation")
+            or self._research_feature_enabled("dynamic_aliases")
         ):
             return state
         updated_options: list[PackageVersionOptions] = []
@@ -1651,12 +1744,12 @@ class ResolutionWorkflow:
         return state
 
     def build_constraint_pack(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
         if not (
-            self._experimental_feature_enabled("transitive_conflicts")
-            or self._experimental_feature_enabled("python_constraint_intersection")
-            or self._experimental_feature_enabled("version_negotiation")
+            self._research_feature_enabled("transitive_conflicts")
+            or self._research_feature_enabled("python_constraint_intersection")
+            or self._research_feature_enabled("version_negotiation")
         ):
             state["constraint_pack"] = None
             state["version_conflict_notes"] = []
@@ -1688,7 +1781,7 @@ class ResolutionWorkflow:
 
     def requires_python_intersection_check(self, state: ResolutionState) -> ResolutionState:
         pack = state.get("constraint_pack")
-        if pack is None or not self._experimental_feature_enabled("python_constraint_intersection"):
+        if pack is None or not self._research_feature_enabled("python_constraint_intersection"):
             return state
         self._write_json_artifact(
             state,
@@ -1705,7 +1798,7 @@ class ResolutionWorkflow:
             state["last_execution"] = ExecutionOutcome(
                 success=False,
                 category="ConstraintConflictError",
-                message="Experimental constraint precheck blocked all candidate plans.",
+                message="Research constraint precheck blocked all candidate plans.",
                 build_succeeded=False,
                 run_succeeded=False,
                 dependency_retryable=False,
@@ -1715,7 +1808,7 @@ class ResolutionWorkflow:
         return state
 
     def load_feedback_memory_summary(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental() or not self._experimental_feature_enabled("repair_feedback_loop"):
+        if not self._is_research() or not self._research_feature_enabled("repair_feedback_loop"):
             state["feedback_memory_hits"] = 0
             return state
         self._feedback_memory_summary(state)
@@ -1891,9 +1984,9 @@ class ResolutionWorkflow:
         return state
 
     def generate_candidate_bundles(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
-        if not self._experimental_feature_enabled("version_negotiation"):
+        if not self._research_feature_enabled("version_negotiation"):
             state["structured_outputs"]["candidate_bundles"] = []
             return state
         pack = state.get("constraint_pack")
@@ -1913,9 +2006,9 @@ class ResolutionWorkflow:
         return state
 
     def negotiate_version_bundles(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
-        if not self._experimental_feature_enabled("version_negotiation"):
+        if not self._research_feature_enabled("version_negotiation"):
             return state
         bundles = state.get("structured_outputs", {}).get("candidate_bundles", [])
         if not bundles:
@@ -1923,7 +2016,7 @@ class ResolutionWorkflow:
             state["remaining_candidate_plans"] = []
             return state
         allowed_versions = self._allowed_versions_map(state.get("version_options", []))
-        allowed_packages = self._experimental_allowed_packages(state)
+        allowed_packages = self._research_allowed_packages(state)
         prompt_text = self._format_prompt(
             "version_negotiation.txt",
             target_python=state.get("target_python", ""),
@@ -1991,29 +2084,29 @@ class ResolutionWorkflow:
         if plans:
             state["candidate_plans"] = plans
             state["remaining_candidate_plans"] = list(plans)
-            state["version_selection_source"] = "experimental_version_negotiation"
+            state["version_selection_source"] = "research_version_negotiation"
             state["dependency_reason"] = "llm_version_selection"
         return state
 
     def generate_candidate_plans(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
-        if self._experimental_feature_enabled("version_negotiation") and state.get("candidate_plans"):
+        if self._research_feature_enabled("version_negotiation") and state.get("candidate_plans"):
             self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(state.get("candidate_plans", [])))
             return state
 
-        default_plans = self._default_experimental_plans(state)
+        default_plans = self._default_research_plans(state)
         options = state.get("version_options", [])
         if default_plans and (
             not options
             or all(len(option.versions) == 1 for option in options)
         ):
             if not options:
-                state["version_selection_source"] = "experimental_default_no_versions"
+                state["version_selection_source"] = "research_default_no_versions"
             elif all(len(option.versions) == 1 for option in options):
-                state["version_selection_source"] = "experimental_single_version_fast_path"
+                state["version_selection_source"] = "research_single_version_fast_path"
             else:
-                state["version_selection_source"] = "experimental_deterministic_default"
+                state["version_selection_source"] = "research_deterministic_default"
             state["candidate_plans"] = default_plans
             state["remaining_candidate_plans"] = list(default_plans)
             state["structured_outputs"]["candidate_plans"] = self._candidate_plan_payload(default_plans)
@@ -2027,13 +2120,13 @@ class ResolutionWorkflow:
             return state
 
         allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
-        allowed_package_set = self._experimental_allowed_packages(state)
+        allowed_package_set = self._research_allowed_packages(state)
         allowed_versions = self._allowed_versions_map(options)
         rag_context_summary = summarize_rag_context(state.get("rag_context", {}), limit=6000)
         candidate_template = (
             "candidate_plans_v2.txt"
-            if self._experimental_feature_enabled("transitive_conflicts")
-            or self._experimental_feature_enabled("multipass_inference")
+            if self._research_feature_enabled("transitive_conflicts")
+            or self._research_feature_enabled("multipass_inference")
             else "candidate_plans.txt"
         )
         prompt_text = self._format_prompt(
@@ -2091,11 +2184,11 @@ class ResolutionWorkflow:
         self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(plans))
         if not state.get("dependency_reason"):
             state["dependency_reason"] = "llm_version_selection"
-        state["version_selection_source"] = "experimental_candidate_plans"
+        state["version_selection_source"] = "research_candidate_plans"
         return state
 
     def select_next_candidate_plan(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
         remaining = list(state.get("remaining_candidate_plans", []))
         selected_plan = remaining.pop(0) if remaining else None
@@ -2122,12 +2215,12 @@ class ResolutionWorkflow:
         )
         return state
 
-    def repair_prompt_c_experimental(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+    def repair_prompt_c_research(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_research():
             return state
         state["repair_cycle_count"] = state.get("repair_cycle_count", 0) + 1
         allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
-        allowed_package_set = self._experimental_allowed_packages(state)
+        allowed_package_set = self._research_allowed_packages(state)
         allowed_versions = self._allowed_versions_map(state.get("version_options", []))
         previous_plan = "\n".join(dep.pin() for dep in state.get("selected_dependencies", []))
         attempted_plans = "\n".join(
@@ -2136,10 +2229,10 @@ class ResolutionWorkflow:
             if attempt.dependencies
         )
         rag_context_summary = summarize_rag_context(state.get("rag_context", {}), limit=8000)
-        repair_template = "repair_attempt_v2.txt" if self._experimental_feature_enabled("repair_memory") else "repair_attempt.txt"
+        repair_template = "repair_attempt_v2.txt" if self._research_feature_enabled("repair_memory") else "repair_attempt.txt"
         feedback_summary = (
             summarize_feedback_memory(self.settings.workspace_memory_dir)
-            if self._experimental_feature_enabled("repair_feedback_loop")
+            if self._research_feature_enabled("repair_feedback_loop")
             else {"entries": []}
         )
         prompt_text = self._format_prompt(
@@ -2334,7 +2427,7 @@ class ResolutionWorkflow:
         (artifact_dir / "prompt_b.txt").write_text(state["prompt_history"]["prompt_b"], encoding="utf-8")
         for index, prompt_c in enumerate(state["prompt_history"]["prompt_c"], start=1):
             (artifact_dir / f"prompt_c_attempt_{index}.txt").write_text(prompt_c, encoding="utf-8")
-        if self._is_experimental():
+        if self._is_research():
             self._write_json_artifact(state, "structured-outputs.json", state.get("structured_outputs", {}))
         return state
 
@@ -2385,7 +2478,7 @@ class ResolutionWorkflow:
         classified = classify_error(execution.build_log, execution.run_log, execution.exit_code)
         if not self._uses_full_apd():
             classified.dependency_retryable = False
-        if self._experimental_feature_enabled("smart_repair_routing"):
+        if self._research_feature_enabled("smart_repair_routing"):
             system_packages_injected = bool(
                 getattr(state.get("prepared_execution_context"), "system_packages", [])
             ) if state.get("prepared_execution_context") is not None else False
@@ -2420,7 +2513,7 @@ class ResolutionWorkflow:
             result="success" if classified.success else "failure",
         )
         state.setdefault("strategy_history", []).append(strategy_record)
-        if self._is_experimental():
+        if self._is_research():
             self._write_json_artifact(
                 state,
                 "error-routing.json",
@@ -2439,7 +2532,7 @@ class ResolutionWorkflow:
                 "strategy-history.json",
                 [asdict(record) for record in state.get("strategy_history", [])],
             )
-            if self._experimental_feature_enabled("repair_feedback_loop"):
+            if self._research_feature_enabled("repair_feedback_loop"):
                 append_feedback_event(
                     self.settings.workspace_memory_dir,
                     {
@@ -2448,7 +2541,7 @@ class ResolutionWorkflow:
                         "target_python": state.get("target_python", ""),
                         "resolver": state.get("resolver", self.settings.resolver),
                         "preset": state.get("preset", self.settings.preset),
-                        "enabled_features": list(state.get("experimental_features", ())),
+                        "enabled_features": list(state.get("research_features", ())),
                         "error_category": classified.category,
                         "strategy_type": strategy_record.strategy_type,
                         "dependency_fingerprint": "|".join(current_dependencies),
@@ -2461,9 +2554,9 @@ class ResolutionWorkflow:
         return state
 
     def build_repair_memory_summary(self, state: ResolutionState) -> ResolutionState:
-        if not self._is_experimental():
+        if not self._is_research():
             return state
-        if not self._experimental_feature_enabled("repair_memory"):
+        if not self._research_feature_enabled("repair_memory"):
             state["repair_memory_summary"] = RepairMemorySummary()
             return state
         strategies = state.get("strategy_history", [])
@@ -2553,8 +2646,8 @@ class ResolutionWorkflow:
             "resolver_implementation": state.get("resolver_implementation", "internal"),
             "preset": state.get("preset", self.settings.preset),
             "prompt_profile": state.get("prompt_profile", self.settings.prompt_profile),
-            "experimental_bundle": state.get("experimental_bundle", "baseline"),
-            "experimental_features": list(state.get("experimental_features", ())),
+            "research_bundle": state.get("research_bundle", "baseline"),
+            "research_features": list(state.get("research_features", ())),
             "model_profile": self.settings.model_profile,
             "use_moe": self.settings.use_moe,
             "use_rag": self.settings.use_rag,
@@ -2586,16 +2679,16 @@ class ResolutionWorkflow:
             "selected_candidate_rank": state.get("selected_candidate_rank"),
             "selected_candidate_reason": state.get("selected_candidate_plan").reason if state.get("selected_candidate_plan") else "",
             "repair_cycle_count": state.get("repair_cycle_count", 0),
-            "experimental_path": state.get("experimental_path", False),
+            "research_path": state.get("research_path", False),
             "structured_prompt_failures": state.get("structured_prompt_failures", 0),
             "conflict_precheck_failed": bool(getattr(state.get("constraint_pack"), "conflict_precheck_failed", False)),
             "python_constraint_intersection": list(state.get("python_constraint_intersection", [])),
             "dynamic_import_candidates": list(state.get("dynamic_import_candidates", [])),
             "repair_memory_hits": len(getattr(state.get("repair_memory_summary"), "recent_strategies", [])),
             "dynamic_alias_hits": sum(1 for source in state.get("candidate_provenance", {}).values() if source == "repo_alias"),
-            "multipass_inference_used": self._experimental_feature_enabled("multipass_inference"),
-            "version_negotiation_used": self._experimental_feature_enabled("version_negotiation"),
-            "feedback_memory_used": self._experimental_feature_enabled("repair_feedback_loop"),
+            "multipass_inference_used": self._research_feature_enabled("multipass_inference"),
+            "version_negotiation_used": self._research_feature_enabled("version_negotiation"),
+            "feedback_memory_used": self._research_feature_enabled("repair_feedback_loop"),
             "retry_severity": getattr(state.get("retry_decision"), "severity", execution.retry_severity),
             "strategy_type": state.get("strategy_history", [])[-1].strategy_type if state.get("strategy_history") else "",
             "wall_clock_seconds": total_wall_clock,
@@ -2606,7 +2699,7 @@ class ResolutionWorkflow:
             "attempt_records": [asdict(attempt) for attempt in state.get("attempt_records", [])],
         }
         state["final_result"] = result
-        if self._is_experimental():
+        if self._is_research():
             self._write_json_artifact(state, "repo-evidence.json", state.get("repo_evidence", {}))
             self._write_json_artifact(state, "pypi-evidence.json", state.get("pypi_evidence", {}))
             self._write_json_artifact(state, "rag-context.json", state.get("rag_context", {}))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import shutil
 import ssl
 import subprocess
@@ -15,6 +16,9 @@ from agentic_python_dependency.state import BenchmarkCase
 
 
 class GistableDataset:
+    _CASE_ID_PATTERN = re.compile(r"^[0-9a-fA-F]{6,40}$")
+    _COMPETITION_ID_COLUMNS = ("name", "gist_id", "gistid", "case_id", "id")
+
     def __init__(self, settings: Settings):
         self.settings = settings
 
@@ -114,6 +118,54 @@ class GistableDataset:
     def _resolve_case_source(self, case_source: BenchmarkCaseSource | None) -> BenchmarkCaseSource:
         return case_source or self.settings.benchmark_case_source
 
+    @staticmethod
+    def _filesystem_case_source(case_source: BenchmarkCaseSource) -> BenchmarkCaseSource:
+        if case_source == "competition-run":
+            return "all-gists"
+        return case_source
+
+    @classmethod
+    def _is_case_id_token(cls, token: str) -> bool:
+        value = token.strip()
+        if not value:
+            return False
+        return bool(cls._CASE_ID_PATTERN.fullmatch(value))
+
+    @classmethod
+    def _extract_case_ids_from_row(cls, row: dict[str, str]) -> set[str]:
+        values: list[str] = []
+        normalized = {key.strip().lower(): value for key, value in row.items() if key}
+        for column in cls._COMPETITION_ID_COLUMNS:
+            if column in normalized:
+                values.append(str(normalized[column]))
+        case_ids: set[str] = set()
+        for value in values:
+            for token in re.split(r"[^0-9A-Za-z]+", value):
+                if cls._is_case_id_token(token):
+                    case_ids.add(token)
+        return case_ids
+
+    def competition_case_ids(self, ref: str | None = None) -> set[str]:
+        root = self.dataset_root(ref)
+        case_root = root / "all-gists"
+        if not case_root.exists():
+            return set()
+        known_case_ids = {path.name for path in case_root.iterdir() if path.is_dir() and (path / "snippet.py").exists()}
+        if not known_case_ids:
+            return set()
+        selected: set[str] = set()
+        for csv_path in self.settings.competition_result_csvs:
+            if not csv_path.exists():
+                continue
+            try:
+                with csv_path.open(newline="", encoding="utf-8", errors="replace") as handle:
+                    reader = csv.DictReader(handle)
+                    for row in reader:
+                        selected.update(self._extract_case_ids_from_row(row))
+            except OSError:
+                continue
+        return selected & known_case_ids
+
     def snippet_path_for_case(
         self,
         case_id: str,
@@ -123,10 +175,13 @@ class GistableDataset:
     ) -> Path | None:
         root = self.dataset_root(ref)
         resolved_source = self._resolve_case_source(case_source)
-        primary = root / resolved_source / case_id / "snippet.py"
+        filesystem_source = self._filesystem_case_source(resolved_source)
+        primary = root / filesystem_source / case_id / "snippet.py"
         if primary.exists():
             return primary
-        fallback_source: BenchmarkCaseSource = "dockerized-gists" if resolved_source == "all-gists" else "all-gists"
+        if resolved_source == "competition-run":
+            return None
+        fallback_source: BenchmarkCaseSource = "dockerized-gists" if filesystem_source == "all-gists" else "all-gists"
         fallback = root / fallback_source / case_id / "snippet.py"
         if fallback.exists():
             return fallback
@@ -141,7 +196,7 @@ class GistableDataset:
     ) -> Path | None:
         root = self.dataset_root(ref)
         resolved_source = self._resolve_case_source(case_source)
-        if resolved_source == "all-gists":
+        if resolved_source in {"all-gists", "competition-run"}:
             candidates = [root / "all-gists" / case_id / "Dockerfile"]
         else:
             candidates = [
@@ -156,15 +211,21 @@ class GistableDataset:
     def valid_case_ids(self, ref: str | None = None, case_source: BenchmarkCaseSource | None = None) -> list[str]:
         root = self.dataset_root(ref)
         resolved_source = self._resolve_case_source(case_source)
+        filesystem_source = self._filesystem_case_source(resolved_source)
         ids = []
-        case_root = root / resolved_source
+        case_root = root / filesystem_source
         if not case_root.exists():
             return ids
+        allowed_case_ids: set[str] | None = None
+        if resolved_source == "competition-run":
+            allowed_case_ids = self.competition_case_ids(ref)
         for case_dir in sorted(path for path in case_root.iterdir() if path.is_dir()):
+            if allowed_case_ids is not None and case_dir.name not in allowed_case_ids:
+                continue
             has_snippet = (case_dir / "snippet.py").exists()
             if not has_snippet:
                 continue
-            if resolved_source == "dockerized-gists" and not (case_dir / "Dockerfile").exists():
+            if filesystem_source == "dockerized-gists" and not (case_dir / "Dockerfile").exists():
                 continue
             ids.append(case_dir.name)
         return ids
@@ -177,7 +238,8 @@ class GistableDataset:
     ) -> BenchmarkCase:
         root = self.dataset_root(ref)
         resolved_source = self._resolve_case_source(case_source)
-        case_root = root / resolved_source / case_id
+        filesystem_source = self._filesystem_case_source(resolved_source)
+        case_root = root / filesystem_source / case_id
         snippet_path = self.snippet_path_for_case(case_id, ref, case_source=resolved_source)
         if snippet_path is None:
             raise FileNotFoundError(f"Snippet not found for case {case_id} in {resolved_source} or fallback source")

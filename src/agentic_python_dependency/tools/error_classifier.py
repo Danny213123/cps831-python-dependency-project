@@ -54,6 +54,15 @@ TERMINAL_PATTERNS = [
     (re.compile(r"SyntaxError"), "SyntaxError"),
     (re.compile(r"NameError"), "NameError"),
     (re.compile(r"AttributeError"), "AttributeError"),
+    (re.compile(r"ValueError"), "ValueError"),
+    (re.compile(r"IndexError"), "IndexError"),
+    (re.compile(r"OSError|IOError|FileNotFoundError"), "EnvironmentError"),
+    (re.compile(r"TypeError"), "TypeError"),
+    (re.compile(r"struct\.error"), "RuntimeError"),
+    (re.compile(r"KeyError"), "KeyError"),
+    (re.compile(r"urllib2?\.\w+Error|HTTPError"), "EnvironmentError"),
+    (re.compile(r"DatabaseError|OperationalError"), "EnvironmentError"),
+    (re.compile(r"BadZipfile|BadZipFile"), "RuntimeError"),
     (re.compile(r"NoCredentialsError|APIError|ConnectionError"), "EnvironmentError"),
 ]
 

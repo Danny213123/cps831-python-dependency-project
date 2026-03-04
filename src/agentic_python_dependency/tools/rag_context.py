@@ -10,7 +10,7 @@ def _json_compact(payload: dict[str, Any], *, limit: int) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)[:limit]
 
 
-def build_experimental_rag_context(
+def build_research_rag_context(
     state: ResolutionState,
     *,
     repo_evidence: dict[str, Any],
@@ -29,8 +29,8 @@ def build_experimental_rag_context(
         )
     return {
         "target_python": state.get("target_python", ""),
-        "experimental_bundle": state.get("experimental_bundle", "baseline"),
-        "experimental_features": list(state.get("experimental_features", ())),
+        "research_bundle": state.get("research_bundle", "baseline"),
+        "research_features": list(state.get("research_features", ())),
         "imports": state.get("extracted_imports", []),
         "dynamic_imports": state.get("dynamic_import_candidates", []),
         "inferred_packages": state.get("inferred_packages", []),

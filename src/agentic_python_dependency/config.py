@@ -7,21 +7,21 @@ from pathlib import Path
 from typing import Literal
 
 from agentic_python_dependency.presets import (
-    ExperimentalBundleName,
-    ExperimentalFeatureName,
     GroupingMode,
     PresetName,
     PromptProfile,
     RagMode,
+    ResearchBundleName,
+    ResearchFeatureName,
     get_preset_config,
-    normalize_experimental_bundle,
     normalize_preset,
     normalize_prompt_profile,
-    resolve_experimental_features,
+    normalize_research_bundle,
+    resolve_research_features,
 )
 
-ResolverName = Literal["apd", "pyego", "readpye"]
-BenchmarkCaseSource = Literal["all-gists", "dockerized-gists"]
+ResolverName = Literal["apdr", "pyego", "readpye"]
+BenchmarkCaseSource = Literal["all-gists", "dockerized-gists", "competition-run"]
 
 ModelProfileName = Literal[
     "gemma-moe",
@@ -56,9 +56,9 @@ def normalize_model_profile(value: str | None) -> ModelProfileName:
 
 def normalize_resolver(value: str | None) -> ResolverName:
     if not value:
-        return "apd"
+        return "apdr"
     normalized = value.strip().lower()
-    if normalized not in {"apd", "pyego", "readpye"}:
+    if normalized not in {"apdr", "pyego", "readpye"}:
         raise ValueError(f"Unsupported resolver: {value}")
     return normalized  # type: ignore[return-value]
 
@@ -67,9 +67,38 @@ def normalize_benchmark_case_source(value: str | None) -> BenchmarkCaseSource:
     if not value:
         return "all-gists"
     normalized = value.strip().lower()
-    if normalized not in {"all-gists", "dockerized-gists"}:
+    if normalized not in {"all-gists", "dockerized-gists", "competition-run"}:
         raise ValueError(f"Unsupported benchmark case source: {value}")
     return normalized  # type: ignore[return-value]
+
+
+def parse_path_list(value: str) -> tuple[Path, ...]:
+    paths: list[Path] = []
+    for raw in value.split(","):
+        candidate = raw.strip()
+        if not candidate:
+            continue
+        paths.append(Path(candidate).expanduser().resolve())
+    return tuple(paths)
+
+
+def default_competition_result_csvs(project_root: Path) -> tuple[Path, ...]:
+    candidates = [
+        project_root / "data" / "benchmarks" / "gistable" / "competition" / "pyego_results.csv",
+        project_root / "data" / "benchmarks" / "gistable" / "competition" / "summary-all-runs.csv",
+        Path.home() / "Downloads" / "pyego_results.csv",
+        Path.home() / "Downloads" / "summary-all-runs.csv",
+    ]
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for path in candidates:
+        resolved = path.expanduser().resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.exists():
+            deduped.append(resolved)
+    return tuple(deduped)
 
 
 def parse_optional_bool(value: str) -> bool | None:
@@ -100,9 +129,10 @@ class Settings:
     pyego_python: str = sys.executable
     readpye_python: str = sys.executable
     readpye_language_dir: str = ""
+    competition_result_csvs: tuple[Path, ...] = ()
     ollama_base_url: str = "http://127.0.0.1:11434"
     docker_host: str = ""
-    resolver: ResolverName = "apd"
+    resolver: ResolverName = "apdr"
     model_profile: ModelProfileName = "gemma-moe"
     use_moe: bool = True
     use_rag: bool = True
@@ -133,8 +163,8 @@ class Settings:
     allow_candidate_fallback_before_repair: bool = False
     repair_cycle_limit: int = 0
     repo_evidence_enabled: bool = False
-    experimental_bundle: ExperimentalBundleName = "baseline"
-    experimental_features: tuple[ExperimentalFeatureName, ...] = ()
+    research_bundle: ResearchBundleName = "baseline"
+    research_features: tuple[ResearchFeatureName, ...] = ()
 
     @classmethod
     def from_env(
@@ -155,10 +185,11 @@ class Settings:
         repair_model_override: str | None = None,
         adjudication_model_override: str | None = None,
         disable_llm_cache_override: bool | None = None,
-        experimental_bundle_override: str | None = None,
-        experimental_feature_overrides: list[str] | None = None,
-        experimental_feature_disable_overrides: list[str] | None = None,
+        research_bundle_override: str | None = None,
+        research_feature_overrides: list[str] | None = None,
+        research_feature_disable_overrides: list[str] | None = None,
         benchmark_case_source_override: str | None = None,
+        competition_result_csvs_override: list[str] | None = None,
     ) -> "Settings":
         root = (project_root or Path(__file__).resolve().parents[2]).resolve()
         data_dir = root / "data"
@@ -167,56 +198,63 @@ class Settings:
         pypi_cache_dir = data_dir / "pypi_cache"
         llm_cache_dir = data_dir / "llm_cache"
         package_metadata_dir = data_dir / "package_metadata"
-        workspace_memory_dir = data_dir / "experimental_memory"
+        workspace_memory_dir = data_dir / "research_memory"
         prompts_dir = root / "src" / "agentic_python_dependency" / "prompts"
         external_tools_dir = root / "external"
-        pyego_root = Path(os.getenv("APD_PYEGO_ROOT", str(external_tools_dir / "PyEGo"))).resolve()
-        readpye_root = Path(os.getenv("APD_READPYE_ROOT", str(external_tools_dir / "ReadPyE"))).resolve()
-        pyego_python = os.getenv("APD_PYEGO_PYTHON", sys.executable)
-        readpye_python = os.getenv("APD_READPYE_PYTHON", sys.executable)
-        readpye_language_dir = os.getenv("APD_READPYE_LANGDIR", "")
-        resolver = normalize_resolver(resolver_override or os.getenv("APD_RESOLVER"))
+        pyego_root = Path(os.getenv("APDR_PYEGO_ROOT", str(external_tools_dir / "PyEGo"))).resolve()
+        readpye_root = Path(os.getenv("APDR_READPYE_ROOT", str(external_tools_dir / "ReadPyE"))).resolve()
+        pyego_python = os.getenv("APDR_PYEGO_PYTHON", sys.executable)
+        readpye_python = os.getenv("APDR_READPYE_PYTHON", sys.executable)
+        readpye_language_dir = os.getenv("APDR_READPYE_LANGDIR", "")
+        resolver = normalize_resolver(resolver_override or os.getenv("APDR_RESOLVER"))
         benchmark_case_source = normalize_benchmark_case_source(
-            benchmark_case_source_override or os.getenv("APD_BENCHMARK_CASE_SOURCE")
+            benchmark_case_source_override or os.getenv("APDR_BENCHMARK_CASE_SOURCE")
         )
-        preset = normalize_preset(preset_override or os.getenv("APD_PRESET"))
+        competition_result_csvs = (
+            tuple(Path(value).expanduser().resolve() for value in competition_result_csvs_override)
+            if competition_result_csvs_override
+            else parse_path_list(os.getenv("APDR_COMPETITION_RESULT_CSVS", ""))
+        )
+        if not competition_result_csvs:
+            competition_result_csvs = default_competition_result_csvs(root)
+        preset = normalize_preset(preset_override or os.getenv("APDR_PRESET"))
         preset_config = get_preset_config(preset)
-        prompt_profile = normalize_prompt_profile(prompt_profile_override or os.getenv("APD_PROMPT_PROFILE"))
-        experimental_bundle = normalize_experimental_bundle(
-            experimental_bundle_override or os.getenv("APD_EXPERIMENTAL_BUNDLE") or preset_config.experimental_bundle
+        prompt_profile = normalize_prompt_profile(prompt_profile_override or os.getenv("APDR_PROMPT_PROFILE"))
+        research_bundle = normalize_research_bundle(
+            research_bundle_override or os.getenv("APDR_RESEARCH_BUNDLE") or preset_config.research_bundle
         )
         env_enabled_features = [
             value.strip()
-            for value in os.getenv("APD_EXPERIMENTAL_FEATURES", "").split(",")
+            for value in os.getenv("APDR_RESEARCH_FEATURES", "").split(",")
             if value.strip()
         ]
         env_disabled_features = [
             value.strip()
-            for value in os.getenv("APD_NO_EXPERIMENTAL_FEATURES", "").split(",")
+            for value in os.getenv("APDR_NO_RESEARCH_FEATURES", "").split(",")
             if value.strip()
         ]
-        experimental_features = resolve_experimental_features(
-            experimental_bundle,
-            enabled=[*(experimental_feature_overrides or []), *env_enabled_features],
-            disabled=[*(experimental_feature_disable_overrides or []), *env_disabled_features],
+        research_features = resolve_research_features(
+            research_bundle,
+            enabled=[*(research_feature_overrides or []), *env_enabled_features],
+            disabled=[*(research_feature_disable_overrides or []), *env_disabled_features],
         )
-        env_disable_llm_cache = os.getenv("APD_DISABLE_LLM_CACHE", "").lower() in TRUE_VALUES
-        env_use_moe = parse_optional_bool(os.getenv("APD_USE_MOE", ""))
-        env_use_rag = parse_optional_bool(os.getenv("APD_USE_RAG", ""))
-        env_use_langchain = parse_optional_bool(os.getenv("APD_USE_LANGCHAIN", ""))
-        selected_model_profile = normalize_model_profile(model_profile_override or os.getenv("APD_MODEL_PROFILE"))
+        env_disable_llm_cache = os.getenv("APDR_DISABLE_LLM_CACHE", "").lower() in TRUE_VALUES
+        env_use_moe = parse_optional_bool(os.getenv("APDR_USE_MOE", ""))
+        env_use_rag = parse_optional_bool(os.getenv("APDR_USE_RAG", ""))
+        env_use_langchain = parse_optional_bool(os.getenv("APDR_USE_LANGCHAIN", ""))
+        selected_model_profile = normalize_model_profile(model_profile_override or os.getenv("APDR_MODEL_PROFILE"))
         default_extraction_model, default_reasoning_model = MODEL_PROFILE_DEFAULTS[selected_model_profile]
-        extraction_model = extraction_model_override or os.getenv("APD_EXTRACTION_MODEL") or default_extraction_model
+        extraction_model = extraction_model_override or os.getenv("APDR_EXTRACTION_MODEL") or default_extraction_model
         reasoning_model = (
             runner_model_override
             or reasoning_model_override
-            or os.getenv("APD_RUNNER_MODEL")
-            or os.getenv("APD_REASONING_MODEL")
+            or os.getenv("APDR_RUNNER_MODEL")
+            or os.getenv("APDR_REASONING_MODEL")
             or default_reasoning_model
         )
-        version_model = version_model_override or os.getenv("APD_VERSION_MODEL") or reasoning_model
-        repair_model = repair_model_override or os.getenv("APD_REPAIR_MODEL") or reasoning_model
-        adjudication_model = adjudication_model_override or os.getenv("APD_ADJUDICATION_MODEL") or reasoning_model
+        version_model = version_model_override or os.getenv("APDR_VERSION_MODEL") or reasoning_model
+        repair_model = repair_model_override or os.getenv("APDR_REPAIR_MODEL") or reasoning_model
+        adjudication_model = adjudication_model_override or os.getenv("APDR_ADJUDICATION_MODEL") or reasoning_model
         use_moe = True if env_use_moe is None else env_use_moe
         if use_moe_override is not None:
             use_moe = use_moe_override
@@ -255,6 +293,7 @@ class Settings:
             docker_host=os.getenv("DOCKER_HOST", ""),
             resolver=resolver,
             benchmark_case_source=benchmark_case_source,
+            competition_result_csvs=competition_result_csvs,
             model_profile=effective_model_profile,
             use_moe=use_moe,
             use_rag=use_rag,
@@ -264,8 +303,8 @@ class Settings:
             version_model=version_model,
             repair_model=repair_model,
             adjudication_model=adjudication_model,
-            keep_images=os.getenv("APD_KEEP_IMAGES", "").lower() in {"1", "true", "yes"},
-            trace_llm=os.getenv("APD_TRACE_LLM", "").lower() in {"1", "true", "yes"},
+            keep_images=os.getenv("APDR_KEEP_IMAGES", "").lower() in {"1", "true", "yes"},
+            trace_llm=os.getenv("APDR_TRACE_LLM", "").lower() in {"1", "true", "yes"},
             disable_llm_cache=env_disable_llm_cache if disable_llm_cache_override is None else disable_llm_cache_override,
             preset=preset,
             prompt_profile=prompt_profile or preset_config.prompt_profile,
@@ -277,8 +316,8 @@ class Settings:
             allow_candidate_fallback_before_repair=preset_config.allow_candidate_fallback_before_repair,
             repair_cycle_limit=preset_config.repair_cycle_limit,
             repo_evidence_enabled=preset_config.repo_evidence_enabled,
-            experimental_bundle=experimental_bundle,
-            experimental_features=experimental_features if preset == "experimental" else (),
+            research_bundle=research_bundle,
+            research_features=research_features if preset == "research" else (),
         )
         settings.ensure_directories()
         return settings
@@ -325,5 +364,5 @@ class Settings:
             "adjudicate": self.stage_model("adjudicate"),
         }
 
-    def experimental_feature_enabled(self, feature: ExperimentalFeatureName | str) -> bool:
-        return feature in self.experimental_features
+    def research_feature_enabled(self, feature: ResearchFeatureName | str) -> bool:
+        return feature in self.research_features

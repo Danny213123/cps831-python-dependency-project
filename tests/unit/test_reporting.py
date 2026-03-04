@@ -38,7 +38,7 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
                 "dependency_reason": "deterministic_version_selector",
                 "candidate_provenance": {"PyYAML": "alias"},
                 "dependencies": ["PyYAML==6.0.2"],
-                "experimental_path": True,
+                "research_path": True,
                 "candidate_plan_count": 3,
                 "selected_candidate_rank": 2,
                 "repair_cycle_count": 1,
@@ -54,7 +54,7 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
     assert summary.prompt_profile == "optimized-strict"
     assert summary.rag_mode == "hybrid"
     assert summary.structured_prompting is True
-    assert summary.experimental_case_count == 1
+    assert summary.research_case_count == 1
     assert summary.candidate_plan_attempts == 3
     assert summary.average_candidate_rank_selected == 2.0
     assert summary.repair_cycle_count == 1
@@ -79,9 +79,9 @@ def test_write_module_success_artifacts_uses_raw_suffix(tmp_path: Path) -> None:
         "total_cohort_cases": 1,
         "skipped_case_count": 0,
         "display_strategy": "all-modules",
-        "rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_success_rate": 100.0}],
-        "top_rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_success_rate": 100.0}],
-        "all_rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_success_rate": 100.0}],
+        "rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apdr_success_rate": 100.0}],
+        "top_rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apdr_success_rate": 100.0}],
+        "all_rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apdr_success_rate": 100.0}],
     }
 
     write_module_success_artifacts(run_dir, report)

@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 from agentic_python_dependency.presets import (
-    ExperimentalBundleName,
-    ExperimentalFeatureName,
     GroupingMode,
     PresetName,
     PromptProfile,
+    ResearchBundleName,
+    ResearchFeatureName,
 )
 from agentic_python_dependency.config import ResolverName
 
@@ -179,7 +179,7 @@ class BenchmarkSummary:
     final_import_errors: int
     mean_attempts_to_success: float
     mean_wall_clock_time: float
-    resolver: str = "apd"
+    resolver: str = "apdr"
     preset: str = "optimized"
     prompt_profile: str = "optimized"
     model_profile: str = "gemma-moe"
@@ -197,13 +197,13 @@ class BenchmarkSummary:
     total_wall_clock_human: str = "00:00:00"
     transitions: dict[str, int] = field(default_factory=dict)
     dependency_reason_counts: dict[str, int] = field(default_factory=dict)
-    experimental_case_count: int = 0
+    research_case_count: int = 0
     candidate_plan_attempts: int = 0
     average_candidate_rank_selected: float = 0.0
     repair_cycle_count: int = 0
     structured_prompt_failures: int = 0
-    experimental_bundle: str = "baseline"
-    experimental_features: list[str] = field(default_factory=list)
+    research_bundle: str = "baseline"
+    research_features: list[str] = field(default_factory=list)
     conflict_precheck_failures: int = 0
     python_constraint_blocked_cases: int = 0
     dynamic_alias_hit_rate: float = 0.0
@@ -256,8 +256,8 @@ class ResolutionState(TypedDict, total=False):
     resolver: ResolverName
     preset: PresetName
     prompt_profile: PromptProfile
-    experimental_bundle: ExperimentalBundleName
-    experimental_features: tuple[ExperimentalFeatureName, ...]
+    research_bundle: ResearchBundleName
+    research_features: tuple[ResearchFeatureName, ...]
     dependency_reason: str
     candidate_provenance: dict[str, str]
     repair_outcome: str
@@ -285,5 +285,5 @@ class ResolutionState(TypedDict, total=False):
     selected_candidate_rank: int | None
     repair_cycle_count: int
     structured_outputs: dict[str, Any]
-    experimental_path: bool
+    research_path: bool
     structured_prompt_failures: int

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from agentic_python_dependency.config import Settings
 from agentic_python_dependency.graph import ResolutionWorkflow
-from agentic_python_dependency.presets import resolve_experimental_features
+from agentic_python_dependency.presets import resolve_research_features
 from agentic_python_dependency.state import PackageVersionOptions
 from agentic_python_dependency.tools.constraint_pack import build_constraint_pack, generate_candidate_bundles
 from agentic_python_dependency.tools.dynamic_imports import collect_dynamic_import_candidates
@@ -37,23 +37,23 @@ class FakePackageMetadataStore:
         }
 
 
-def test_settings_from_env_resolves_experimental_bundle_and_feature_overrides(tmp_path: Path) -> None:
+def test_settings_from_env_resolves_research_bundle_and_feature_overrides(tmp_path: Path) -> None:
     settings = Settings.from_env(
         project_root=tmp_path,
-        preset_override="experimental",
-        experimental_bundle_override="enhanced",
-        experimental_feature_overrides=["dynamic_imports"],
-        experimental_feature_disable_overrides=["repair_memory"],
+        preset_override="research",
+        research_bundle_override="enhanced",
+        research_feature_overrides=["dynamic_imports"],
+        research_feature_disable_overrides=["repair_memory"],
     )
 
-    assert settings.experimental_bundle == "enhanced"
-    assert "dynamic_aliases" in settings.experimental_features
-    assert "dynamic_imports" in settings.experimental_features
-    assert "repair_memory" not in settings.experimental_features
+    assert settings.research_bundle == "enhanced"
+    assert "dynamic_aliases" in settings.research_features
+    assert "dynamic_imports" in settings.research_features
+    assert "repair_memory" not in settings.research_features
 
 
-def test_resolve_experimental_features_respects_bundle_order_and_overrides() -> None:
-    features = resolve_experimental_features(
+def test_resolve_research_features_respects_bundle_order_and_overrides() -> None:
+    features = resolve_research_features(
         "baseline",
         enabled=["repair_memory", "dynamic_imports"],
         disabled=["repair_memory"],
@@ -99,7 +99,7 @@ def test_build_repo_alias_candidates_uses_declared_package_metadata() -> None:
         target_python="3.12",
         pypi_store=FakePyPIStore(),
         package_metadata_store=FakePackageMetadataStore(),
-        preset="experimental",
+        preset="research",
     )
 
     assert alias_map == {"cv2": ["opencv-contrib-python"]}
@@ -172,8 +172,8 @@ def test_feedback_memory_summary_aggregates_workspace_local_history(tmp_path: Pa
     assert summary["entries"][0]["failures"] == 1
 
 
-def test_experimental_prompt_templates_render_without_format_key_errors(tmp_path: Path) -> None:
-    settings = Settings.from_env(project_root=tmp_path, preset_override="experimental")
+def test_research_prompt_templates_render_without_format_key_errors(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
     settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
     workflow = ResolutionWorkflow(settings)
 

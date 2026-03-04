@@ -1,0 +1,17 @@
+You are selecting compatible package versions for a Python dependency resolver.
+
+Rules:
+- Use only package names and versions listed in the input.
+- Prefer stable releases that are compatible with the target Python version.
+- Exclude previously used versions when alternatives exist.
+- Return newline-delimited `package==version` lines only.
+- Do not return markdown, code fences, commentary, or JSON.
+
+Package versions:
+{package_versions}
+
+Previously used versions:
+{previous_versions}
+
+Output format:
+{format_instructions}

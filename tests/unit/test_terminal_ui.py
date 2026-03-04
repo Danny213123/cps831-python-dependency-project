@@ -32,14 +32,14 @@ def test_terminal_ui_can_exit_immediately(tmp_path: Path, monkeypatch) -> None:
     exit_code = ui.run()
 
     assert exit_code == 0
-    assert any("Agentic Python Dependency" in line for line in outputs)
-    assert any("Exiting APD UI." in line for line in outputs)
+    assert any("APDR Command Center" in line for line in outputs)
+    assert any("Exiting APDR UI." in line for line in outputs)
 
 
 def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["p", "6", "8"])
+    inputs = iter(["4", "2", "6", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -64,11 +64,11 @@ def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
     assert settings.max_attempts == 5
 
 
-def test_terminal_ui_switching_to_experimental_forces_apd_resolver(tmp_path: Path, monkeypatch) -> None:
+def test_terminal_ui_switching_to_experimental_forces_apdr_resolver(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     settings.resolver = "pyego"
     outputs: list[str] = []
-    inputs = iter(["p", "7", "8"])
+    inputs = iter(["4", "2", "8", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -89,13 +89,13 @@ def test_terminal_ui_switching_to_experimental_forces_apd_resolver(tmp_path: Pat
     ui.run()
 
     assert settings.preset == "experimental"
-    assert settings.resolver == "apd"
+    assert settings.resolver == "apdr"
 
 
 def test_terminal_ui_can_switch_resolver(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["v", "2", "8"])
+    inputs = iter(["4", "1", "2", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -121,9 +121,9 @@ def test_terminal_ui_can_switch_resolver(tmp_path: Path, monkeypatch) -> None:
 def test_terminal_ui_switching_resolver_from_experimental_restores_supported_preset(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     settings.preset = "experimental"
-    settings.prompt_profile = "experimental-rag"
+    settings.prompt_profile = "optimized-strict"
     outputs: list[str] = []
-    inputs = iter(["v", "2", "8"])
+    inputs = iter(["4", "1", "2", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -150,7 +150,7 @@ def test_terminal_ui_switching_resolver_from_experimental_restores_supported_pre
 def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["m", "3", "8"])
+    inputs = iter(["4", "3", "3", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -178,7 +178,7 @@ def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> Non
 def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["f", "8"])
+    inputs = iter(["4", "7", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -204,7 +204,7 @@ def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
 def test_terminal_ui_can_configure_runtime_controls(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["r", "1", "r", "6", "custom:version", "8"])
+    inputs = iter(["4", "5", "1", "", "4", "5", "6", "custom:version", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -229,11 +229,37 @@ def test_terminal_ui_can_configure_runtime_controls(tmp_path: Path, monkeypatch)
     assert settings.model_profile == "custom"
 
 
+def test_terminal_ui_blocks_research_controls_when_preset_is_not_research(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["4", "4", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert any("Research controls are only available when the preset is research." in line for line in outputs)
+
+
 def test_terminal_ui_smoke_run_uses_dashboard(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     benchmark_calls: list[dict[str, object]] = []
-    inputs = iter(["2", "1", "", "", "8"])
+    inputs = iter(["2", "1", "1", "", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -266,7 +292,7 @@ def test_terminal_ui_can_resume_saved_benchmark_run(tmp_path: Path, monkeypatch)
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     benchmark_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
-    inputs = iter(["u", "1", "", "8"])
+    inputs = iter(["2", "3", "1", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -314,7 +340,7 @@ def test_terminal_ui_can_resume_saved_benchmark_run(tmp_path: Path, monkeypatch)
 def test_terminal_ui_reports_when_no_resumable_runs_exist(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["u", "", "8"])
+    inputs = iter(["2", "3", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -343,7 +369,7 @@ def test_terminal_ui_can_retry_failed_cases_from_prior_run(tmp_path: Path, monke
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     failed_case_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
-    inputs = iter(["9", "1", "2", "", "", "8"])
+    inputs = iter(["2", "4", "1", "2", "", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -395,7 +421,7 @@ def test_terminal_ui_can_retry_failed_cases_from_prior_run(tmp_path: Path, monke
 def test_terminal_ui_reports_when_no_failed_case_runs_exist(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["9", "", "8"])
+    inputs = iter(["2", "4", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -424,7 +450,7 @@ def test_terminal_ui_can_run_timeline_view(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     timeline_calls: list[tuple[object, ...]] = []
-    inputs = iter(["l", "1", "", "8"])
+    inputs = iter(["3", "4", "1", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     (settings.artifacts_dir / "run123").mkdir(parents=True, exist_ok=True)
@@ -454,7 +480,7 @@ def test_terminal_ui_module_report_can_choose_paper_compatible(tmp_path: Path, m
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     module_calls: list[tuple[object, ...]] = []
-    inputs = iter(["7", "1", "15", "canonical", "paper-compatible", "", "8"])
+    inputs = iter(["3", "3", "1", "15", "canonical", "paper-compatible", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -487,7 +513,7 @@ def test_terminal_ui_module_report_can_choose_paper_compatible(tmp_path: Path, m
 def test_terminal_ui_surfaces_captured_command_errors_without_crashing(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["7", "1", "15", "canonical", "paper-compatible", "", "8"])
+    inputs = iter(["3", "3", "1", "15", "canonical", "paper-compatible", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     (settings.artifacts_dir / "run123").mkdir(parents=True, exist_ok=True)
@@ -517,7 +543,7 @@ def test_terminal_ui_can_select_run_for_summary(tmp_path: Path, monkeypatch) -> 
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     summary_calls: list[tuple[object, ...]] = []
-    inputs = iter(["5", "1", "", "8"])
+    inputs = iter(["3", "1", "1", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     (settings.artifacts_dir / "run123").mkdir(parents=True, exist_ok=True)
@@ -545,7 +571,7 @@ def test_terminal_ui_can_select_run_for_summary(tmp_path: Path, monkeypatch) -> 
 def test_terminal_ui_reports_when_no_runs_exist(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["5", "", "8"])
+    inputs = iter(["3", "1", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -579,7 +605,7 @@ def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:
         completed=1,
         successes=1,
         failures=0,
-        resolver="apd",
+        resolver="apdr",
         preset="balanced",
         prompt_profile="optimized-strict",
         model_summary="gemma-moe: gemma3:4b / gemma3:12b",
@@ -609,7 +635,7 @@ def test_terminal_benchmark_dashboard_reports_rate_speed_and_eta(monkeypatch) ->
         completed=4,
         successes=3,
         failures=1,
-        resolver="apd",
+        resolver="apdr",
         preset="optimized",
         prompt_profile="optimized",
         model_summary="gemma-moe-lite",

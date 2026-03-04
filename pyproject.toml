@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentic-python-dependency"
-version = "0.1.0"
+version = "1.0.0"
 description = "PLLM-inspired agentic Python dependency resolver."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.scripts]
-apd = "agentic_python_dependency.cli:main"
+apdr = "agentic_python_dependency.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -65,4 +65,4 @@ version_provider = "pep621"
 tag_format = "v$version"
 version_scheme = "pep440"
 update_changelog_on_bump = false
-major_version_zero = true
+major_version_zero = false

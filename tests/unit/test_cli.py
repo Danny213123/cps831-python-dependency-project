@@ -30,6 +30,10 @@ def test_benchmark_run_parser_accepts_jobs_flag() -> None:
             "--model-profile",
             "gpt-oss-20b",
             "--fresh-run",
+            "--benchmark-source",
+            "competition-run",
+            "--competition-csv",
+            "/tmp/official-results.csv",
             "benchmark",
             "run",
             "--subset",
@@ -46,6 +50,8 @@ def test_benchmark_run_parser_accepts_jobs_flag() -> None:
     assert args.resolver == "readpye"
     assert args.model_profile == "gpt-oss-20b"
     assert args.fresh_run is True
+    assert args.benchmark_source == "competition-run"
+    assert args.competition_csv == ["/tmp/official-results.csv"]
 
 
 def test_benchmark_run_parser_accepts_new_moe_model_profiles() -> None:
@@ -155,6 +161,12 @@ def test_top_level_ui_parser_is_available() -> None:
     assert args.command == "ui"
 
 
+def test_parser_program_name_is_apdr() -> None:
+    parser = build_parser()
+
+    assert parser.prog == "apdr"
+
+
 def test_report_modules_parser_accepts_grouping() -> None:
     parser = build_parser()
 
@@ -199,17 +211,58 @@ def test_report_timeline_parser_accepts_run_id() -> None:
 def test_parser_accepts_experimental_preset_and_prompt_profile() -> None:
     parser = build_parser()
 
-    args = parser.parse_args(["--preset", "experimental", "--prompt-profile", "experimental-rag", "smoke"])
+    args = parser.parse_args(["--preset", "experimental", "--prompt-profile", "research-rag", "smoke"])
 
     assert args.preset == "experimental"
-    assert args.prompt_profile == "experimental-rag"
+    assert args.prompt_profile == "research-rag"
 
 
-def test_main_rejects_experimental_with_non_apd_resolver(tmp_path: Path, monkeypatch) -> None:
+def test_parser_accepts_research_bundle_and_feature_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "--preset",
+            "research",
+            "--research-bundle",
+            "enhanced",
+            "--research-feature",
+            "dynamic_imports",
+            "--no-research-feature",
+            "repair_memory",
+            "smoke",
+        ]
+    )
+
+    assert args.preset == "research"
+    assert args.research_bundle == "enhanced"
+    assert args.research_feature == ["dynamic_imports"]
+    assert args.no_research_feature == ["repair_memory"]
+
+
+def test_main_rejects_experimental_with_non_apdr_resolver(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
     with pytest.raises(SystemExit) as excinfo:
         main(["--preset", "experimental", "--resolver", "pyego", "doctor"])
+
+    assert excinfo.value.code == 2
+
+
+def test_main_rejects_research_with_non_apdr_resolver(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--preset", "research", "--resolver", "readpye", "doctor"])
+
+    assert excinfo.value.code == 2
+
+
+def test_main_rejects_research_feature_flags_without_research_preset(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--preset", "optimized", "--research-bundle", "enhanced", "doctor"])
 
     assert excinfo.value.code == 2
 
@@ -227,7 +280,7 @@ def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, m
     report = collect_doctor_report(settings)
 
     assert report["overall_status"] == "warning"
-    assert report["resolver"] == "apd"
+    assert report["resolver"] == "apdr"
     names = {check["name"]: check for check in report["checks"]}
     assert names["docker_cli"]["status"] == "missing"
     assert names["ollama_server"]["status"] == "warning"
@@ -266,7 +319,7 @@ def test_benchmark_progress_refresh_thread_starts_and_stops(monkeypatch) -> None
         completed=0,
         successes=0,
         failures=0,
-        resolver="apd",
+        resolver="apdr",
         preset="optimized",
         prompt_profile="optimized",
         model_summary="gemma-moe: gemma3:4b / gemma3:12b",
@@ -289,7 +342,7 @@ def test_benchmark_progress_tracks_case_results() -> None:
         completed=1,
         successes=1,
         failures=0,
-        resolver="apd",
+        resolver="apdr",
         preset="optimized",
         prompt_profile="optimized",
         model_summary="gemma-moe: gemma3:4b / gemma3:12b",
@@ -328,7 +381,7 @@ def test_persistent_benchmark_observer_writes_run_state_files(tmp_path: Path) ->
         completed=1,
         successes=1,
         failures=0,
-        resolver="apd",
+        resolver="apdr",
         preset="optimized",
         prompt_profile="optimized",
         model_summary="gemma-moe",
@@ -378,7 +431,7 @@ def test_persistent_benchmark_observer_restores_elapsed_seconds(monkeypatch, tmp
         completed=2,
         successes=1,
         failures=1,
-        resolver="apd",
+        resolver="apdr",
         preset="optimized",
         prompt_profile="optimized",
         model_summary="gemma-moe",

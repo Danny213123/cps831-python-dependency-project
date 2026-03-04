@@ -77,3 +77,17 @@ def test_classify_error_detects_local_module_mismatch_as_terminal() -> None:
 
     assert outcome.category == "LocalModuleMismatch"
     assert outcome.dependency_retryable is False
+
+
+def test_classify_error_detects_value_error_as_terminal() -> None:
+    outcome = classify_error("", "ValueError: invalid literal for int()", 1)
+
+    assert outcome.category == "ValueError"
+    assert outcome.dependency_retryable is False
+
+
+def test_classify_error_detects_oserror_family_as_environment_error() -> None:
+    outcome = classify_error("", "FileNotFoundError: [Errno 2] No such file or directory", 1)
+
+    assert outcome.category == "EnvironmentError"
+    assert outcome.dependency_retryable is False

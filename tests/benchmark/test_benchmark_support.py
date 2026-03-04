@@ -93,6 +93,61 @@ def test_build_smoke30_backfills_when_buckets_are_short(tmp_path: Path) -> None:
     assert smoke[-5:] == ["extra00", "extra01", "extra02", "extra03", "extra04"]
 
 
+def test_competition_run_filters_all_gists_to_official_csv_case_ids(tmp_path: Path) -> None:
+    settings = Settings.from_env(
+        project_root=tmp_path,
+        benchmark_case_source_override="competition-run",
+    )
+    root = make_dataset(settings)
+    target_one = "ed991fb8cdcac3dfadf7"
+    target_two = "260617"
+    write_case(root, target_one)
+    write_case(root, target_two)
+    write_case(root, "abc123deadbeef")
+    with (root / "results" / "naive-inference-results.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["id", "url", "initial-eval", "final-eval", "error"])
+        writer.writeheader()
+        writer.writerows(
+            [
+                {"id": target_one, "url": "", "initial-eval": "ImportError", "final-eval": "", "error": ""},
+                {"id": target_two, "url": "", "initial-eval": "ImportError", "final-eval": "", "error": ""},
+            ]
+        )
+
+    pyego_csv = tmp_path / "pyego_results.csv"
+    pyego_csv.write_text(
+        "\n".join(
+            [
+                "id,name,result,duration,passed",
+                f"1,{target_one},ModuleNotFound,14.48,False",
+                "1,not-a-gist-id,ImportError,2.0,False",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary_csv = tmp_path / "summary-all-runs.csv"
+    summary_csv.write_text(
+        "\n".join(
+            [
+                "name,file,result,python_modules,duration,passed",
+                f"{target_two},output_data_2.7.yml,ImportError,none,10.0,0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    settings.competition_result_csvs = (pyego_csv, summary_csv)
+
+    dataset = GistableDataset(settings)
+    filtered = dataset.valid_case_ids(case_source="competition-run")
+
+    assert filtered == sorted([target_one, target_two])
+    loaded = dataset.load_case(target_one, case_source="competition-run")
+    assert loaded.case_source == "competition-run"
+    assert loaded.snippet_path == root / "all-gists" / target_one / "snippet.py"
+
+
 def test_summarize_run_writes_summary_files(tmp_path: Path) -> None:
     run_dir = tmp_path / "artifacts" / "runs" / "run123"
     case_one = run_dir / "case1"
@@ -225,11 +280,27 @@ def test_build_module_success_table_writes_artifacts(tmp_path: Path) -> None:
     (run_dir / "case1").mkdir(parents=True, exist_ok=True)
     (run_dir / "case2").mkdir(parents=True, exist_ok=True)
     (run_dir / "case1" / "result.json").write_text(
-        json.dumps({"case_id": "case1", "success": True, "attempts": 1, "initial_eval": "ImportError"}),
+        json.dumps(
+            {
+                "case_id": "case1",
+                "success": True,
+                "attempts": 1,
+                "initial_eval": "ImportError",
+                "case_source": "dockerized-gists",
+            }
+        ),
         encoding="utf-8",
     )
     (run_dir / "case2" / "result.json").write_text(
-        json.dumps({"case_id": "case2", "success": False, "attempts": 1, "initial_eval": "ImportError"}),
+        json.dumps(
+            {
+                "case_id": "case2",
+                "success": False,
+                "attempts": 1,
+                "initial_eval": "ImportError",
+                "case_source": "dockerized-gists",
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -238,7 +309,7 @@ def test_build_module_success_table_writes_artifacts(tmp_path: Path) -> None:
 
     assert report["rows"][0]["module_name"] == "requests"
     assert report["rows"][0]["projects"] == 2
-    assert report["rows"][0]["apd_success_rate"] == 50.0
+    assert report["rows"][0]["apdr_success_rate"] == 50.0
     assert (run_dir / "module-success.json").exists()
     assert (run_dir / "module-success.csv").exists()
     assert (run_dir / "module-success.md").exists()
@@ -283,9 +354,9 @@ def test_build_module_success_table_supports_paper_compatible_cohort(tmp_path: P
     assert report["total_cohort_cases"] == 2
     assert report["covered_case_count"] == 2
     assert report["rows"][0]["module_name"] == "django"
-    assert report["rows"][0]["apd_success_rate"] == 100.0
+    assert report["rows"][0]["apdr_success_rate"] == 100.0
     assert report["rows"][1]["module_name"] == "requests"
-    assert report["rows"][1]["apd_success_rate"] == 0.0
+    assert report["rows"][1]["apdr_success_rate"] == 0.0
     assert (run_dir / "module-success-paper.json").exists()
     assert (run_dir / "module-success-paper.csv").exists()
     assert (run_dir / "module-success-paper.md").exists()
@@ -323,7 +394,7 @@ def test_build_module_success_table_uses_all_projects_for_paper_rates(tmp_path: 
 
     assert report["rows"][0]["projects"] == 3
     assert report["rows"][0]["successes"] == 1
-    assert report["rows"][0]["apd_success_rate"] == 33.33
+    assert report["rows"][0]["apdr_success_rate"] == 33.33
 
 
 def test_build_module_success_table_lists_all_modules_for_partial_paper_preview(tmp_path: Path) -> None:

@@ -4,14 +4,14 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-PresetName = Literal["performance", "efficient", "optimized", "balanced", "thorough", "accuracy", "experimental"]
-PromptProfile = Literal["paper", "optimized-lite", "optimized", "optimized-strict", "experimental-rag"]
+PresetName = Literal["performance", "efficient", "optimized", "balanced", "thorough", "accuracy", "research", "experimental"]
+PromptProfile = Literal["paper", "optimized-lite", "optimized", "optimized-strict", "research-rag"]
 GroupingMode = Literal["canonical", "raw"]
 CompatibilityPolicyMode = Literal["essential", "curated", "full"]
 VersionPromptMode = Literal["high_risk_only", "efficient", "optimized", "balanced", "thorough", "accuracy"]
 RagMode = Literal["disabled", "pypi", "hybrid"]
-ExperimentalBundleName = Literal["baseline", "enhanced", "full"]
-ExperimentalFeatureName = Literal[
+ResearchBundleName = Literal["baseline", "enhanced", "full"]
+ResearchFeatureName = Literal[
     "dynamic_aliases",
     "transitive_conflicts",
     "smart_repair_routing",
@@ -37,7 +37,7 @@ COMPATIBILITY_SENSITIVE_PACKAGES = {
     "lxml",
 }
 
-EXPERIMENTAL_FEATURES: tuple[ExperimentalFeatureName, ...] = (
+RESEARCH_FEATURES: tuple[ResearchFeatureName, ...] = (
     "dynamic_aliases",
     "transitive_conflicts",
     "smart_repair_routing",
@@ -49,7 +49,7 @@ EXPERIMENTAL_FEATURES: tuple[ExperimentalFeatureName, ...] = (
     "dynamic_imports",
 )
 
-EXPERIMENTAL_BUNDLE_DEFAULTS: dict[ExperimentalBundleName, tuple[ExperimentalFeatureName, ...]] = {
+RESEARCH_BUNDLE_DEFAULTS: dict[ResearchBundleName, tuple[ResearchFeatureName, ...]] = {
     "baseline": (),
     "enhanced": (
         "dynamic_aliases",
@@ -91,7 +91,7 @@ class PresetConfig:
     allow_candidate_fallback_before_repair: bool = False
     repair_cycle_limit: int = 0
     repo_evidence_enabled: bool = False
-    experimental_bundle: ExperimentalBundleName = "baseline"
+    research_bundle: ResearchBundleName = "baseline"
 
 
 PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
@@ -161,9 +161,9 @@ PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
         extract_llm_for_project_frameworks=True,
         accuracy_extract_cleanup=True,
     ),
-    "experimental": PresetConfig(
-        name="experimental",
-        prompt_profile="experimental-rag",
+    "research": PresetConfig(
+        name="research",
+        prompt_profile="research-rag",
         max_attempts=6,
         compatibility_policy="full",
         version_prompt_mode="accuracy",
@@ -177,7 +177,18 @@ PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
         allow_candidate_fallback_before_repair=True,
         repair_cycle_limit=2,
         repo_evidence_enabled=True,
-        experimental_bundle="baseline",
+        research_bundle="baseline",
+    ),
+    "experimental": PresetConfig(
+        name="experimental",
+        prompt_profile="optimized-strict",
+        max_attempts=5,
+        compatibility_policy="full",
+        version_prompt_mode="accuracy",
+        allow_adjudication=True,
+        allow_alias_retry=True,
+        extract_llm_for_project_frameworks=True,
+        accuracy_extract_cleanup=True,
     ),
 }
 
@@ -195,39 +206,39 @@ def normalize_prompt_profile(value: str | None) -> PromptProfile | None:
     if value is None:
         return None
     normalized = value.strip().lower()
-    if normalized not in {"paper", "optimized-lite", "optimized", "optimized-strict", "experimental-rag"}:
+    if normalized not in {"paper", "optimized-lite", "optimized", "optimized-strict", "research-rag"}:
         raise ValueError(f"Unsupported prompt profile: {value}")
     return normalized  # type: ignore[return-value]
 
 
-def normalize_experimental_bundle(value: str | None) -> ExperimentalBundleName:
+def normalize_research_bundle(value: str | None) -> ResearchBundleName:
     if not value:
         return "baseline"
     normalized = value.strip().lower()
-    if normalized not in EXPERIMENTAL_BUNDLE_DEFAULTS:
-        raise ValueError(f"Unsupported experimental bundle: {value}")
+    if normalized not in RESEARCH_BUNDLE_DEFAULTS:
+        raise ValueError(f"Unsupported research bundle: {value}")
     return normalized  # type: ignore[return-value]
 
 
-def normalize_experimental_feature(value: str) -> ExperimentalFeatureName:
+def normalize_research_feature(value: str) -> ResearchFeatureName:
     normalized = value.strip().lower()
-    if normalized not in EXPERIMENTAL_FEATURES:
-        raise ValueError(f"Unsupported experimental feature: {value}")
+    if normalized not in RESEARCH_FEATURES:
+        raise ValueError(f"Unsupported research feature: {value}")
     return normalized  # type: ignore[return-value]
 
 
-def resolve_experimental_features(
-    bundle: ExperimentalBundleName,
+def resolve_research_features(
+    bundle: ResearchBundleName,
     *,
     enabled: list[str] | tuple[str, ...] | None = None,
     disabled: list[str] | tuple[str, ...] | None = None,
-) -> tuple[ExperimentalFeatureName, ...]:
-    selected = set(EXPERIMENTAL_BUNDLE_DEFAULTS[bundle])
+) -> tuple[ResearchFeatureName, ...]:
+    selected = set(RESEARCH_BUNDLE_DEFAULTS[bundle])
     for value in enabled or ():
-        selected.add(normalize_experimental_feature(value))
+        selected.add(normalize_research_feature(value))
     for value in disabled or ():
-        selected.discard(normalize_experimental_feature(value))
-    ordered = [feature for feature in EXPERIMENTAL_FEATURES if feature in selected]
+        selected.discard(normalize_research_feature(value))
+    ordered = [feature for feature in RESEARCH_FEATURES if feature in selected]
     return tuple(ordered)
 
 

@@ -709,10 +709,10 @@ def test_workflow_pyego_does_not_enter_repair_loop(tmp_path: Path) -> None:
     assert final_state["final_result"]["final_error_category"] == "OfficialBaselineUnavailable"
 
 
-def test_experimental_workflow_tries_ranked_candidate_plans_before_repair(tmp_path: Path) -> None:
+def test_research_workflow_tries_ranked_candidate_plans_before_repair(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
-    settings.preset = "experimental"
-    settings.prompt_profile = "experimental-rag"
+    settings.preset = "research"
+    settings.prompt_profile = "research-rag"
     settings.max_attempts = 6
     settings.rag_mode = "hybrid"
     settings.structured_prompting = True
@@ -766,18 +766,18 @@ def test_experimental_workflow_tries_ranked_candidate_plans_before_repair(tmp_pa
     assert final_state["final_result"]["success"] is True
     assert final_state["final_result"]["attempts"] == 2
     assert final_state["final_result"]["selected_candidate_rank"] == 2
-    assert final_state["final_result"]["experimental_path"] is True
+    assert final_state["final_result"]["research_path"] is True
     assert final_state["repair_cycle_count"] == 0
     assert (Path(final_state["artifact_dir"]) / "repo-evidence.json").exists()
     assert (Path(final_state["artifact_dir"]) / "candidate-plans.json").exists()
 
 
-def test_experimental_enhanced_stops_before_execution_when_python_constraints_are_impossible(tmp_path: Path) -> None:
+def test_research_enhanced_stops_before_execution_when_python_constraints_are_impossible(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
-    settings.preset = "experimental"
-    settings.prompt_profile = "experimental-rag"
-    settings.experimental_bundle = "enhanced"
-    settings.experimental_features = ("python_constraint_intersection",)
+    settings.preset = "research"
+    settings.prompt_profile = "research-rag"
+    settings.research_bundle = "enhanced"
+    settings.research_features = ("python_constraint_intersection",)
     project_root = write_project(tmp_path, "import badpkg\n")
     docker_executor = FakeDockerExecutor([])
     workflow = ResolutionWorkflow(

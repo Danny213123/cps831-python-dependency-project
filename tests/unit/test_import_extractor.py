@@ -48,6 +48,14 @@ print 'No access key is available.'
     assert roots == ["boto", "dateutil"]
 
 
+def test_filter_third_party_imports_excludes_python2_stdlib_extras() -> None:
+    roots = ["BaseHTTPServer", "SimpleHTTPServer", "requests"]
+
+    filtered = filter_third_party_imports(roots)
+
+    assert filtered == ["requests"]
+
+
 def test_normalize_candidate_packages_rejects_prose_and_invalid_names() -> None:
     normalized = normalize_candidate_packages(
         [

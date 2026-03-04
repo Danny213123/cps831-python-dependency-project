@@ -9,7 +9,7 @@ def test_settings_from_env_uses_preset_defaults(tmp_path: Path) -> None:
     assert settings.preset == "performance"
     assert settings.prompt_profile == "optimized-lite"
     assert settings.max_attempts == 2
-    assert settings.resolver == "apd"
+    assert settings.resolver == "apdr"
 
 
 def test_settings_from_env_supports_resolver_override(tmp_path: Path) -> None:
@@ -46,16 +46,28 @@ def test_settings_from_env_supports_thorough_preset(tmp_path: Path) -> None:
     assert settings.max_attempts == 4
 
 
-def test_settings_from_env_supports_experimental_preset(tmp_path: Path) -> None:
-    settings = Settings.from_env(project_root=tmp_path, preset_override="experimental")
+def test_settings_from_env_supports_research_preset(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
 
-    assert settings.preset == "experimental"
-    assert settings.prompt_profile == "experimental-rag"
+    assert settings.preset == "research"
+    assert settings.prompt_profile == "research-rag"
     assert settings.max_attempts == 6
     assert settings.rag_mode == "hybrid"
     assert settings.structured_prompting is True
     assert settings.candidate_plan_count == 3
     assert settings.repo_evidence_enabled is True
+
+
+def test_settings_from_env_supports_experimental_preset(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="experimental")
+
+    assert settings.preset == "experimental"
+    assert settings.prompt_profile == "optimized-strict"
+    assert settings.max_attempts == 5
+    assert settings.rag_mode == "pypi"
+    assert settings.structured_prompting is False
+    assert settings.candidate_plan_count == 1
+    assert settings.repo_evidence_enabled is False
 
 
 def test_settings_from_env_supports_model_profile_defaults(tmp_path: Path) -> None:
@@ -116,15 +128,36 @@ def test_settings_from_env_supports_runtime_toggle_overrides(tmp_path: Path) -> 
 
 
 def test_settings_from_env_supports_false_runtime_env_values(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("APD_USE_MOE", "false")
-    monkeypatch.setenv("APD_USE_RAG", "0")
-    monkeypatch.setenv("APD_USE_LANGCHAIN", "no")
+    monkeypatch.setenv("APDR_USE_MOE", "false")
+    monkeypatch.setenv("APDR_USE_RAG", "0")
+    monkeypatch.setenv("APDR_USE_LANGCHAIN", "no")
 
     settings = Settings.from_env(project_root=tmp_path)
 
     assert settings.use_moe is False
     assert settings.use_rag is False
     assert settings.use_langchain is False
+
+
+def test_settings_from_env_supports_competition_run_benchmark_source(tmp_path: Path) -> None:
+    settings = Settings.from_env(
+        project_root=tmp_path,
+        benchmark_case_source_override="competition-run",
+    )
+
+    assert settings.benchmark_case_source == "competition-run"
+
+
+def test_settings_from_env_supports_competition_csv_overrides(tmp_path: Path) -> None:
+    csv_path = tmp_path / "official.csv"
+    csv_path.write_text("name\nabc123\n", encoding="utf-8")
+
+    settings = Settings.from_env(
+        project_root=tmp_path,
+        competition_result_csvs_override=[str(csv_path)],
+    )
+
+    assert settings.competition_result_csvs == (csv_path.resolve(),)
 
 
 def test_settings_from_env_allows_disabling_llm_cache(tmp_path: Path) -> None:

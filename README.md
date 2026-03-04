@@ -50,32 +50,34 @@ ollama list
 If you want to use a specific execution tradeoff, pick a preset:
 
 ```bash
-apd --preset performance smoke --jobs 1
-apd --preset efficient smoke --jobs 1
-apd --preset optimized smoke --jobs 1
-apd --preset balanced smoke --jobs 1
-apd --preset thorough smoke --jobs 1
-apd --preset accuracy smoke --jobs 1
+apdr --preset performance smoke --jobs 1
+apdr --preset efficient smoke --jobs 1
+apdr --preset optimized smoke --jobs 1
+apdr --preset balanced smoke --jobs 1
+apdr --preset thorough smoke --jobs 1
+apdr --preset accuracy smoke --jobs 1
+apdr --preset experimental smoke --jobs 1
+apdr --preset research smoke --jobs 1
 ```
 
 Model bundles are also selectable:
 
 ```bash
-apd --model-profile gemma-moe smoke --jobs 1
-apd --model-profile gemma-moe-lite smoke --jobs 1
-apd --model-profile qwen35-9b smoke --jobs 1
-apd --model-profile qwen35-moe-lite smoke --jobs 1
-apd --model-profile gpt-oss-20b smoke --jobs 1
+apdr --model-profile gemma-moe smoke --jobs 1
+apdr --model-profile gemma-moe-lite smoke --jobs 1
+apdr --model-profile qwen35-9b smoke --jobs 1
+apdr --model-profile qwen35-moe-lite smoke --jobs 1
+apdr --model-profile gpt-oss-20b smoke --jobs 1
 ```
 
 Runtime behavior is selectable too:
 
 ```bash
-apd --no-moe smoke --jobs 1
-apd --no-rag smoke --jobs 1
-apd --no-langchain smoke --jobs 1
-apd --model-profile custom --extraction-model gemma3:1b --runner-model qwen3.5:4b smoke --jobs 1
-apd --extraction-model gemma3:1b --runner-model gemma3:4b --version-model qwen3.5:9b --repair-model qwen3.5:9b --adjudication-model gpt-oss:20b smoke --jobs 1
+apdr --no-moe smoke --jobs 1
+apdr --no-rag smoke --jobs 1
+apdr --no-langchain smoke --jobs 1
+apdr --model-profile custom --extraction-model gemma3:1b --runner-model qwen3.5:4b smoke --jobs 1
+apdr --extraction-model gemma3:1b --runner-model gemma3:4b --version-model qwen3.5:9b --repair-model qwen3.5:9b --adjudication-model gpt-oss:20b smoke --jobs 1
 ```
 
 ## Quick start
@@ -83,32 +85,34 @@ apd --extraction-model gemma3:1b --runner-model gemma3:4b --version-model qwen3.
 If you just cloned the repo and want the easiest commands, use these:
 
 ```bash
-apd ui
-apd doctor
-apd smoke --jobs 1
-apd full --jobs 1
-apd solve --path /path/to/python/repo
+apdr ui
+apdr doctor
+apdr smoke --jobs 1
+apdr full --jobs 1
+apdr solve --path /path/to/python/repo
 ```
 
-- `apd ui` launches a prompt-toolkit powered terminal control center for common benchmark, report, and project commands, including a live benchmark dashboard with preset, progress, active cases, elapsed time, and result counts.
-- `apd doctor` checks Docker, Ollama, required models, and dataset readiness.
-- `apd smoke` runs the beginner-friendly smoke benchmark flow.
-- `apd full` runs the full benchmark.
-- `apd solve` runs dependency resolution for a local repo.
+- `apdr ui` launches a prompt-toolkit powered terminal control center for common benchmark, report, and project commands, including a live benchmark dashboard with preset, progress, active cases, elapsed time, and result counts.
+- `apdr doctor` checks Docker, Ollama, required models, and dataset readiness.
+- `apdr smoke` runs the beginner-friendly smoke benchmark flow.
+- `apdr full` runs the full benchmark.
+- `apdr solve` runs dependency resolution for a local repo.
 
 ## CLI
 
 ```bash
-apd benchmark fetch-gistable --ref 665d39a2bd82543d5196555f0801ef8fd4a3ee48
-apd benchmark make-subsets
-apd benchmark run --subset smoke30
-apd --preset optimized benchmark run --subset smoke30
-apd --fresh-run --model-profile gpt-oss-20b benchmark run --subset smoke30
-apd case run --case-id 000769db6848429c9b3eac30361d9140
-apd project solve --path /path/to/python/repo
-apd report summarize --run-id <run-id>
-apd report modules --run-id <run-id> --grouping canonical --top 50
-apd report trace --run-id <run-id> --case-id <case-id>
+apdr benchmark fetch-gistable --ref 665d39a2bd82543d5196555f0801ef8fd4a3ee48
+apdr benchmark make-subsets
+apdr benchmark run --subset smoke30
+apdr --benchmark-source competition-run benchmark run --subset smoke30
+apdr --benchmark-source competition-run --competition-csv /abs/path/pyego_results.csv --competition-csv /abs/path/summary-all-runs.csv benchmark run --subset smoke30
+apdr --preset optimized benchmark run --subset smoke30
+apdr --fresh-run --model-profile gpt-oss-20b benchmark run --subset smoke30
+apdr case run --case-id 000769db6848429c9b3eac30361d9140
+apdr project solve --path /path/to/python/repo
+apdr report summarize --run-id <run-id>
+apdr report modules --run-id <run-id> --grouping canonical --top 50
+apdr report trace --run-id <run-id> --case-id <case-id>
 ```
 
 ## One-step benchmark commands
@@ -116,15 +120,15 @@ apd report trace --run-id <run-id> --case-id <case-id>
 Run the prepared benchmark segment in one command:
 
 ```bash
-apd benchmark segment --jobs 2
-apd smoke --jobs 2
+apdr benchmark segment --jobs 2
+apdr smoke --jobs 2
 ```
 
 Run the full benchmark in one command:
 
 ```bash
-apd benchmark full --jobs 2
-apd full --jobs 2
+apdr benchmark full --jobs 2
+apdr full --jobs 2
 ```
 
 `benchmark segment` automatically fetches Gistable, regenerates `smoke30`, and runs it.
@@ -132,7 +136,7 @@ apd full --jobs 2
 
 ## Presets
 
-Six presets are available:
+Eight presets are available:
 
 - `performance`
 - `efficient`
@@ -140,48 +144,64 @@ Six presets are available:
 - `balanced`
 - `thorough`
 - `accuracy`
+- `experimental`
+- `research`
 
 Examples:
 
 ```bash
-apd --preset performance benchmark full --jobs 1
-apd --preset efficient benchmark segment --jobs 2
-apd --preset optimized benchmark segment --jobs 2
-apd --preset balanced project solve --path /path/to/python/repo
-apd --preset thorough benchmark run --subset smoke30
-apd --preset accuracy benchmark run --subset smoke30
+apdr --preset performance benchmark full --jobs 1
+apdr --preset efficient benchmark segment --jobs 2
+apdr --preset optimized benchmark segment --jobs 2
+apdr --preset balanced project solve --path /path/to/python/repo
+apdr --preset thorough benchmark run --subset smoke30
+apdr --preset accuracy benchmark run --subset smoke30
+apdr --preset experimental benchmark run --subset smoke30
+apdr --preset research benchmark run --subset smoke30
+```
+
+`research` keeps the advanced multi-plan workflow that was previously in `experimental`.
+The new `experimental` preset is a fixed accuracy-style profile with extra small-model guardrails.
+
+Research-only bundle/feature controls are available with `--preset research`:
+
+```bash
+apdr --preset research --research-bundle baseline benchmark run --subset smoke30
+apdr --preset research --research-bundle enhanced benchmark run --subset smoke30
+apdr --preset research --research-bundle full benchmark run --subset smoke30
+apdr --preset research --research-feature dynamic_imports --no-research-feature repair_memory smoke --jobs 1
 ```
 
 You can also override only the prompt profile:
 
 ```bash
-apd --preset accuracy --prompt-profile paper benchmark run --subset smoke30
+apdr --preset accuracy --prompt-profile paper benchmark run --subset smoke30
 ```
 
 For completely fresh benchmarking without resume state or LLM cache reuse:
 
 ```bash
-apd --fresh-run benchmark run --subset smoke30
+apdr --fresh-run benchmark run --subset smoke30
 ```
 
 To disable only the LLM cache while keeping normal run IDs and artifact behavior:
 
 ```bash
-apd --no-llm-cache benchmark run --subset smoke30
+apdr --no-llm-cache benchmark run --subset smoke30
 ```
 
 To override individual model names instead of a bundle:
 
 ```bash
-apd --extraction-model gemma3:4b --reasoning-model qwen3.5:9b smoke --jobs 1
+apdr --extraction-model gemma3:4b --reasoning-model qwen3.5:9b smoke --jobs 1
 ```
 
 You can also disable or mix individual runtime features:
 
 ```bash
-apd --no-moe --runner-model qwen3.5:9b benchmark run --subset smoke30
-apd --no-rag --no-langchain --extraction-model gemma3:1b --runner-model gemma3:4b smoke --jobs 1
-apd --extraction-model qwen3.5:0.8b --runner-model qwen3.5:4b --version-model qwen3.5:9b --repair-model gpt-oss:20b benchmark segment --jobs 2
+apdr --no-moe --runner-model qwen3.5:9b benchmark run --subset smoke30
+apdr --no-rag --no-langchain --extraction-model gemma3:1b --runner-model gemma3:4b smoke --jobs 1
+apdr --extraction-model qwen3.5:0.8b --runner-model qwen3.5:4b --version-model qwen3.5:9b --repair-model gpt-oss:20b benchmark segment --jobs 2
 ```
 
 ## Module reporting
@@ -189,14 +209,22 @@ apd --extraction-model qwen3.5:0.8b --runner-model qwen3.5:4b --version-model qw
 Canonical module-family reporting is now the default:
 
 ```bash
-apd report modules --run-id <run-id>
+apdr report modules --run-id <run-id>
 ```
 
 To inspect the ungrouped raw module buckets:
 
 ```bash
-apd report modules --run-id <run-id> --grouping raw --top 50
+apdr report modules --run-id <run-id> --grouping raw --top 50
 ```
+
+`competition-run` uses `all-gists` cases but filters to gist IDs found in official-result CSV files.
+APDR reads CSV IDs from:
+- `--competition-csv` (repeatable)
+- `APDR_COMPETITION_RESULT_CSVS` (comma-separated absolute paths)
+- default detected files:
+  - `~/Downloads/pyego_results.csv`
+  - `~/Downloads/summary-all-runs.csv`
 
 ## Tests
 
@@ -220,6 +248,6 @@ Each case stores:
 If you run with `--trace-llm`, you can inspect prompts and model responses with:
 
 ```bash
-apd report trace --run-id <run-id>
-apd report trace --run-id <run-id> --case-id <case-id> --tail 200
+apdr report trace --run-id <run-id>
+apdr report trace --run-id <run-id> --case-id <case-id> --tail 200
 ```

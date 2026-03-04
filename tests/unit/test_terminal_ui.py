@@ -244,7 +244,7 @@ def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> Non
 def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["4", "7", "", "8"])
+    inputs = iter(["4", "8", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -265,6 +265,116 @@ def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
     ui.run()
 
     assert ui._fresh_run is True
+
+
+def test_terminal_ui_can_open_official_setup_from_config_menu(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["4", "6", "1", "", "8"])
+    calls: list[str] = []
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr(TerminalUI, "_setup_local_pyego_neo4j", lambda self: calls.append("called"))
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert calls == ["called"]
+
+
+def test_terminal_ui_rewrites_pyego_config_for_local_neo4j(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.pyego_root = tmp_path / "external" / "PyEGo"
+    settings.pyego_root.mkdir(parents=True, exist_ok=True)
+    config_path = settings.pyego_root / "config.py"
+    config_path.write_text(
+        'NEO4J_URI = "neo4j+s://instance.databases.neo4j.io"\n'
+        'NEO4J_PWD = "secret"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+    )
+
+    rewritten = ui._rewrite_pyego_local_neo4j_config()
+    updated = rewritten.read_text(encoding="utf-8")
+
+    assert 'NEO4J_URI = "bolt://localhost:7687"' in updated
+    assert "NEO4J_PWD = None" in updated
+    assert "NEO4J_USERNAME = None" in updated
+    assert "NEO4J_DATABASE = None" in updated
+
+
+def test_terminal_ui_detects_docker_arm_manifest_errors(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+    )
+
+    assert ui._is_docker_platform_manifest_error(
+        "no matching manifest for linux/arm64/v8 in the manifest list entries"
+    )
+    assert ui._is_docker_platform_manifest_error("no match for platform in manifest: not found")
+    assert not ui._is_docker_platform_manifest_error("connection refused")
+
+
+def test_terminal_ui_builds_pykg_dump_from_split_parts(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.pyego_root = tmp_path / "external" / "PyEGo"
+    pykg_dir = settings.pyego_root / "PyKG"
+    pykg_dir.mkdir(parents=True, exist_ok=True)
+    (pykg_dir / "PyKG.dump.aa").write_bytes(b"hello ")
+    (pykg_dir / "PyKG.dump.ab").write_bytes(b"world")
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+    )
+
+    dump_path = ui._ensure_pykg_dump_file()
+
+    assert dump_path.name == "PyKG.dump"
+    assert dump_path.read_bytes() == b"hello world"
 
 
 def test_terminal_ui_can_save_and_load_loadout(tmp_path: Path, monkeypatch) -> None:

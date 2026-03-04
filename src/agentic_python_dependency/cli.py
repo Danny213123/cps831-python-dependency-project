@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import json
@@ -28,6 +29,50 @@ from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, build_timeline_view, summarize_run
 from agentic_python_dependency.terminal_ui import launch_terminal_ui
 from agentic_python_dependency.tools.official_baselines import validate_pyego_runtime
+
+RUNTIME_COMPARISON_COLUMNS = [
+    "case_number",
+    "case_id",
+    "run_result",
+    "run_success",
+    "run_final_error_category",
+    "run_attempts",
+    "run_wall_clock_seconds",
+    "run_started_at",
+    "run_finished_at",
+    "official_in_csv",
+    "official_result",
+    "official_passed",
+    "official_duration",
+    "official_python_modules",
+    "official_file",
+    "official_csv_sources",
+]
+
+RUNTIME_COMPARISON_MD_COLUMNS = [
+    "case_number",
+    "case_id",
+    "run_result",
+    "run_final_error_category",
+    "run_wall_clock_seconds",
+    "official_in_csv",
+    "official_result",
+    "official_passed",
+    "official_duration",
+    "official_csv_sources",
+]
+
+GIST_MATCH_COLUMNS = ["gistid", "matches"]
+GIST_MATCH_DETAILED_COLUMNS = [
+    "gistid",
+    "matches_passed",
+    "matches_official_result",
+    "run_official_result",
+    "official_result",
+    "run_success",
+    "official_passed",
+    "run_final_error_category",
+]
 
 
 def _notify_path(label: str, path: Path) -> None:
@@ -733,6 +778,237 @@ def ensure_smoke_subset(
     return subset_path
 
 
+def _official_lookup_value(row: dict[str, str], *keys: str) -> str:
+    for key in keys:
+        value = str(row.get(key, "") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def load_official_csv_lookup(settings: Settings) -> dict[str, dict[str, str]]:
+    lookup: dict[str, dict[str, str]] = {}
+    for csv_path in settings.competition_result_csvs:
+        if not csv_path.exists():
+            continue
+        try:
+            with csv_path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
+                reader = csv.DictReader(handle)
+                for row in reader:
+                    case_ids = GistableDataset._extract_case_ids_from_row({key: str(value or "") for key, value in row.items()})
+                    if not case_ids:
+                        continue
+                    for case_id in case_ids:
+                        entry = lookup.setdefault(
+                            case_id,
+                            {
+                                "official_result": "",
+                                "official_passed": "",
+                                "official_duration": "",
+                                "official_python_modules": "",
+                                "official_file": "",
+                                "_sources": set(),
+                            },
+                        )
+                        entry["official_result"] = entry["official_result"] or _official_lookup_value(row, "result")
+                        entry["official_passed"] = entry["official_passed"] or _official_lookup_value(row, "passed")
+                        entry["official_duration"] = entry["official_duration"] or _official_lookup_value(row, "duration")
+                        entry["official_python_modules"] = entry["official_python_modules"] or _official_lookup_value(
+                            row,
+                            "python_modules",
+                            "modules",
+                        )
+                        entry["official_file"] = entry["official_file"] or _official_lookup_value(row, "file")
+                        entry["_sources"].add(csv_path.name)
+        except OSError:
+            continue
+
+    normalized: dict[str, dict[str, str]] = {}
+    for case_id, payload in lookup.items():
+        sources = payload.get("_sources", set())
+        normalized[case_id] = {
+            "official_result": str(payload.get("official_result", "")),
+            "official_passed": str(payload.get("official_passed", "")),
+            "official_duration": str(payload.get("official_duration", "")),
+            "official_python_modules": str(payload.get("official_python_modules", "")),
+            "official_file": str(payload.get("official_file", "")),
+            "official_csv_sources": ";".join(sorted(str(source) for source in sources)),
+        }
+    return normalized
+
+
+def build_runtime_comparison_row(
+    result: dict[str, object],
+    official_lookup: dict[str, dict[str, str]],
+    *,
+    case_number: int,
+) -> dict[str, object]:
+    case_id = str(result.get("case_id", "") or "")
+    success = bool(result.get("success", False))
+    official = official_lookup.get(case_id, {})
+    return {
+        "case_number": case_number,
+        "case_id": case_id,
+        "run_result": "success" if success else "failure",
+        "run_success": success,
+        "run_final_error_category": str(
+            result.get("final_error_category", "Success" if success else "UnknownError") or ""
+        ),
+        "run_attempts": int(result.get("attempts", 0) or 0),
+        "run_wall_clock_seconds": float(result.get("wall_clock_seconds", 0.0) or 0.0),
+        "run_started_at": str(result.get("started_at", "") or ""),
+        "run_finished_at": str(result.get("finished_at", "") or ""),
+        "official_in_csv": bool(official),
+        "official_result": official.get("official_result", ""),
+        "official_passed": official.get("official_passed", ""),
+        "official_duration": official.get("official_duration", ""),
+        "official_python_modules": official.get("official_python_modules", ""),
+        "official_file": official.get("official_file", ""),
+        "official_csv_sources": official.get("official_csv_sources", ""),
+    }
+
+
+def _comparison_markdown_cell(value: object) -> str:
+    rendered = str(value)
+    return rendered.replace("|", "\\|")
+
+
+def _parse_official_passed_flag(value: object) -> bool | None:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    if text in {"true", "t", "yes", "y", "pass", "passed"}:
+        return True
+    if text in {"false", "f", "no", "n", "fail", "failed"}:
+        return False
+    try:
+        return float(text) > 0
+    except ValueError:
+        return None
+
+
+def _normalize_result_label(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def _run_result_label_for_official(row: dict[str, object]) -> str:
+    if bool(row.get("run_success", False)):
+        return "otherpass"
+    category = _normalize_result_label(row.get("run_final_error_category", ""))
+    if category in {"modulenotfounderror", "modulenotfound"}:
+        return "modulenotfound"
+    if category in {
+        "importerror",
+        "syntaxerror",
+        "nameerror",
+        "typeerror",
+        "attributeerror",
+    }:
+        return category
+    return "otherfailure"
+
+
+def gist_match_row_from_runtime_row(row: dict[str, object]) -> dict[str, object]:
+    run_success = bool(row.get("run_success", False))
+    official_passed = _parse_official_passed_flag(row.get("official_passed", ""))
+    if official_passed is None:
+        matches: str | bool = ""
+    else:
+        matches = run_success == official_passed
+    return {"gistid": str(row.get("case_id", "") or ""), "matches": matches}
+
+
+def gist_match_detailed_row_from_runtime_row(row: dict[str, object]) -> dict[str, object]:
+    run_success = bool(row.get("run_success", False))
+    official_passed = _parse_official_passed_flag(row.get("official_passed", ""))
+    if official_passed is None:
+        matches_passed: str | bool = ""
+    else:
+        matches_passed = run_success == official_passed
+
+    run_official_result = _run_result_label_for_official(row)
+    official_result = _normalize_result_label(row.get("official_result", ""))
+    matches_official_result: str | bool = ""
+    if official_result:
+        matches_official_result = run_official_result == official_result
+
+    return {
+        "gistid": str(row.get("case_id", "") or ""),
+        "matches_passed": matches_passed,
+        "matches_official_result": matches_official_result,
+        "run_official_result": run_official_result,
+        "official_result": str(row.get("official_result", "") or ""),
+        "run_success": run_success,
+        "official_passed": str(row.get("official_passed", "") or ""),
+        "run_final_error_category": str(row.get("run_final_error_category", "") or ""),
+    }
+
+
+def _write_runtime_comparison_tables(
+    csv_path: Path,
+    markdown_path: Path,
+    rows: list[dict[str, object]],
+) -> None:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=RUNTIME_COMPARISON_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    header = "| " + " | ".join(column.replace("_", " ") for column in RUNTIME_COMPARISON_MD_COLUMNS) + " |"
+    separator = "| " + " | ".join("---" for _ in RUNTIME_COMPARISON_MD_COLUMNS) + " |"
+    lines = [header, separator]
+    for row in rows:
+        lines.append("| " + " | ".join(_comparison_markdown_cell(row.get(column, "")) for column in RUNTIME_COMPARISON_MD_COLUMNS) + " |")
+    markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _append_runtime_comparison_row(
+    csv_path: Path,
+    markdown_path: Path,
+    row: dict[str, object],
+) -> None:
+    with csv_path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=RUNTIME_COMPARISON_COLUMNS)
+        writer.writerow(row)
+    with markdown_path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            "| "
+            + " | ".join(_comparison_markdown_cell(row.get(column, "")) for column in RUNTIME_COMPARISON_MD_COLUMNS)
+            + " |\n"
+        )
+
+
+def _write_gist_match_table(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=GIST_MATCH_COLUMNS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(gist_match_row_from_runtime_row(row))
+
+
+def _write_gist_match_detailed_table(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=GIST_MATCH_DETAILED_COLUMNS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(gist_match_detailed_row_from_runtime_row(row))
+
+
+def _append_gist_match_row(path: Path, runtime_row: dict[str, object]) -> None:
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=GIST_MATCH_COLUMNS)
+        writer.writerow(gist_match_row_from_runtime_row(runtime_row))
+
+
+def _append_gist_match_detailed_row(path: Path, runtime_row: dict[str, object]) -> None:
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=GIST_MATCH_DETAILED_COLUMNS)
+        writer.writerow(gist_match_detailed_row_from_runtime_row(runtime_row))
+
+
 def load_existing_case_results(run_dir: Path, case_ids: list[str]) -> list[dict[str, object]]:
     results: list[dict[str, object]] = []
     for case_id in case_ids:
@@ -960,6 +1236,18 @@ def run_case_batch(
     completed_case_id_set = set(completed_case_ids)
     pending_case_ids = [case_id for case_id in case_ids if case_id not in completed_case_id_set]
     completed_results = load_existing_case_results(run_dir, completed_case_ids)
+    official_lookup = load_official_csv_lookup(settings)
+    runtime_table_csv_path = run_dir / "run-vs-csv.csv"
+    runtime_table_md_path = run_dir / "run-vs-csv.md"
+    gist_match_csv_path = run_dir / "gistid-matches.csv"
+    gist_match_detailed_csv_path = run_dir / "gistid-matches-detailed.csv"
+    runtime_rows = [
+        build_runtime_comparison_row(result, official_lookup, case_number=index)
+        for index, result in enumerate(completed_results, start=1)
+    ]
+    _write_runtime_comparison_tables(runtime_table_csv_path, runtime_table_md_path, runtime_rows)
+    _write_gist_match_table(gist_match_csv_path, runtime_rows)
+    _write_gist_match_detailed_table(gist_match_detailed_csv_path, runtime_rows)
     completed_successes = sum(1 for result in completed_results if bool(result.get("success", False)))
     completed_failures = len(completed_results) - completed_successes
     inner_observer = observer or BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
@@ -998,6 +1286,15 @@ def run_case_batch(
                     progress_observer.case_started(case_id)
                     result = process_case(case_id)
                     progress_observer.advance(result)
+                    row = build_runtime_comparison_row(
+                        result,
+                        official_lookup,
+                        case_number=len(runtime_rows) + 1,
+                    )
+                    runtime_rows.append(row)
+                    _append_runtime_comparison_row(runtime_table_csv_path, runtime_table_md_path, row)
+                    _append_gist_match_row(gist_match_csv_path, row)
+                    _append_gist_match_detailed_row(gist_match_detailed_csv_path, row)
             else:
                 with ThreadPoolExecutor(max_workers=jobs) as executor:
                     pending_iterator = iter(pending_case_ids)
@@ -1015,6 +1312,15 @@ def run_case_batch(
                         case_id = futures.pop(future)
                         result = future.result()
                         progress_observer.advance(result)
+                        row = build_runtime_comparison_row(
+                            result,
+                            official_lookup,
+                            case_number=len(runtime_rows) + 1,
+                        )
+                        runtime_rows.append(row)
+                        _append_runtime_comparison_row(runtime_table_csv_path, runtime_table_md_path, row)
+                        _append_gist_match_row(gist_match_csv_path, row)
+                        _append_gist_match_detailed_row(gist_match_detailed_csv_path, row)
                         if progress_observer.stop_requested():
                             continue
                         next_case_id = next(pending_iterator, None)
@@ -1037,6 +1343,9 @@ def run_case_batch(
     )
     if notify_paths:
         _notify_path("Summary written", run_dir / "summary.json")
+        _notify_path("Run-vs-CSV table written", run_dir / "run-vs-csv.csv")
+        _notify_path("Gist match table written", run_dir / "gistid-matches.csv")
+        _notify_path("Gist detailed match table written", run_dir / "gistid-matches-detailed.csv")
         if non_empty_warnings_path is not None:
             _notify_path("Warnings written", warnings_path)
         if settings.trace_llm:

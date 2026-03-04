@@ -6,10 +6,14 @@ import pytest
 from agentic_python_dependency.cli import (
     BenchmarkProgress,
     PersistentBenchmarkObserver,
+    build_runtime_comparison_row,
     build_parser,
     collect_doctor_report,
     format_elapsed,
     format_progress_bar,
+    gist_match_detailed_row_from_runtime_row,
+    gist_match_row_from_runtime_row,
+    load_official_csv_lookup,
     load_run_state,
     redirect_runtime_warnings,
     resolve_trace_path,
@@ -165,6 +169,126 @@ def test_parser_program_name_is_apdr() -> None:
     parser = build_parser()
 
     assert parser.prog == "apdr"
+
+
+def test_load_official_csv_lookup_reads_case_rows(tmp_path: Path) -> None:
+    csv_path = tmp_path / "official.csv"
+    csv_path.write_text(
+        "name,result,duration,passed,python_modules,file\n"
+        "00a4835bf36513ca58a3,ImportError,12.3,0,c4d,output_data_2.7.yml\n",
+        encoding="utf-8",
+    )
+    settings = Settings.from_env(project_root=tmp_path, competition_result_csvs_override=[str(csv_path)])
+
+    lookup = load_official_csv_lookup(settings)
+
+    assert "00a4835bf36513ca58a3" in lookup
+    row = lookup["00a4835bf36513ca58a3"]
+    assert row["official_result"] == "ImportError"
+    assert row["official_duration"] == "12.3"
+    assert row["official_passed"] == "0"
+    assert row["official_python_modules"] == "c4d"
+    assert row["official_file"] == "output_data_2.7.yml"
+    assert "official.csv" in row["official_csv_sources"]
+
+
+def test_build_runtime_comparison_row_includes_official_values() -> None:
+    official_lookup = {
+        "abc123": {
+            "official_result": "ModuleNotFound",
+            "official_passed": "False",
+            "official_duration": "14.48",
+            "official_python_modules": "requests",
+            "official_file": "output.yml",
+            "official_csv_sources": "pyego_results.csv",
+        }
+    }
+    result = {
+        "case_id": "abc123",
+        "success": False,
+        "final_error_category": "ModuleNotFoundError",
+        "attempts": 1,
+        "wall_clock_seconds": 7.5,
+        "started_at": "2026-03-04T00:00:00+00:00",
+        "finished_at": "2026-03-04T00:00:08+00:00",
+    }
+
+    row = build_runtime_comparison_row(result, official_lookup, case_number=3)
+
+    assert row["case_number"] == 3
+    assert row["case_id"] == "abc123"
+    assert row["run_result"] == "failure"
+    assert row["run_final_error_category"] == "ModuleNotFoundError"
+    assert row["run_attempts"] == 1
+    assert row["run_wall_clock_seconds"] == 7.5
+    assert row["official_in_csv"] is True
+    assert row["official_result"] == "ModuleNotFound"
+    assert row["official_passed"] == "False"
+    assert row["official_duration"] == "14.48"
+    assert row["official_csv_sources"] == "pyego_results.csv"
+
+
+def test_gist_match_row_from_runtime_row_compares_success_and_official_flag() -> None:
+    assert gist_match_row_from_runtime_row(
+        {
+            "case_id": "case-success",
+            "run_success": True,
+            "official_passed": "10",
+        }
+    ) == {"gistid": "case-success", "matches": True}
+
+    assert gist_match_row_from_runtime_row(
+        {
+            "case_id": "case-failure",
+            "run_success": False,
+            "official_passed": "False",
+        }
+    ) == {"gistid": "case-failure", "matches": True}
+
+    assert gist_match_row_from_runtime_row(
+        {
+            "case_id": "case-mismatch",
+            "run_success": False,
+            "official_passed": "True",
+        }
+    ) == {"gistid": "case-mismatch", "matches": False}
+
+    assert gist_match_row_from_runtime_row(
+        {
+            "case_id": "case-unknown",
+            "run_success": True,
+            "official_passed": "",
+        }
+    ) == {"gistid": "case-unknown", "matches": ""}
+
+
+def test_gist_match_detailed_row_from_runtime_row_includes_both_match_modes() -> None:
+    row = gist_match_detailed_row_from_runtime_row(
+        {
+            "case_id": "case-x",
+            "run_success": False,
+            "run_final_error_category": "ModuleNotFoundError",
+            "official_passed": "False",
+            "official_result": "ModuleNotFound",
+        }
+    )
+    assert row["gistid"] == "case-x"
+    assert row["matches_passed"] is True
+    assert row["run_official_result"] == "modulenotfound"
+    assert row["matches_official_result"] is True
+
+    row_mismatch = gist_match_detailed_row_from_runtime_row(
+        {
+            "case_id": "case-y",
+            "run_success": False,
+            "run_final_error_category": "UnknownError",
+            "official_passed": "True",
+            "official_result": "OtherPass",
+        }
+    )
+    assert row_mismatch["matches_passed"] is False
+    assert row_mismatch["run_official_result"] == "otherfailure"
+    assert row_mismatch["matches_official_result"] is False
 
 
 def test_report_modules_parser_accepts_grouping() -> None:

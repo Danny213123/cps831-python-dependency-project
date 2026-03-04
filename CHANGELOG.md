@@ -7,6 +7,30 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-03-04
+
+### Added
+
+- Per-run runtime comparison artifacts that join APDR outcomes with official CSV fields during execution:
+  - `run-vs-csv.csv`
+  - `run-vs-csv.md`
+- Per-run gist match exports for quick parity checks:
+  - `gistid-matches.csv` (`gistid,matches`)
+  - `gistid-matches-detailed.csv` (`matches_passed` and `matches_official_result` plus mapping context)
+
+### Changed
+
+- Extended benchmark execution to update comparison and match artifacts incrementally as each case completes, including resumed runs with pre-existing case results.
+- Improved PyEGo local Neo4j bootstrap flow in UI with stronger automatic setup sequencing and clearer diagnostics in failure dialogs.
+
+### Fixed
+
+- Fixed Apple Silicon local Neo4j setup by automatically retrying with `--platform linux/amd64` when the Neo4j image has no native arm64 manifest.
+- Fixed local Neo4j setup reliability with longer pull/load timeouts and explicit timeout diagnostics.
+- Fixed Neo4j bootstrap command compatibility by resolving `neo4j-admin` from known container paths when it is not on `PATH`.
+- Fixed Neo4j 3.5 database load failures by creating `/data/databases/graph.db` before import in the setup container flow.
+- Fixed repeated PyEGo run failures from unreachable Neo4j by adding in-flow UI remediation prompts that can auto-run local Neo4j setup and re-validate runtime requirements.
+
 ## [1.1.0] - 2026-03-04
 
 ### Added

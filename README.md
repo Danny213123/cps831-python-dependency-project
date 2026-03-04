@@ -42,6 +42,10 @@ export APDR_PYEGO_PYTHON="$(pwd)/.venv-pyego/bin/python"
 ```
 
 PyEGo depends on `typed_ast.ast27`, which is not supported on Python `3.12+`.
+Official PyEGo also requires a running Neo4j instance with PyKG loaded and
+`external/PyEGo/config.py` configured (for example `NEO4J_URI = "bolt://localhost:7687"`).
+For Aura, set `NEO4J_URI` with `bolt+s://...` (not `neo4j+s://`), and set
+`NEO4J_USERNAME` / `NEO4J_DATABASE` in the same config file when needed.
 
 ## Local runtime
 
@@ -111,6 +115,8 @@ apdr solve --path /path/to/python/repo
 - `apdr smoke` runs the beginner-friendly smoke benchmark flow.
 - `apdr full` runs the full benchmark.
 - `apdr solve` runs dependency resolution for a local repo.
+- For official PyEGo local setup, open `apdr ui` and use:
+  `Configure -> Official setup -> Setup local PyEGo Neo4j (recommended)`.
 
 ## CLI
 

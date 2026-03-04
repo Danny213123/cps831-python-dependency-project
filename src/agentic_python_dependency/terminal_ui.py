@@ -6,6 +6,7 @@ import io
 import json
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -631,6 +632,7 @@ class TerminalUI:
                     ("Models", "m"),
                     ("Research", "x"),
                     ("Runtime", "r"),
+                    ("Official setup", "o"),
                     ("Benchmark source", "s"),
                     ("Fresh run", "f"),
                     ("Trace LLM", "t"),
@@ -650,6 +652,8 @@ class TerminalUI:
                 self._configure_research()
             elif choice == "r":
                 self._configure_runtime()
+            elif choice == "o":
+                self._configure_official_setup()
             elif choice == "s":
                 self._choose_benchmark_source()
             elif choice == "f":
@@ -666,10 +670,11 @@ class TerminalUI:
         self.output("  3. Change model bundle")
         self.output("  4. Configure research bundle/features")
         self.output("  5. Runtime controls")
-        self.output("  6. Change benchmark source")
-        self.output("  7. Toggle fresh run / no LLM cache")
-        self.output("  8. Toggle LLM tracing")
-        self.output("  9. Back")
+        self.output("  6. Official baseline setup")
+        self.output("  7. Change benchmark source")
+        self.output("  8. Toggle fresh run / no LLM cache")
+        self.output("  9. Toggle LLM tracing")
+        self.output("  10. Back")
         choice = self.input_fn("Select configuration option: ").strip().lower()
         if choice == "1":
             self._choose_resolver()
@@ -682,14 +687,38 @@ class TerminalUI:
         elif choice == "5":
             self._configure_runtime()
         elif choice == "6":
-            self._choose_benchmark_source()
+            self._configure_official_setup()
         elif choice == "7":
+            self._choose_benchmark_source()
+        elif choice == "8":
             self._fresh_run = not self._fresh_run
             self._show_status_dialog(f"Fresh run is now {'on' if self._fresh_run else 'off'}.")
-        elif choice == "8":
+        elif choice == "9":
             self.settings.trace_llm = not self.settings.trace_llm
             self._show_status_dialog(f"LLM tracing is now {'on' if self.settings.trace_llm else 'off'}.")
         return 0
+
+    def _configure_official_setup(self) -> None:
+        if self._use_prompt_toolkit:
+            choice = button_dialog(
+                title="Official setup",
+                text="Set up official baseline dependencies and services.",
+                buttons=[
+                    ("Setup local PyEGo Neo4j (recommended)", "pyego-neo4j"),
+                    ("Back", "back"),
+                ],
+                style=UI_STYLE,
+            ).run()
+            if choice == "pyego-neo4j":
+                self._setup_local_pyego_neo4j()
+            return
+
+        self.output("\nOfficial baseline setup")
+        self.output("  1. Setup local PyEGo Neo4j (recommended)")
+        self.output("  2. Back")
+        choice = self.input_fn("Select setup option: ").strip().lower()
+        if choice == "1":
+            self._setup_local_pyego_neo4j()
 
     def _run_smoke(self) -> int:
         if not self._validate_runtime_selection():
@@ -1157,6 +1186,299 @@ class TerminalUI:
     def _bootstrap_dir(self) -> Path:
         return self.settings.data_dir / "runtime_bootstrap"
 
+    def _pyego_neo4j_container_name(self) -> str:
+        return "apdr-pyego-neo4j"
+
+    def _pyego_neo4j_volume_name(self) -> str:
+        return "apdr-pyego-neo4j-data"
+
+    def _pyego_neo4j_loaded_marker(self) -> Path:
+        return self._bootstrap_dir() / "pyego-neo4j-loaded.json"
+
+    def _docker_available(self) -> bool:
+        return shutil.which("docker") is not None
+
+    def _run_subprocess_checked(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(cwd) if cwd is not None else None,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            detail = (stderr or stdout).strip()
+            timeout_value = f"{timeout:.0f}s" if isinstance(timeout, (int, float)) else "configured limit"
+            if detail:
+                raise RuntimeError(
+                    f"{' '.join(command)}\nCommand timed out after {timeout_value}.\n{detail}"
+                ) from exc
+            raise RuntimeError(f"{' '.join(command)}\nCommand timed out after {timeout_value}.") from exc
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            stdout = (completed.stdout or "").strip()
+            detail = stderr or stdout or "command failed"
+            raise RuntimeError(f"{' '.join(command)}\n{detail}")
+        return completed
+
+    def _ensure_pykg_dump_file(self) -> Path:
+        pykg_dir = self.settings.pyego_root / "PyKG"
+        dump_path = pykg_dir / "PyKG.dump"
+        part_paths = sorted(pykg_dir.glob("PyKG.dump.a*"))
+        if dump_path.exists():
+            if part_paths:
+                newest_part = max(part.stat().st_mtime for part in part_paths)
+                if dump_path.stat().st_mtime >= newest_part:
+                    return dump_path
+            else:
+                return dump_path
+        if not part_paths:
+            raise RuntimeError(f"PyKG dump parts not found under {pykg_dir}.")
+        pykg_dir.mkdir(parents=True, exist_ok=True)
+        with dump_path.open("wb") as destination:
+            for part_path in part_paths:
+                destination.write(part_path.read_bytes())
+        return dump_path
+
+    def _wait_for_local_tcp(self, host: str, port: int, timeout_seconds: float) -> bool:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection((host, port), timeout=1.0):
+                    return True
+            except OSError:
+                time.sleep(1.0)
+        return False
+
+    def _is_docker_platform_manifest_error(self, detail: str) -> bool:
+        lowered = detail.lower()
+        return (
+            "no matching manifest for linux/arm64" in lowered
+            or "no match for platform in manifest" in lowered
+        )
+
+    def _rewrite_pyego_local_neo4j_config(self) -> Path:
+        config_path = self.settings.pyego_root / "config.py"
+        if not config_path.exists():
+            raise RuntimeError(f"PyEGo config not found at {config_path}.")
+        content = config_path.read_text(encoding="utf-8")
+        replacements = {
+            "NEO4J_URI": 'NEO4J_URI = "bolt://localhost:7687"',
+            "NEO4J_PWD": "NEO4J_PWD = None",
+            "NEO4J_USERNAME": "NEO4J_USERNAME = None",
+            "NEO4J_DATABASE": "NEO4J_DATABASE = None",
+        }
+        updated = content
+        for key, replacement in replacements.items():
+            pattern = rf"^{key}\s*=.*$"
+            if re.search(pattern, updated, flags=re.MULTILINE):
+                updated = re.sub(pattern, replacement, updated, flags=re.MULTILINE)
+            else:
+                if not updated.endswith("\n"):
+                    updated += "\n"
+                updated += replacement + "\n"
+        config_path.write_text(updated, encoding="utf-8")
+        return config_path
+
+    def _setup_local_pyego_neo4j(self) -> None:
+        if not self._docker_available():
+            self._show_status_dialog("Docker CLI not found on PATH. Install Docker Desktop first.")
+            return
+        try:
+            dump_path = self._ensure_pykg_dump_file()
+        except Exception as exc:
+            self._show_status_dialog(f"Failed preparing PyKG dump: {exc}")
+            return
+
+        volume_name = self._pyego_neo4j_volume_name()
+        container_name = self._pyego_neo4j_container_name()
+        marker_path = self._pyego_neo4j_loaded_marker()
+        marker_path.parent.mkdir(parents=True, exist_ok=True)
+
+        reset_choice = self._prompt_choice(
+            "Reset and reload local PyEGo Neo4j data volume?",
+            ["no", "yes"],
+            "no",
+        )
+        force_reload = reset_choice == "yes"
+        messages: list[str] = [f"Using dump: {dump_path}"]
+        neo4j_image = "neo4j:3.5.26"
+
+        try:
+            if force_reload:
+                subprocess.run(
+                    ["docker", "volume", "rm", "-f", volume_name],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=False,
+                )
+
+            should_load = force_reload or not marker_path.exists()
+            selected_platform = "native"
+            attempted_amd64 = False
+            platform_flags: list[str] = []
+            volume_status = "Existing local Neo4j volume already initialized with PyKG."
+            while True:
+                try:
+                    subprocess.run(
+                        ["docker", "rm", "-f", container_name],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        check=False,
+                    )
+
+                    self._run_subprocess_checked(["docker", "volume", "create", volume_name], timeout=30)
+                    self._run_subprocess_checked(
+                        ["docker", "pull", *platform_flags, neo4j_image],
+                        timeout=1800,
+                    )
+
+                    if should_load:
+                        load_preamble = (
+                            "set -e; "
+                            "mkdir -p /data/databases /data/databases/graph.db /data/dbms; "
+                            "cp /import/PyKG.dump /data/databases/PyKG.dump; "
+                            "if command -v neo4j-admin >/dev/null 2>&1; then "
+                            "NEO4J_ADMIN=$(command -v neo4j-admin); "
+                            "elif [ -x /var/lib/neo4j/bin/neo4j-admin ]; then "
+                            "NEO4J_ADMIN=/var/lib/neo4j/bin/neo4j-admin; "
+                            "elif [ -x /neo4j/bin/neo4j-admin ]; then "
+                            "NEO4J_ADMIN=/neo4j/bin/neo4j-admin; "
+                            "else echo 'neo4j-admin command not found'; exit 127; fi; "
+                        )
+                        primary_load_script = (
+                            load_preamble
+                            + "$NEO4J_ADMIN load --from=/data/databases/PyKG.dump --database=graph.db --force"
+                        )
+                        try:
+                            self._run_subprocess_checked(
+                                [
+                                    "docker",
+                                    "run",
+                                    "--rm",
+                                    *platform_flags,
+                                    "-v",
+                                    f"{volume_name}:/data",
+                                    "-v",
+                                    f"{dump_path.parent.resolve()}:/import",
+                                    neo4j_image,
+                                    "bash",
+                                    "-lc",
+                                    primary_load_script,
+                                ],
+                                timeout=3600,
+                            )
+                        except Exception as load_exc:
+                            if "NoSuchFileException: /data/databases/graph.db" not in str(load_exc):
+                                raise
+                            messages.append(
+                                "Primary graph.db load mode failed; retrying Neo4j 3.5 compatibility load mode."
+                            )
+                            compatibility_load_script = (
+                                load_preamble + "$NEO4J_ADMIN load --from=/data/databases/PyKG.dump --force"
+                            )
+                            self._run_subprocess_checked(
+                                [
+                                    "docker",
+                                    "run",
+                                    "--rm",
+                                    *platform_flags,
+                                    "-v",
+                                    f"{volume_name}:/data",
+                                    "-v",
+                                    f"{dump_path.parent.resolve()}:/import",
+                                    neo4j_image,
+                                    "bash",
+                                    "-lc",
+                                    compatibility_load_script,
+                                ],
+                                timeout=3600,
+                            )
+                        marker_path.write_text(
+                            json.dumps(
+                                {
+                                    "loaded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                    "volume": volume_name,
+                                    "dump_path": str(dump_path),
+                                },
+                                indent=2,
+                            ),
+                            encoding="utf-8",
+                        )
+                        volume_status = "Loaded PyKG into local Neo4j volume."
+
+                    self._run_subprocess_checked(
+                        [
+                            "docker",
+                            "run",
+                            "-d",
+                            *platform_flags,
+                            "--name",
+                            container_name,
+                            "-p",
+                            "7474:7474",
+                            "-p",
+                            "7687:7687",
+                            "-e",
+                            "NEO4J_AUTH=none",
+                            "-v",
+                            f"{volume_name}:/data",
+                            neo4j_image,
+                        ],
+                        timeout=300,
+                    )
+                    break
+                except Exception as exc:
+                    if attempted_amd64 or not self._is_docker_platform_manifest_error(str(exc)):
+                        raise
+                    attempted_amd64 = True
+                    platform_flags = ["--platform", "linux/amd64"]
+                    selected_platform = "linux/amd64 emulation"
+                    messages.append(
+                        "Neo4j image has no native arm64 manifest; retrying with linux/amd64 emulation."
+                    )
+
+            messages.append(volume_status)
+            messages.append(f"Docker platform mode: {selected_platform}")
+            if not self._wait_for_local_tcp("127.0.0.1", 7687, timeout_seconds=60):
+                raise RuntimeError("Neo4j container started, but Bolt port 7687 did not become ready in time.")
+            config_path = self._rewrite_pyego_local_neo4j_config()
+            messages.append(f"Updated PyEGo config: {config_path}")
+
+            self.settings.resolver = "pyego"
+            version_text = self._ensure_ui_pyego_python311()
+            if version_text:
+                messages.append(f"Using PyEGo Python: {self.settings.pyego_python} ({version_text})")
+            messages.append("Local PyEGo Neo4j setup complete.")
+            self._show_status_dialog("\n".join(messages))
+        except Exception as exc:
+            self._show_status_dialog(
+                "Failed to set up local PyEGo Neo4j automatically.\n\n"
+                f"{exc}\n\n"
+                "Tip: inspect docker logs with:\n"
+                f"docker logs {container_name}"
+            )
+
     def _official_runtime_paths(self, resolver: str) -> tuple[str, Path] | None:
         if resolver == "pyego":
             return self.settings.pyego_python, self.settings.pyego_root / "requirements.txt"
@@ -1323,6 +1645,17 @@ class TerminalUI:
             "python -m pip install -r external/PyEGo/requirements.txt"
         )
 
+    def _is_pyego_neo4j_connectivity_failure(self, detail: str) -> bool:
+        lowered = detail.lower()
+        markers = (
+            "cannot reach neo4j",
+            "cannot open connection to",
+            "connection refused",
+            "configured uri:",
+            "py2neo",
+        )
+        return any(marker in lowered for marker in markers)
+
     def _validate_runtime_selection(self) -> bool:
         if self.settings.preset in {"research", "experimental"} and self.settings.resolver != "apdr":
             self._show_status_dialog("Research and experimental presets are only supported with the apdr resolver.")
@@ -1334,6 +1667,15 @@ class TerminalUI:
                 return False
             self._ensure_ui_pyego_python311()
             pyego_ok, pyego_detail = validate_pyego_runtime(self.settings)
+            if not pyego_ok and self._is_pyego_neo4j_connectivity_failure(pyego_detail):
+                auto_fix = self._prompt_choice(
+                    "PyEGo cannot reach Neo4j. Auto-setup local Neo4j now?",
+                    ["yes", "no"],
+                    "yes",
+                )
+                if auto_fix == "yes":
+                    self._setup_local_pyego_neo4j()
+                    pyego_ok, pyego_detail = validate_pyego_runtime(self.settings)
             if not pyego_ok:
                 default_venv = self._default_pyego_venv_python()
                 self._show_status_dialog(
@@ -1342,7 +1684,8 @@ class TerminalUI:
                     f"{pyego_detail}\n\n"
                     "Set up a dedicated Python 3.11 env, then retry from the UI:\n"
                     f"{self._pyego_setup_instructions()}\n\n"
-                    f"APDR auto-detects: {default_venv}"
+                    f"APDR auto-detects: {default_venv}\n\n"
+                    "For automatic local Neo4j setup: Configure -> Official setup -> Setup local PyEGo Neo4j."
                 )
                 return False
         if self.settings.resolver == "readpye":

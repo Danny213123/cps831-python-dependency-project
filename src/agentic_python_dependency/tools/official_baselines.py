@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import ast
 import json
+import os
 import re
 import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from agentic_python_dependency.config import Settings
 from agentic_python_dependency.state import ResolvedDependency
@@ -38,6 +41,100 @@ def _probe_python_version(python_executable: str) -> tuple[int, int, int]:
             f"Unable to parse APDR_PYEGO_PYTHON version output from '{python_executable}': {version_text or '<empty>'}"
         )
     return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def _read_pyego_config_values(config_path: Path) -> tuple[str | None, str | None, str | None, str | None]:
+    if not config_path.exists():
+        return None, None, None, None
+    try:
+        source = config_path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+    except (OSError, SyntaxError):
+        return None, None, None, None
+
+    uri: str | None = None
+    password: str | None = None
+    username: str | None = None
+    database: str | None = None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if not isinstance(target, ast.Name):
+                continue
+            if target.id not in {"NEO4J_URI", "NEO4J_PWD", "NEO4J_USERNAME", "NEO4J_DATABASE"}:
+                continue
+            try:
+                value = ast.literal_eval(node.value)
+            except (ValueError, TypeError):
+                continue
+            if target.id == "NEO4J_URI":
+                if value is not None:
+                    uri = str(value).strip()
+            elif target.id == "NEO4J_PWD":
+                if value is not None:
+                    password = str(value).strip()
+            elif target.id == "NEO4J_USERNAME":
+                if value is not None:
+                    username = str(value).strip()
+            elif target.id == "NEO4J_DATABASE":
+                if value is not None:
+                    database = str(value).strip()
+    return uri, password, username, database
+
+
+def _normalize_py2neo_uri(uri: str) -> str:
+    if uri.startswith("neo4j+s://"):
+        return "bolt+s://" + uri[len("neo4j+s://"):]
+    if uri.startswith("neo4j://"):
+        return "bolt://" + uri[len("neo4j://"):]
+    return uri
+
+
+def _probe_pyego_neo4j_connection(
+    python_executable: str,
+    *,
+    uri: str,
+    password: str | None,
+    username: str | None,
+    database: str | None,
+) -> tuple[bool, str]:
+    probe_code = (
+        "import os\n"
+        "from py2neo import Graph\n"
+        "uri = os.environ['APDR_PYEGO_NEO4J_URI']\n"
+        "password = os.environ.get('APDR_PYEGO_NEO4J_PWD')\n"
+        "username = os.environ.get('APDR_PYEGO_NEO4J_USERNAME')\n"
+        "database = os.environ.get('APDR_PYEGO_NEO4J_DATABASE')\n"
+        "if password == '':\n"
+        "    password = None\n"
+        "kwargs = {}\n"
+        "if username:\n"
+        "    kwargs['user'] = username\n"
+        "if password is not None:\n"
+        "    kwargs['password'] = password\n"
+        "if database:\n"
+        "    kwargs['name'] = database\n"
+        "graph = Graph(uri=uri, **kwargs)\n"
+        "graph.run('RETURN 1').evaluate()\n"
+        "print('ok')\n"
+    )
+    env = dict(os.environ)
+    env["APDR_PYEGO_NEO4J_URI"] = uri
+    env["APDR_PYEGO_NEO4J_PWD"] = password or ""
+    env["APDR_PYEGO_NEO4J_USERNAME"] = username or ""
+    env["APDR_PYEGO_NEO4J_DATABASE"] = database or ""
+    completed = subprocess.run(
+        [python_executable, "-c", probe_code],
+        capture_output=True,
+        check=False,
+        timeout=10,
+        env=env,
+    )
+    if completed.returncode == 0:
+        return True, f"neo4j reachable at {uri}"
+    details = (_decode_output(completed.stderr) or _decode_output(completed.stdout) or "probe failed").strip()
+    return False, details
 
 
 def validate_pyego_runtime(settings: Settings) -> tuple[bool, str]:
@@ -79,6 +176,39 @@ def validate_pyego_runtime(settings: Settings) -> tuple[bool, str]:
                 f"Interpreter: {settings.pyego_python} ({major}.{minor}.{patch}). "
                 f"Install dependencies with: {settings.pyego_python} -m pip install -r {requirements_path}. "
                 f"Original error: {details}"
+            ),
+        )
+
+    config_path = settings.pyego_root / "config.py"
+    neo4j_uri, neo4j_password, neo4j_username, neo4j_database = _read_pyego_config_values(config_path)
+    if not neo4j_uri or "YOUR NEO4J URI" in neo4j_uri:
+        return (
+            False,
+            (
+                "PyEGo Neo4j configuration is missing. "
+                f"Set NEO4J_URI in {config_path} (example: bolt://localhost:7687) and start Neo4j."
+            ),
+        )
+
+    neo4j_uri = _normalize_py2neo_uri(neo4j_uri)
+    parsed = urlparse(neo4j_uri)
+    if not parsed.scheme:
+        neo4j_uri = f"bolt://{neo4j_uri}"
+    neo4j_ok, neo4j_detail = _probe_pyego_neo4j_connection(
+        settings.pyego_python,
+        uri=neo4j_uri,
+        password=neo4j_password,
+        username=neo4j_username,
+        database=neo4j_database,
+    )
+    if not neo4j_ok:
+        return (
+            False,
+            (
+                "PyEGo cannot reach Neo4j. "
+                f"Configured URI: {neo4j_uri}. "
+                f"Details: {neo4j_detail}. "
+                "Start Neo4j, load PyKG, and verify credentials in external/PyEGo/config.py."
             ),
         )
 

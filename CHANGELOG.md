@@ -84,6 +84,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+- Fixed benchmark Python-version reconciliation so APD keeps the benchmark Dockerfile Python when Prompt A infers a conflicting Python 3 version for code that is not even Python-3-syntax-compatible, preventing obvious Python 2 vs 3 syntax breakage during execution.
 - Fixed Windows subprocess decoding in Docker execution and official-baseline wrappers by capturing byte output and decoding with UTF-8 replacement instead of relying on CP1252 text decoding, preventing `_readerthread` `UnicodeDecodeError` crashes during runs.
 - Fixed experimental-rag prompt template rendering by escaping literal JSON braces in the new structured prompt files, preventing `str.format` crashes such as `KeyError: '\n  "packages"'` during experimental package inference.
 - Fixed experimental classification routing so legacy experimental-baseline behavior does not silently inherit the new smart-repair retry policy unless that feature is explicitly enabled.

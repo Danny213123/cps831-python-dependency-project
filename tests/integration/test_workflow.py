@@ -6,7 +6,7 @@ from typing import Any
 
 from agentic_python_dependency.config import Settings
 from agentic_python_dependency.graph import ResolutionWorkflow
-from agentic_python_dependency.state import PackageVersionOptions, ResolvedDependency
+from agentic_python_dependency.state import BenchmarkCase, PackageVersionOptions, ResolvedDependency
 from agentic_python_dependency.tools.docker_executor import DockerExecutionResult
 from agentic_python_dependency.tools.official_baselines import OfficialBaselinePlan
 
@@ -113,6 +113,22 @@ def write_project(tmp_path: Path, source: str) -> Path:
     project_root.mkdir()
     (project_root / "example.py").write_text(source, encoding="utf-8")
     return project_root
+
+
+def write_benchmark_case(tmp_path: Path, case_id: str, snippet: str, dockerfile: str, initial_eval: str = "ImportError") -> BenchmarkCase:
+    case_root = tmp_path / case_id
+    case_root.mkdir()
+    snippet_path = case_root / "snippet.py"
+    dockerfile_path = case_root / "Dockerfile"
+    snippet_path.write_text(snippet, encoding="utf-8")
+    dockerfile_path.write_text(dockerfile, encoding="utf-8")
+    return BenchmarkCase(
+        case_id=case_id,
+        root_dir=case_root,
+        snippet_path=snippet_path,
+        dockerfile_path=dockerfile_path,
+        initial_eval=initial_eval,
+    )
 
 
 def test_workflow_repairs_retryable_dependency_failure(tmp_path: Path) -> None:
@@ -239,6 +255,48 @@ def test_workflow_prompt_a_can_infer_target_python(tmp_path: Path) -> None:
     assert final_state["python_version_source"] == "llm_prompt_a"
     assert final_state["final_result"]["target_python"] == "3.11"
     assert final_state["final_result"]["inferred_target_python"] == "3.11"
+
+
+def test_benchmark_prompt_a_python_guardrail_keeps_python2_for_python2_only_syntax(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    case = write_benchmark_case(
+        tmp_path,
+        "case_guardrail",
+        "print 'python2 only'\n",
+        "FROM python:2.7.13\nCMD [\"python\", \"snippet.py\"]\n",
+    )
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner(
+            {
+                "extract": ['{"modules":["requests"],"python_version":"3.11"}'],
+                "version": ["requests==2.31.0"],
+                "repair": [],
+                "adjudicate": [],
+            }
+        ),
+        pypi_store=FakePyPIStore({"requests": ["2.31.0"]}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-guardrail",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_case(case))
+
+    assert final_state["benchmark_target_python"] == "2.7.13"
+    assert final_state["inferred_target_python"] == "3.11"
+    assert final_state["target_python"] == "2.7.13"
+    assert final_state["python_version_source"] == "benchmark_dockerfile_syntax_guardrail"
 
 
 def test_workflow_filters_unrelated_repair_dependencies(tmp_path: Path) -> None:

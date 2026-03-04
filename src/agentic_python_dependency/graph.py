@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import re
 import shutil
@@ -190,6 +191,31 @@ def parse_package_inference_output(raw_output: str) -> tuple[list[str], str | No
                 continue
         packages.append(line)
     return packages, python_version
+
+
+def _is_python3_syntax_compatible(source: str) -> bool:
+    try:
+        ast.parse(source)
+    except SyntaxError:
+        return False
+    return True
+
+
+def reconcile_inferred_target_python(
+    inferred_version: str | None,
+    *,
+    benchmark_target_python: str,
+    source_text: str,
+) -> tuple[str | None, str | None]:
+    if not inferred_version:
+        return None, None
+    inferred_major = inferred_version.split(".", 1)[0]
+    benchmark_major = benchmark_target_python.split(".", 1)[0] if benchmark_target_python else ""
+    if inferred_major == benchmark_major:
+        return inferred_version, "llm_prompt_a"
+    if benchmark_major == "2" and inferred_major == "3" and not _is_python3_syntax_compatible(source_text):
+        return benchmark_target_python, "benchmark_dockerfile_syntax_guardrail"
+    return inferred_version, "llm_prompt_a"
 
 
 def route_after_execute(state: ResolutionState) -> str:
@@ -1203,9 +1229,16 @@ class ResolutionWorkflow:
                 llm_candidates = []
         _, inferred_python_version = parse_package_inference_output(raw_version_output)
         if inferred_python_version:
+            resolved_python_version, version_source = reconcile_inferred_target_python(
+                inferred_python_version,
+                benchmark_target_python=state.get("benchmark_target_python", ""),
+                source_text=code,
+            )
             state["inferred_target_python"] = inferred_python_version
-            state["target_python"] = inferred_python_version
-            state["python_version_source"] = "llm_prompt_a"
+            if resolved_python_version:
+                state["target_python"] = resolved_python_version
+            if version_source:
+                state["python_version_source"] = version_source
         state["structured_outputs"]["extract"] = llm_candidates
         candidate_sources: dict[str, set[str]] = {}
         candidate_confidence: dict[str, float] = {}
@@ -1394,9 +1427,16 @@ class ResolutionWorkflow:
             outputs.append({"file": file_name, "output": raw_output})
             packages, inferred_python_version = parse_package_inference_output(raw_output)
             if inferred_python_version:
+                resolved_python_version, version_source = reconcile_inferred_target_python(
+                    inferred_python_version,
+                    benchmark_target_python=state.get("benchmark_target_python", ""),
+                    source_text=code,
+                )
                 state["inferred_target_python"] = inferred_python_version
-                state["target_python"] = inferred_python_version
-                state["python_version_source"] = "llm_prompt_a"
+                if resolved_python_version:
+                    state["target_python"] = resolved_python_version
+                if version_source:
+                    state["python_version_source"] = version_source
             for package in packages:
                 if package:
                     inferred.add(package)
@@ -1479,9 +1519,16 @@ class ResolutionWorkflow:
         _, inferred_python_version = parse_package_inference_output(raw_version_output)
         state["structured_outputs"]["extract"] = packages
         if inferred_python_version:
+            resolved_python_version, version_source = reconcile_inferred_target_python(
+                inferred_python_version,
+                benchmark_target_python=state.get("benchmark_target_python", ""),
+                source_text=code,
+            )
             state["inferred_target_python"] = inferred_python_version
-            state["target_python"] = inferred_python_version
-            state["python_version_source"] = "llm_prompt_a"
+            if resolved_python_version:
+                state["target_python"] = resolved_python_version
+            if version_source:
+                state["python_version_source"] = version_source
         if not inferred:
             inferred = extracted_imports
         provenance = self._candidate_provenance_from(inferred, extracted_imports)

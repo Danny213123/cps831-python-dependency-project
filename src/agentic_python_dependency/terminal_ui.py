@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import shutil
 import sys
 import threading
@@ -352,6 +353,7 @@ class TerminalUI:
                     ("Doctor", "1"),
                     ("Smoke benchmark", "2"),
                     ("Full benchmark", "3"),
+                    ("Resume benchmark", "u"),
                     ("Solve local project", "4"),
                     ("Summarize run", "5"),
                     ("Failure report", "6"),
@@ -371,7 +373,7 @@ class TerminalUI:
                 message_dialog(title="APD", text="Exiting APD UI.", style=UI_STYLE).run()
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice in {"2", "3"}:
+            if choice in {"2", "3", "u"}:
                 self._show_status_dialog(f"Command finished with exit code {exit_code}.")
 
     def _run_basic(self) -> int:
@@ -394,6 +396,8 @@ class TerminalUI:
             return self._run_smoke()
         if choice == "3":
             return self._run_full()
+        if choice == "u":
+            return self._run_resume_benchmark()
         if choice == "4":
             return self._run_project_solve()
         if choice == "5":
@@ -458,6 +462,28 @@ class TerminalUI:
             observer=dashboard,
             notify_paths=False,
             fresh_run=self._fresh_run,
+        )
+
+    def _run_resume_benchmark(self) -> int:
+        run_entry = self._prompt_resume_run()
+        if run_entry is None:
+            return 1
+        target = str(run_entry.get("target", "benchmark") or "benchmark")
+        jobs = int(run_entry.get("jobs", 1) or 1)
+        run_id = str(run_entry["run_id"])
+        if target == "smoke30":
+            self.ensure_smoke_subset(self.settings, None, "smoke30", notify=False)
+        dashboard = TerminalBenchmarkDashboard()
+        return self.run_benchmark(
+            self.settings,
+            None,
+            None if target in {"full", "benchmark"} else target,
+            target == "full",
+            run_id,
+            jobs,
+            observer=dashboard,
+            notify_paths=False,
+            fresh_run=False,
         )
 
     def _run_project_solve(self) -> int:
@@ -559,33 +585,99 @@ class TerminalUI:
         run_dirs.sort(key=lambda path: (-path.stat().st_mtime, path.name))
         return [path.name for path in run_dirs]
 
+    def _read_run_state(self, run_id: str) -> dict[str, object]:
+        run_state_path = self.settings.artifacts_dir / run_id / "run-state.json"
+        if not run_state_path.exists():
+            return {}
+        try:
+            payload = json.loads(run_state_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _available_run_entries(self, *, resumable_only: bool = False) -> list[dict[str, object]]:
+        entries: list[dict[str, object]] = []
+        for run_id in self._available_run_ids():
+            state = self._read_run_state(run_id)
+            completed = int(state.get("completed", 0) or 0)
+            total = int(state.get("total", 0) or 0)
+            status = str(state.get("status", "unknown") or "unknown")
+            resumable = status in {"running", "stopping", "paused", "interrupted"} or (total > 0 and completed < total)
+            if resumable_only and not resumable:
+                continue
+            target = str(state.get("target", "benchmark") or "benchmark")
+            jobs = int(state.get("jobs", 1) or 1)
+            label = f"{run_id} [{status}] {completed}/{total} target={target} jobs={jobs}"
+            entries.append(
+                {
+                    "run_id": run_id,
+                    "label": label,
+                    "status": status,
+                    "completed": completed,
+                    "total": total,
+                    "target": target,
+                    "jobs": jobs,
+                }
+            )
+        return entries
+
     def _prompt_run_id(self) -> str | None:
-        run_ids = self._available_run_ids()
-        if not run_ids:
+        run_entries = self._available_run_entries()
+        if not run_entries:
             self._show_status_dialog(f"No run directories found in {self.settings.artifacts_dir}.")
             return None
         if self._use_prompt_toolkit:
             selected = radiolist_dialog(
                 title="Select run",
                 text="Choose a run directory from artifacts/runs.",
-                values=[(run_id, run_id) for run_id in run_ids],
-                default=run_ids[0],
+                values=[(entry["run_id"], str(entry["label"])) for entry in run_entries],
+                default=str(run_entries[0]["run_id"]),
                 style=UI_STYLE,
             ).run()
             return selected
 
         self.output("\nAvailable runs:")
-        for index, run_id in enumerate(run_ids, start=1):
-            self.output(f"  {index}. {run_id}")
+        for index, entry in enumerate(run_entries, start=1):
+            self.output(f"  {index}. {entry['label']}")
         choice = self.input_fn("Choose run number: ").strip()
         if not choice.isdigit():
             self._show_status_dialog("Invalid run selection.")
             return None
         index = int(choice) - 1
-        if index < 0 or index >= len(run_ids):
+        if index < 0 or index >= len(run_entries):
             self._show_status_dialog("Invalid run selection.")
             return None
-        return run_ids[index]
+        return str(run_entries[index]["run_id"])
+
+    def _prompt_resume_run(self) -> dict[str, object] | None:
+        run_entries = self._available_run_entries(resumable_only=True)
+        if not run_entries:
+            self._show_status_dialog("No resumable benchmark runs found.")
+            return None
+        if self._use_prompt_toolkit:
+            selected = radiolist_dialog(
+                title="Resume benchmark",
+                text="Choose a saved benchmark run to resume.",
+                values=[(str(entry["run_id"]), str(entry["label"])) for entry in run_entries],
+                default=str(run_entries[0]["run_id"]),
+                style=UI_STYLE,
+            ).run()
+            if selected is None:
+                return None
+            return next((entry for entry in run_entries if entry["run_id"] == selected), None)
+
+        self.output("\nResumable runs:")
+        for index, entry in enumerate(run_entries, start=1):
+            self.output(f"  {index}. {entry['label']}")
+        choice = self.input_fn("Choose run number: ").strip()
+        if not choice.isdigit():
+            self._show_status_dialog("Invalid run selection.")
+            return None
+        index = int(choice) - 1
+        if index < 0 or index >= len(run_entries):
+            self._show_status_dialog("Invalid run selection.")
+            return None
+        return run_entries[index]
 
     def _choose_preset(self) -> None:
         options = [(preset, preset) for preset in PRESET_CONFIGS]
@@ -873,6 +965,7 @@ class TerminalUI:
         self.output("  1. Doctor")
         self.output("  2. Smoke benchmark")
         self.output("  3. Full benchmark")
+        self.output("  U. Resume benchmark")
         self.output("  4. Solve local project")
         self.output("  5. Summarize run")
         self.output("  6. Failure report")

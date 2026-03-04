@@ -341,6 +341,7 @@ class TerminalUI:
     settings: Settings
     doctor_command: ActionCallback
     run_benchmark: ActionCallback
+    run_failed_cases: ActionCallback
     run_project: ActionCallback
     summarize_command: ActionCallback
     failures_command: ActionCallback
@@ -371,6 +372,7 @@ class TerminalUI:
                     ("Smoke benchmark", "2"),
                     ("Full benchmark", "3"),
                     ("Resume benchmark", "u"),
+                    ("Retry failed cases", "9"),
                     ("Solve local project", "4"),
                     ("Summarize run", "5"),
                     ("Failure report", "6"),
@@ -416,6 +418,8 @@ class TerminalUI:
             return self._run_full()
         if choice == "u":
             return self._run_resume_benchmark()
+        if choice == "9":
+            return self._run_failed_cases_from_run()
         if choice == "4":
             return self._run_project_solve()
         if choice == "5":
@@ -544,6 +548,26 @@ class TerminalUI:
             validation or None,
             run_id or None,
             self._fresh_run,
+        )
+
+    def _run_failed_cases_from_run(self) -> int:
+        if not self._validate_runtime_selection():
+            return 1
+        source_run = self._prompt_failed_case_run()
+        if source_run is None:
+            return 1
+        jobs = self._prompt_int("Jobs", 1)
+        run_id = self._prompt_optional("Run ID", "")
+        dashboard = TerminalBenchmarkDashboard()
+        return self.run_failed_cases(
+            self.settings,
+            str(source_run["run_id"]),
+            None,
+            run_id or None,
+            jobs=jobs,
+            observer=dashboard,
+            notify_paths=False,
+            fresh_run=self._fresh_run,
         )
 
     def _run_summary(self) -> int:
@@ -678,6 +702,26 @@ class TerminalUI:
             )
         return entries
 
+    def _available_failed_case_runs(self) -> list[dict[str, object]]:
+        entries: list[dict[str, object]] = []
+        for entry in self._available_run_entries():
+            run_id = str(entry["run_id"])
+            failed_count = 0
+            for result_path in (self.settings.artifacts_dir / run_id).glob("*/result.json"):
+                try:
+                    payload = json.loads(result_path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+                if isinstance(payload, dict) and not bool(payload.get("success", False)):
+                    failed_count += 1
+            if failed_count <= 0:
+                continue
+            updated = dict(entry)
+            updated["failed_count"] = failed_count
+            updated["label"] = f"{entry['label']} failed={failed_count}"
+            entries.append(updated)
+        return entries
+
     def _validate_runtime_selection(self) -> bool:
         if self.settings.preset == "experimental" and self.settings.resolver != "apd":
             self._show_status_dialog("The experimental preset is only supported with the apd resolver.")
@@ -730,6 +774,36 @@ class TerminalUI:
             return next((entry for entry in run_entries if entry["run_id"] == selected), None)
 
         self.output("\nResumable runs:")
+        for index, entry in enumerate(run_entries, start=1):
+            self.output(f"  {index}. {entry['label']}")
+        choice = self.input_fn("Choose run number: ").strip()
+        if not choice.isdigit():
+            self._show_status_dialog("Invalid run selection.")
+            return None
+        index = int(choice) - 1
+        if index < 0 or index >= len(run_entries):
+            self._show_status_dialog("Invalid run selection.")
+            return None
+        return run_entries[index]
+
+    def _prompt_failed_case_run(self) -> dict[str, object] | None:
+        run_entries = self._available_failed_case_runs()
+        if not run_entries:
+            self._show_status_dialog("No prior runs with failed cases were found.")
+            return None
+        if self._use_prompt_toolkit:
+            selected = radiolist_dialog(
+                title="Retry failed cases",
+                text="Choose a prior run and APD will rerun only its failed benchmark cases.",
+                values=[(str(entry["run_id"]), str(entry["label"])) for entry in run_entries],
+                default=str(run_entries[0]["run_id"]),
+                style=UI_STYLE,
+            ).run()
+            if selected is None:
+                return None
+            return next((entry for entry in run_entries if entry["run_id"] == selected), None)
+
+        self.output("\nRuns with failed cases:")
         for index, entry in enumerate(run_entries, start=1):
             self.output(f"  {index}. {entry['label']}")
         choice = self.input_fn("Choose run number: ").strip()
@@ -1084,6 +1158,7 @@ class TerminalUI:
         self.output("  2. Smoke benchmark")
         self.output("  3. Full benchmark")
         self.output("  U. Resume benchmark")
+        self.output("  9. Retry failed cases from prior run")
         self.output("  4. Solve local project")
         self.output("  5. Summarize run")
         self.output("  6. Failure report")
@@ -1103,6 +1178,7 @@ def launch_terminal_ui(
     settings: Settings,
     doctor_command: ActionCallback,
     run_benchmark: ActionCallback,
+    run_failed_cases: ActionCallback,
     run_project: ActionCallback,
     summarize_command: ActionCallback,
     failures_command: ActionCallback,
@@ -1114,6 +1190,7 @@ def launch_terminal_ui(
         settings=settings,
         doctor_command=doctor_command,
         run_benchmark=run_benchmark,
+        run_failed_cases=run_failed_cases,
         run_project=run_project,
         summarize_command=summarize_command,
         failures_command=failures_command,

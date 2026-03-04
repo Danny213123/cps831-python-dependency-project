@@ -20,6 +20,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Automatic per-run case results exports in `results.csv`, `results.md`, and `results.json`, including case number, modules, success/failure, attempts, dependencies, and timing fields.
 - Persistent benchmark run-state artifacts in `run-state.json` and `run-state.md`, capturing live progress, elapsed time, active cases, last completed case, and resumable run metadata.
 - Interactive resume-run selection in `apd ui`, using saved `run-state.json` metadata to list resumable benchmarks and restart them with the original run ID, target, and saved progress context.
+- Interactive failed-case replay selection in `apd ui`, allowing users to pick a previous run with failures and rerun only those failed benchmark cases with the current runtime settings.
 - PLLM-inspired Python dependency resolver with a LangGraph workflow for extraction, version inference, repair, execution, and result finalization.
 - Ollama-backed LangChain model routing using `gemma3:4b` for extraction and `gemma3:12b` for versioning, repair, and adjudication.
 - Six user-selectable execution presets spanning `performance` through `accuracy`, including `efficient` and `thorough` intermediate tradeoff levels.

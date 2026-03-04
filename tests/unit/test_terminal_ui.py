@@ -19,6 +19,7 @@ def test_terminal_ui_can_exit_immediately(tmp_path: Path, monkeypatch) -> None:
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -46,6 +47,7 @@ def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -74,6 +76,7 @@ def test_terminal_ui_switching_to_experimental_forces_apd_resolver(tmp_path: Pat
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -100,6 +103,7 @@ def test_terminal_ui_can_switch_resolver(tmp_path: Path, monkeypatch) -> None:
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -127,6 +131,7 @@ def test_terminal_ui_switching_resolver_from_experimental_restores_supported_pre
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -153,6 +158,7 @@ def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> Non
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -180,6 +186,7 @@ def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -205,6 +212,7 @@ def test_terminal_ui_can_configure_runtime_controls(tmp_path: Path, monkeypatch)
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -237,6 +245,7 @@ def test_terminal_ui_smoke_run_uses_dashboard(tmp_path: Path, monkeypatch) -> No
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=fake_run_benchmark,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -279,6 +288,7 @@ def test_terminal_ui_can_resume_saved_benchmark_run(tmp_path: Path, monkeypatch)
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=fake_run_benchmark,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -312,6 +322,7 @@ def test_terminal_ui_reports_when_no_resumable_runs_exist(tmp_path: Path, monkey
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -328,6 +339,87 @@ def test_terminal_ui_reports_when_no_resumable_runs_exist(tmp_path: Path, monkey
     assert any("No resumable benchmark runs found." in line for line in outputs)
 
 
+def test_terminal_ui_can_retry_failed_cases_from_prior_run(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    failed_case_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    inputs = iter(["9", "1", "2", "", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    run_dir = settings.artifacts_dir / "run123"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run-state.json").write_text(
+        '{"run_id":"run123","status":"completed","target":"full","jobs":1,"completed":2,"total":2}',
+        encoding="utf-8",
+    )
+    failed_case_dir = run_dir / "case-a"
+    failed_case_dir.mkdir(parents=True, exist_ok=True)
+    (failed_case_dir / "result.json").write_text('{"case_id":"case-a","success":false}', encoding="utf-8")
+    passed_case_dir = run_dir / "case-b"
+    passed_case_dir.mkdir(parents=True, exist_ok=True)
+    (passed_case_dir / "result.json").write_text('{"case_id":"case-b","success":true}', encoding="utf-8")
+
+    def fake_run_failed_cases(*args, **kwargs):
+        failed_case_calls.append((args, kwargs))
+        return 0
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=fake_run_failed_cases,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        timeline_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert failed_case_calls
+    args, kwargs = failed_case_calls[0]
+    assert args[1] == "run123"
+    assert args[2] is None
+    assert args[3] is None
+    assert kwargs["jobs"] == 2
+    assert kwargs["notify_paths"] is False
+    assert kwargs["fresh_run"] is False
+    assert isinstance(kwargs["observer"], TerminalBenchmarkDashboard)
+
+
+def test_terminal_ui_reports_when_no_failed_case_runs_exist(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["9", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        timeline_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    exit_code = ui.run()
+
+    assert exit_code == 0
+    assert any("No prior runs with failed cases were found." in line for line in outputs)
+
+
 def test_terminal_ui_can_run_timeline_view(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
@@ -341,6 +433,7 @@ def test_terminal_ui_can_run_timeline_view(tmp_path: Path, monkeypatch) -> None:
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -373,6 +466,7 @@ def test_terminal_ui_module_report_can_choose_paper_compatible(tmp_path: Path, m
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -402,6 +496,7 @@ def test_terminal_ui_surfaces_captured_command_errors_without_crashing(tmp_path:
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -431,6 +526,7 @@ def test_terminal_ui_can_select_run_for_summary(tmp_path: Path, monkeypatch) -> 
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: summary_calls.append(args) or 0,
         failures_command=lambda *args, **kwargs: 0,
@@ -457,6 +553,7 @@ def test_terminal_ui_reports_when_no_runs_exist(tmp_path: Path, monkeypatch) -> 
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
         run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
         run_project=lambda *args, **kwargs: 0,
         summarize_command=lambda *args, **kwargs: 0,
         failures_command=lambda *args, **kwargs: 0,

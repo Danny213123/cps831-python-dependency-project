@@ -717,6 +717,28 @@ def load_existing_case_results(run_dir: Path, case_ids: list[str]) -> list[dict[
     return results
 
 
+def load_all_run_results(run_dir: Path) -> list[dict[str, object]]:
+    results: list[dict[str, object]] = []
+    for result_path in sorted(run_dir.glob("*/result.json")):
+        try:
+            payload = json.loads(result_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            results.append(payload)
+    return results
+
+
+def failed_case_ids_for_run(run_dir: Path) -> list[str]:
+    failed_case_ids: list[str] = []
+    for result in load_all_run_results(run_dir):
+        case_id = str(result.get("case_id", "") or "")
+        success = bool(result.get("success", False))
+        if case_id and not success:
+            failed_case_ids.append(case_id)
+    return failed_case_ids
+
+
 def resolve_trace_path(settings: Settings, run_id: str, case_id: str | None = None) -> Path:
     run_dir = settings.artifacts_dir / run_id
     return (run_dir / case_id / "llm-trace.log") if case_id else (run_dir / "llm-trace.log")
@@ -826,6 +848,33 @@ def run_benchmark(
         case_ids = dataset.load_subset(subset, ref)
     else:
         case_ids = dataset.valid_case_ids(ref)
+    return run_case_batch(
+        settings,
+        ref,
+        case_ids,
+        run_id,
+        jobs=jobs,
+        observer=observer,
+        notify_paths=notify_paths,
+        fresh_run=fresh_run,
+        target_label=subset or ("full" if full else "benchmark"),
+    )
+
+
+def run_case_batch(
+    settings: Settings,
+    ref: str | None,
+    case_ids: list[str],
+    run_id: str | None,
+    *,
+    jobs: int = 1,
+    observer: BenchmarkObserver | None = None,
+    notify_paths: bool = True,
+    fresh_run: bool = False,
+    target_label: str = "benchmark",
+) -> int:
+    dataset = GistableDataset(settings)
+    dataset.fetch(ref)
 
     active_run_id = run_id or uuid4().hex[:12]
     run_dir = settings.artifacts_dir / active_run_id
@@ -857,7 +906,7 @@ def run_benchmark(
         experimental_bundle=settings.experimental_bundle,
         experimental_features=settings.experimental_features,
         jobs=jobs,
-        target=subset or ("full" if full else "benchmark"),
+        target=target_label,
         artifacts_dir=run_dir,
     )
 
@@ -921,6 +970,35 @@ def run_benchmark(
         if settings.trace_llm:
             _notify_path("LLM trace written", run_dir / "llm-trace.log")
     return 0
+
+
+def run_failed_cases(
+    settings: Settings,
+    source_run_id: str,
+    ref: str | None,
+    run_id: str | None,
+    *,
+    jobs: int = 1,
+    observer: BenchmarkObserver | None = None,
+    notify_paths: bool = True,
+    fresh_run: bool = False,
+) -> int:
+    source_run_dir = settings.artifacts_dir / source_run_id
+    failed_case_ids = failed_case_ids_for_run(source_run_dir)
+    if not failed_case_ids:
+        print(f"[INFO] no failed cases found in run {source_run_id}")
+        return 0
+    return run_case_batch(
+        settings,
+        ref,
+        failed_case_ids,
+        run_id,
+        jobs=jobs,
+        observer=observer,
+        notify_paths=notify_paths,
+        fresh_run=fresh_run,
+        target_label=f"failed:{source_run_id}",
+    )
 
 
 def run_case(settings: Settings, case_id: str, ref: str | None, run_id: str | None, fresh_run: bool = False) -> int:
@@ -1079,6 +1157,7 @@ def main(argv: list[str] | None = None) -> int:
             settings,
             doctor_command=doctor_command,
             run_benchmark=run_benchmark,
+            run_failed_cases=run_failed_cases,
             run_project=run_project,
             summarize_command=summarize_command,
             failures_command=failures_command,

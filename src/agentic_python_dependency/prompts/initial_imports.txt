@@ -1,4 +1,10 @@
-List the required third-party libraries that need to be installed for the following Python code to execute successfully. Provide just the library names without any additional explanation.
+Given a python file:
+{raw_file}
 
-Python code:
-{code}
+Return the Python modules and python version required to run.
+
+Output strict JSON only with this format:
+{{
+  "modules": ["module_or_package_name"],
+  "python_version": "X.Y or X.Y.Z"
+}}

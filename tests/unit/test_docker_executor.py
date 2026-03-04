@@ -51,6 +51,26 @@ def test_patch_dockerfile_rewrites_benchmark_pip_installs_for_python2() -> None:
     )
 
 
+def test_patch_dockerfile_rewrites_python_base_image_when_target_changes() -> None:
+    dockerfile = "\n".join(
+        [
+            "FROM python:2.7.13-slim",
+            "WORKDIR /app",
+            'CMD ["python", "snippet.py"]',
+            "",
+        ]
+    )
+
+    patched = DockerExecutor.patch_dockerfile(
+        dockerfile,
+        rewrite_base_python=True,
+        target_python="3.11",
+    )
+
+    assert "FROM python:3.11-slim" in patched
+    assert "FROM python:2.7.13-slim" not in patched
+
+
 def test_patch_dockerfile_injects_system_packages_for_pygame() -> None:
     dockerfile = "\n".join(
         [
@@ -75,16 +95,8 @@ def test_patch_dockerfile_injects_system_packages_for_pygame() -> None:
 
 
 def test_execute_converts_run_timeout_into_failed_result(monkeypatch, tmp_path: Path) -> None:
-    settings = Settings(
-        project_root=tmp_path,
-        data_dir=tmp_path / "data",
-        artifacts_dir=tmp_path / "artifacts",
-        benchmark_dir=tmp_path / "benchmarks",
-        pypi_cache_dir=tmp_path / "pypi-cache",
-        llm_cache_dir=tmp_path / "llm-cache",
-        prompts_dir=tmp_path / "prompts",
-        run_timeout_seconds=60,
-    )
+    settings = Settings.from_env(project_root=tmp_path)
+    settings.run_timeout_seconds = 60
     executor = DockerExecutor(settings)
     context = PreparedExecutionContext(
         context_dir=tmp_path,
@@ -125,15 +137,7 @@ def test_execute_converts_run_timeout_into_failed_result(monkeypatch, tmp_path: 
 
 
 def test_execute_adds_headless_runtime_environment(monkeypatch, tmp_path: Path) -> None:
-    settings = Settings(
-        project_root=tmp_path,
-        data_dir=tmp_path / "data",
-        artifacts_dir=tmp_path / "artifacts",
-        benchmark_dir=tmp_path / "benchmarks",
-        pypi_cache_dir=tmp_path / "pypi-cache",
-        llm_cache_dir=tmp_path / "llm-cache",
-        prompts_dir=tmp_path / "prompts",
-    )
+    settings = Settings.from_env(project_root=tmp_path)
     executor = DockerExecutor(settings)
     context = PreparedExecutionContext(
         context_dir=tmp_path,
@@ -167,15 +171,7 @@ def test_execute_adds_headless_runtime_environment(monkeypatch, tmp_path: Path) 
 
 
 def test_execute_handles_none_stdout_on_windows_subprocess(monkeypatch, tmp_path: Path) -> None:
-    settings = Settings(
-        project_root=tmp_path,
-        data_dir=tmp_path / "data",
-        artifacts_dir=tmp_path / "artifacts",
-        benchmark_dir=tmp_path / "benchmarks",
-        pypi_cache_dir=tmp_path / "pypi-cache",
-        llm_cache_dir=tmp_path / "llm-cache",
-        prompts_dir=tmp_path / "prompts",
-    )
+    settings = Settings.from_env(project_root=tmp_path)
     executor = DockerExecutor(settings)
     context = PreparedExecutionContext(
         context_dir=tmp_path,

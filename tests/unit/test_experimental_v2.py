@@ -180,7 +180,7 @@ def test_experimental_prompt_templates_render_without_format_key_errors(tmp_path
     rendered = {
         "package_inference": workflow._format_prompt(
             "package_inference.txt",
-            code="import yaml\n",
+            raw_file="import yaml\n",
             target_python="3.12",
             extracted_imports="yaml",
             repo_evidence="{}",

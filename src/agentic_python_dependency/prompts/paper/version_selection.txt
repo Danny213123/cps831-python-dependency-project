@@ -1,6 +1,6 @@
-You are given a list of Python packages and their available versions from PyPI. Determine the most appropriate version for each package to ensure compatibility and successful execution. Only consider the versions explicitly listed.
-
-Return the result as a plain list using the format package_name==version, with no additional explanation or formatting.
-
-Packages and versions:
+Given a comma-separated list of Module versions from oldest to newest:
 {package_versions}
+
+Perform equally distanced sampling to return a version from the given versions, excluding previously used versions ({previous_versions}).
+
+Return the information with the format {format_instructions}

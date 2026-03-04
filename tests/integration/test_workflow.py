@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from agentic_python_dependency.config import Settings
 from agentic_python_dependency.graph import ResolutionWorkflow
-from agentic_python_dependency.state import PackageVersionOptions
+from agentic_python_dependency.state import PackageVersionOptions, ResolvedDependency
 from agentic_python_dependency.tools.docker_executor import DockerExecutionResult
+from agentic_python_dependency.tools.official_baselines import OfficialBaselinePlan
 
 
 @dataclass
@@ -81,10 +83,18 @@ class FakeDockerExecutor:
         image_tag: str,
         target_python: str = "3.12",
         validation_command: str | None = None,
+        extra_system_packages: list[str] | None = None,
     ) -> PreparedContext:
         return self._prepared(artifact_dir, image_tag, validation_command)
 
-    def prepare_project_context(self, target, dependencies, artifact_dir: Path, image_tag: str) -> PreparedContext:
+    def prepare_project_context(
+        self,
+        target,
+        dependencies,
+        artifact_dir: Path,
+        image_tag: str,
+        extra_system_packages: list[str] | None = None,
+    ) -> PreparedContext:
         return self._prepared(artifact_dir, image_tag, target.validation_command)
 
     def execute(self, context: PreparedContext) -> DockerExecutionResult:
@@ -191,6 +201,44 @@ def test_workflow_adjudicates_malformed_repair_output(tmp_path: Path) -> None:
 
     assert final_state["final_result"]["success"] is True
     assert final_state["final_result"]["dependencies"] == ["PyYAML==6.0.2"]
+
+
+def test_workflow_prompt_a_can_infer_target_python(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    project_root = write_project(tmp_path, "# prompt-driven python version inference\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner(
+            {
+                "extract": ['{"modules":["PyYAML"],"python_version":"3.11"}'],
+                "version": ["PyYAML==6.0.2"],
+                "repair": [],
+                "adjudicate": [],
+            }
+        ),
+        pypi_store=FakePyPIStore({"PyYAML": ["6.0.2", "6.0.1"]}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["target_python"] == "3.11"
+    assert final_state["inferred_target_python"] == "3.11"
+    assert final_state["python_version_source"] == "llm_prompt_a"
+    assert final_state["final_result"]["target_python"] == "3.11"
+    assert final_state["final_result"]["inferred_target_python"] == "3.11"
 
 
 def test_workflow_filters_unrelated_repair_dependencies(tmp_path: Path) -> None:
@@ -417,7 +465,7 @@ def test_workflow_uses_deterministic_version_selector_for_performance_preset(tmp
     assert final_state["final_result"]["dependencies"] == ["requests==2.32.3"]
 
 
-def test_workflow_pyego_uses_static_imports_and_deterministic_pins(tmp_path: Path) -> None:
+def test_workflow_pyego_requires_official_baseline_when_unavailable(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     settings.resolver = "pyego"
     project_root = write_project(tmp_path, "import yaml\n")
@@ -442,10 +490,60 @@ def test_workflow_pyego_uses_static_imports_and_deterministic_pins(tmp_path: Pat
 
     final_state = workflow.run(workflow.initial_state_for_project(project_root))
 
-    assert final_state["version_selection_source"] == "pyego_deterministic"
-    assert final_state["dependency_reason"] == "deterministic_version_selector"
+    assert final_state["version_selection_source"] == "pyego_official_required"
+    assert final_state["dependency_reason"] == "official_baseline_unavailable"
+    assert final_state["resolver_implementation"] == "official-required"
+    assert final_state["last_execution"].category == "OfficialBaselineUnavailable"
     assert final_state["final_result"]["resolver"] == "pyego"
-    assert final_state["final_result"]["dependencies"] == ["PyYAML==6.0.2"]
+    assert final_state["final_result"]["resolver_implementation"] == "official-required"
+    assert final_state["final_result"]["final_error_category"] == "OfficialBaselineUnavailable"
+    assert final_state["final_result"]["dependencies"] == []
+    assert final_state["final_result"]["attempts"] == 0
+
+
+def test_workflow_pyego_prefers_official_baseline_when_available(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.resolver = "pyego"
+    project_root = write_project(tmp_path, "import yaml\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner({"extract": [], "version": [], "repair": [], "adjudicate": []}),
+        pypi_store=FakePyPIStore({"PyYAML": ["6.0.2", "6.0.1"]}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    def fake_official(_: ResolutionWorkflow, state: dict[str, Any]) -> tuple[OfficialBaselinePlan | None, str]:
+        return (
+            OfficialBaselinePlan(
+                target_python="3.11",
+                dependencies=[ResolvedDependency(name="PyYAML", version="6.0.1")],
+                system_packages=["libyaml-dev"],
+                implementation="official",
+                raw_payload={"source": "test"},
+            ),
+            "pyego_official",
+        )
+
+    monkeypatch.setattr(ResolutionWorkflow, "_run_official_baseline", fake_official)
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["version_selection_source"] == "pyego_official"
+    assert final_state["resolver_implementation"] == "official"
+    assert final_state["final_result"]["resolver_implementation"] == "official"
+    assert final_state["final_result"]["system_dependencies"] == ["libyaml-dev"]
+    assert final_state["final_result"]["dependencies"] == ["PyYAML==6.0.1"]
 
 
 def test_workflow_readpye_uses_static_imports_and_unpinned_packages(tmp_path: Path) -> None:
@@ -479,6 +577,50 @@ def test_workflow_readpye_uses_static_imports_and_unpinned_packages(tmp_path: Pa
     assert final_state["final_result"]["dependencies"] == ["PyYAML"]
 
 
+def test_workflow_readpye_prefers_official_baseline_when_available(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.resolver = "readpye"
+    project_root = write_project(tmp_path, "import yaml\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner({"extract": [], "version": [], "repair": [], "adjudicate": []}),
+        pypi_store=FakePyPIStore({}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    def fake_official(_: ResolutionWorkflow, state: dict[str, Any]) -> tuple[OfficialBaselinePlan | None, str]:
+        return (
+            OfficialBaselinePlan(
+                target_python="2.7.18",
+                dependencies=[ResolvedDependency(name="PyYAML", version="")],
+                system_packages=[],
+                implementation="official",
+                raw_payload={"source": "test"},
+            ),
+            "readpye_official",
+        )
+
+    monkeypatch.setattr(ResolutionWorkflow, "_run_official_baseline", fake_official)
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["version_selection_source"] == "readpye_official"
+    assert final_state["resolver_implementation"] == "official"
+    assert final_state["final_result"]["resolver_implementation"] == "official"
+    assert final_state["final_result"]["dependencies"] == ["PyYAML"]
+
+
 def test_workflow_pyego_does_not_enter_repair_loop(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     settings.resolver = "pyego"
@@ -505,7 +647,8 @@ def test_workflow_pyego_does_not_enter_repair_loop(tmp_path: Path) -> None:
     final_state = workflow.run(workflow.initial_state_for_project(project_root))
 
     assert final_state["final_result"]["success"] is False
-    assert final_state["final_result"]["attempts"] == 1
+    assert final_state["final_result"]["attempts"] == 0
+    assert final_state["final_result"]["final_error_category"] == "OfficialBaselineUnavailable"
 
 
 def test_experimental_workflow_tries_ranked_candidate_plans_before_repair(tmp_path: Path) -> None:

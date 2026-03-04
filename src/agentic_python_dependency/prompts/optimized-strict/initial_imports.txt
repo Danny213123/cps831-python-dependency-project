@@ -1,14 +1,19 @@
-List only the installable third-party Python packages that are directly supported by this code.
+Given a python file:
+{raw_file}
+
+Return the installable third-party Python modules and the python version required to run.
 
 Rules:
 - Only list pip-installable third-party Python packages.
 - Only list packages that are anchored to imports or clear runtime loading patterns in the code.
-- Do not list Python standard library modules.
-- Do not list local files, local modules, relative imports, tools, or shell commands.
+- Do not include Python standard library modules.
+- Do not include local files, local modules, relative imports, tools, or shell commands.
 - Do not explain anything.
-- Do not use bullets, numbering, or code fences.
-- Return one package name per line.
-- If no third-party packages are required, return an empty response.
+- Return strict JSON only.
+- If no third-party packages are required, return an empty modules list.
 
-Python code:
-{code}
+Output format:
+{{
+  "modules": ["package_name"],
+  "python_version": "X.Y or X.Y.Z"
+}}

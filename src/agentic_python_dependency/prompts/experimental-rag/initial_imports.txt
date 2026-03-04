@@ -9,7 +9,8 @@ Return strict JSON only using this schema:
       "source": "import|alias|repo_evidence|llm",
       "evidence": ["short evidence string"]
     }}
-  ]
+  ],
+  "python_version": "X.Y or X.Y.Z"
 }}
 
 Rules:
@@ -17,7 +18,7 @@ Rules:
 - Do not include Python standard library modules.
 - Do not include local modules from the repository itself.
 - Every package must be anchored to the extracted imports or repo evidence.
-- If no third-party packages are needed, return {{"packages":[]}}.
+- If no third-party packages are needed, return {{"packages":[],"python_version":"X.Y or X.Y.Z"}}.
 - Do not return markdown, code fences, or commentary.
 
 Target Python:
@@ -30,4 +31,4 @@ Repo evidence:
 {repo_evidence}
 
 Python code:
-{code}
+{raw_file}

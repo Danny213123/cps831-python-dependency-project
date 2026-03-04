@@ -249,6 +249,9 @@ class ResolutionState(TypedDict, total=False):
     stop_reason: str
     final_result: dict[str, Any]
     target_python: str
+    benchmark_target_python: str
+    inferred_target_python: str
+    python_version_source: str
     resolver: ResolverName
     preset: PresetName
     prompt_profile: PromptProfile
@@ -270,6 +273,8 @@ class ResolutionState(TypedDict, total=False):
     version_conflict_notes: list[ConflictNote]
     python_constraint_intersection: list[str]
     top_level_module_map: dict[str, list[str]]
+    system_dependencies: list[str]
+    resolver_implementation: str
     repo_evidence: dict[str, Any]
     pypi_evidence: dict[str, Any]
     rag_context: dict[str, Any]

@@ -42,6 +42,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Aligned Prompt A with the paper-style modules-plus-Python-version flow by having initial package inference return both dependency modules and an inferred Python version, recording benchmark vs inferred Python version metadata in run artifacts, and rewriting benchmark Docker base images to the inferred Python version for APD-driven execution.
 - Extended the experimental workflow so enhanced/full runs can perform repo-derived alias discovery, multipass package inference, version-specific metadata retrieval, constraint prechecks, feedback-memory loading, candidate-bundle generation, and version negotiation before execution.
 - Extended the interactive UI and CLI to configure experimental bundles/features explicitly and preserve that configuration in run state, dashboards, and resumed runs.
 - Extended reporting and result exports with experimental bundle, feature, retry-severity, strategy-type, conflict-precheck, and related experimental accuracy metrics.

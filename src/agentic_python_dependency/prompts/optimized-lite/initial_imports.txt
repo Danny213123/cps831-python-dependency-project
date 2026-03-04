@@ -1,12 +1,17 @@
-List only the installable third-party Python packages required for this code to run.
+Given a python file:
+{raw_file}
+
+Return the installable third-party Python modules and the python version required to run.
 
 Rules:
-- Do not list Python standard library modules.
-- Do not list local files or local modules.
+- Do not include Python standard library modules.
+- Do not include local files or local modules.
 - Do not explain anything.
-- Do not use bullets or code fences.
-- Return one package name per line.
-- If no third-party packages are needed, return an empty response.
+- Return strict JSON only.
+- If no third-party packages are needed, return an empty modules list.
 
-Python code:
-{code}
+Output format:
+{{
+  "modules": ["package_name"],
+  "python_version": "X.Y or X.Y.Z"
+}}

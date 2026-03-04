@@ -6,7 +6,7 @@ import shlex
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentic_python_dependency.config import Settings
@@ -20,6 +20,7 @@ class PreparedExecutionContext:
     image_tag: str
     validation_command: str | None
     artifact_dir: Path
+    system_packages: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -117,6 +118,7 @@ class DockerExecutor:
         requirements_file: str = "requirements.generated.txt",
         *,
         rewrite_python_installs: bool = False,
+        rewrite_base_python: bool = False,
         target_python: str = "3.12",
         bootstrap_pins: list[str] | None = None,
         system_packages: list[str] | None = None,
@@ -126,6 +128,13 @@ class DockerExecutor:
         for line in lines:
             if rewrite_python_installs and DockerExecutor._is_python_install_line(line):
                 continue
+            if rewrite_base_python and line.strip().lower().startswith("from python:"):
+                suffix = ""
+                lowered = line.strip().lower()
+                if "-slim" in lowered:
+                    suffix = "-slim"
+                line = f"FROM python:{target_python}{suffix}"
+                rewrite_base_python = False
             rewritten_lines.append(line)
 
         injection: list[str] = []
@@ -180,6 +189,7 @@ class DockerExecutor:
         image_tag: str,
         target_python: str = "3.12",
         validation_command: str | None = None,
+        extra_system_packages: list[str] | None = None,
     ) -> PreparedExecutionContext:
         context_dir = artifact_dir / "context"
         context_dir.mkdir(parents=True, exist_ok=True)
@@ -192,18 +202,30 @@ class DockerExecutor:
         requirements_path = context_dir / "requirements.generated.txt"
         dockerfile_path = context_dir / "Dockerfile.generated"
         requirements_path.write_text(self.render_requirements(dependencies), encoding="utf-8")
+        merged_system_packages = self.system_packages(dependencies)
+        for package in extra_system_packages or []:
+            if package not in merged_system_packages:
+                merged_system_packages.append(package)
         dockerfile_text = case.dockerfile_path.read_text(encoding="utf-8")
         dockerfile_path.write_text(
             self.patch_dockerfile(
                 dockerfile_text,
                 rewrite_python_installs=True,
+                rewrite_base_python=True,
                 target_python=target_python,
                 bootstrap_pins=self.bootstrap_pins(dependencies),
-                system_packages=self.system_packages(dependencies),
+                system_packages=merged_system_packages,
             ),
             encoding="utf-8",
         )
-        return PreparedExecutionContext(context_dir, dockerfile_path, image_tag, validation_command, artifact_dir)
+        return PreparedExecutionContext(
+            context_dir,
+            dockerfile_path,
+            image_tag,
+            validation_command,
+            artifact_dir,
+            merged_system_packages,
+        )
 
     def prepare_project_context(
         self,
@@ -211,10 +233,15 @@ class DockerExecutor:
         dependencies: list[ResolvedDependency],
         artifact_dir: Path,
         image_tag: str,
+        extra_system_packages: list[str] | None = None,
     ) -> PreparedExecutionContext:
         context_dir = artifact_dir / "context"
         context_dir.mkdir(parents=True, exist_ok=True)
         self._copy_project_tree(target.root_dir, context_dir)
+        merged_system_packages = self.system_packages(dependencies)
+        for package in extra_system_packages or []:
+            if package not in merged_system_packages:
+                merged_system_packages.append(package)
         requirements_path = context_dir / "requirements.generated.txt"
         dockerfile_path = context_dir / "Dockerfile.generated"
         requirements_path.write_text(self.render_requirements(dependencies), encoding="utf-8")
@@ -224,7 +251,7 @@ class DockerExecutor:
                 self.patch_dockerfile(
                     dockerfile_text,
                     bootstrap_pins=self.bootstrap_pins(dependencies),
-                    system_packages=self.system_packages(dependencies),
+                    system_packages=merged_system_packages,
                 ),
                 encoding="utf-8",
             )
@@ -234,6 +261,15 @@ class DockerExecutor:
                     [
                         "FROM python:3.12-slim",
                         "WORKDIR /workspace",
+                        *(
+                            [
+                                "RUN apt-get update && apt-get install -y --no-install-recommends "
+                                + " ".join(merged_system_packages)
+                                + " && rm -rf /var/lib/apt/lists/*"
+                            ]
+                            if merged_system_packages
+                            else []
+                        ),
                         "COPY . /workspace",
                         "COPY requirements.generated.txt /tmp/requirements.generated.txt",
                         "RUN pip install --no-cache-dir -r /tmp/requirements.generated.txt",
@@ -249,6 +285,7 @@ class DockerExecutor:
             image_tag=image_tag,
             validation_command=target.validation_command,
             artifact_dir=artifact_dir,
+            system_packages=merged_system_packages,
         )
 
     def execute(self, context: PreparedExecutionContext) -> DockerExecutionResult:

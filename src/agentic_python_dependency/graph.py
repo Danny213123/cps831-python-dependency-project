@@ -53,6 +53,12 @@ from agentic_python_dependency.tools.import_extractor import (
     normalize_candidate_packages_with_sources,
     runtime_package_alias,
 )
+from agentic_python_dependency.tools.official_baselines import (
+    OfficialBaselineError,
+    OfficialBaselinePlan,
+    run_pyego,
+    run_readpye,
+)
 from agentic_python_dependency.tools.package_metadata import PackageMetadataStore
 from agentic_python_dependency.tools.pypi_store import PyPIMetadataStore
 from agentic_python_dependency.tools.rag_context import build_experimental_rag_context, summarize_rag_context
@@ -110,12 +116,92 @@ def parse_dependency_lines(raw_output: str) -> list[ResolvedDependency]:
     return sorted(dependencies.values(), key=lambda dependency: dependency.name.lower())
 
 
+PYTHON_VERSION_RE = re.compile(r"\b((?:2|3)\.\d+(?:\.\d+)?)\b")
+
+
+def normalize_python_version_hint(value: str) -> str | None:
+    candidate = value.strip()
+    match = PYTHON_VERSION_RE.search(candidate)
+    if not match:
+        return None
+    version = match.group(1)
+    parts = version.split(".")
+    if len(parts) == 2:
+        return version
+    if len(parts) == 3:
+        return version
+    return None
+
+
+def parse_package_inference_output(raw_output: str) -> tuple[list[str], str | None]:
+    raw_output = raw_output.strip()
+    if not raw_output:
+        return [], None
+
+    try:
+        payload = json.loads(raw_output)
+    except json.JSONDecodeError:
+        payload = None
+
+    if isinstance(payload, dict):
+        version = normalize_python_version_hint(str(payload.get("python_version", "")).strip())
+        packages_field = None
+        for key in ("packages", "modules", "python_modules"):
+            if key in payload:
+                packages_field = payload[key]
+                break
+        packages: list[str] = []
+        if isinstance(packages_field, list):
+            for item in packages_field:
+                if isinstance(item, dict):
+                    package = str(item.get("package", "") or item.get("name", "")).strip()
+                else:
+                    package = str(item).strip()
+                if package:
+                    packages.append(package)
+        elif isinstance(packages_field, str):
+            packages.extend(part.strip() for part in packages_field.split(",") if part.strip())
+        return packages, version
+
+    packages: list[str] = []
+    python_version: str | None = None
+    for raw_line in raw_output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        lowered = line.lower()
+        if "python" in lowered and "version" in lowered:
+            inferred = normalize_python_version_hint(line)
+            if inferred:
+                python_version = inferred
+            continue
+        if re.fullmatch(r"(?:2|3)\.\d+(?:\.\d+)?", line):
+            python_version = line
+            continue
+        if ":" in line:
+            label, _, value = line.partition(":")
+            if "python" in label.lower() and "version" in label.lower():
+                inferred = normalize_python_version_hint(value)
+                if inferred:
+                    python_version = inferred
+                continue
+            if label.strip().lower() in {"modules", "packages"}:
+                packages.extend(part.strip() for part in value.split(",") if part.strip())
+                continue
+        packages.append(line)
+    return packages, python_version
+
+
 def route_after_execute(state: ResolutionState) -> str:
     return "finalize_result" if state["last_execution"].success else "classify_outcome"
 
 
 def route_after_normalize(state: ResolutionState) -> str:
-    return "finalize_result" if state.get("stop_reason") == "RepairOutputStalled" else "materialize_execution_context"
+    return (
+        "finalize_result"
+        if state.get("stop_reason") in {"RepairOutputStalled", "OfficialPyEGoUnavailable"}
+        else "materialize_execution_context"
+    )
 
 
 def route_after_classification(state: ResolutionState, max_attempts: int) -> str:
@@ -326,6 +412,90 @@ class ResolutionWorkflow:
         if hasattr(self.prompt_runner, "stage_model"):
             return self.prompt_runner.stage_model(stage)
         return stage
+
+    def _official_baseline_target(self, state: ResolutionState) -> Path:
+        if state["mode"] == "gistable":
+            if self.settings.resolver == "readpye":
+                return state["benchmark_case"].snippet_path
+            return state["benchmark_case"].root_dir
+        if self.settings.resolver == "readpye" and state["project_target"].python_files:
+            return state["project_target"].python_files[0]
+        return state["project_target"].root_dir
+
+    def _run_official_baseline(self, state: ResolutionState) -> tuple[OfficialBaselinePlan | None, str]:
+        artifact_dir = Path(state["artifact_dir"])
+        target = self._official_baseline_target(state)
+        if self.settings.resolver == "pyego":
+            script = self.settings.pyego_root / "PyEGo.py"
+            if not script.exists():
+                return None, ""
+            return run_pyego(self.settings, target, artifact_dir), "pyego_official"
+        if self.settings.resolver == "readpye":
+            script = self.settings.readpye_root / "run.py"
+            if not script.exists():
+                return None, ""
+            return run_readpye(self.settings, target, artifact_dir), "readpye_official"
+        return None, ""
+
+    def _apply_official_baseline_plan(
+        self,
+        state: ResolutionState,
+        plan: OfficialBaselinePlan,
+        source: str,
+    ) -> ResolutionState:
+        selected = sorted(plan.dependencies, key=lambda dependency: dependency.name.lower())
+        state["selected_dependencies"] = selected
+        state["system_dependencies"] = list(plan.system_packages)
+        if plan.target_python:
+            state["target_python"] = plan.target_python
+        state["resolver_implementation"] = plan.implementation
+        state["generated_requirements"] = DockerExecutor.render_requirements(selected)
+        state["dependency_reason"] = "official_baseline"
+        state["version_selection_source"] = source
+        state["prompt_history"]["prompt_b"] = (
+            f"# skipped: using official {self.settings.resolver} baseline output"
+        )
+        state["model_outputs"]["version"].append(
+            {
+                "attempt": state["current_attempt"],
+                "output": "\n".join(dependency.pin() for dependency in selected),
+                "source": source,
+                "system_packages": list(plan.system_packages),
+                "target_python": plan.target_python,
+            }
+        )
+        state.setdefault("structured_outputs", {})["official_baseline"] = plan.raw_payload
+        return state
+
+    def _mark_official_pyego_unavailable(self, state: ResolutionState, error: str) -> ResolutionState:
+        message = f"Official PyEGo is required for resolver=pyego but is unavailable: {error}"
+        state["resolver_implementation"] = "official-required"
+        state["selected_dependencies"] = []
+        state["system_dependencies"] = []
+        state["dependency_reason"] = "official_baseline_unavailable"
+        state["version_selection_source"] = "pyego_official_required"
+        state["last_execution"] = ExecutionOutcome(
+            success=False,
+            category="OfficialBaselineUnavailable",
+            message=message,
+            build_succeeded=False,
+            run_succeeded=False,
+            dependency_retryable=False,
+            retry_severity="terminal",
+        )
+        state["last_error_category"] = "OfficialBaselineUnavailable"
+        state["last_error_details"] = message
+        state["stop_reason"] = "OfficialPyEGoUnavailable"
+        state["prompt_history"]["prompt_b"] = f"# official PyEGo required but unavailable: {error}"
+        state["model_outputs"]["version"].append(
+            {
+                "attempt": state["current_attempt"],
+                "output": "",
+                "source": "pyego_official_required",
+                "error": error,
+            }
+        )
+        return state
 
     def _emit_trace(self, state: ResolutionState, message: str) -> None:
         if not self.settings.trace_llm:
@@ -616,6 +786,8 @@ class ResolutionWorkflow:
             version_conflict_notes=[],
             python_constraint_intersection=[],
             top_level_module_map={},
+            system_dependencies=[],
+            resolver_implementation="internal",
             repo_evidence={},
             pypi_evidence={},
             rag_context={},
@@ -670,6 +842,8 @@ class ResolutionWorkflow:
             version_conflict_notes=[],
             python_constraint_intersection=[],
             top_level_module_map={},
+            system_dependencies=[],
+            resolver_implementation="internal",
             repo_evidence={},
             pypi_evidence={},
             rag_context={},
@@ -895,13 +1069,20 @@ class ResolutionWorkflow:
             state["source_files"] = {"snippet.py": source}
             state["current_validation_command"] = ""
             state["current_runtime_profile"] = "docker_cmd"
-            state["target_python"] = detect_target_python_from_dockerfile(dockerfile_text)
+            benchmark_target_python = detect_target_python_from_dockerfile(dockerfile_text)
+            state["benchmark_target_python"] = benchmark_target_python
+            state["target_python"] = benchmark_target_python
+            state["inferred_target_python"] = ""
+            state["python_version_source"] = "benchmark_dockerfile"
         else:
             target = state["project_target"]
             state["source_files"] = load_python_sources(target.root_dir)
             state["current_validation_command"] = target.validation_command
             state["current_runtime_profile"] = "project"
             state["target_python"] = "3.12"
+            state["benchmark_target_python"] = ""
+            state["inferred_target_python"] = ""
+            state["python_version_source"] = "project_default"
 
         return state
 
@@ -986,7 +1167,7 @@ class ResolutionWorkflow:
         repo_evidence_summary = json.dumps(state.get("repo_evidence", {}), indent=2)[:2000]
         prompt_text = self._format_prompt(
             "package_inference.txt",
-            code=code,
+            raw_file=code,
             target_python=state.get("target_python", ""),
             extracted_imports="\n".join(state.get("extracted_imports", [])),
             repo_evidence=repo_evidence_summary,
@@ -996,7 +1177,7 @@ class ResolutionWorkflow:
             "extract",
             "package_inference.txt",
             {
-                "code": code,
+                "raw_file": code,
                 "target_python": state.get("target_python", ""),
                 "extracted_imports": "\n".join(state.get("extracted_imports", [])),
                 "repo_evidence": repo_evidence_summary,
@@ -1006,6 +1187,7 @@ class ResolutionWorkflow:
         state["prompt_history"]["prompt_a"] = [prompt_text]
         state["model_outputs"]["extract"] = [{"file": next(iter(state["source_files"].keys()), "snippet.py"), "output": raw_output}]
         state["structured_outputs"]["extract_raw"] = raw_output
+        raw_version_output = raw_output
         try:
             llm_candidates = parse_experimental_package_payload(raw_output)
         except StructuredOutputError:
@@ -1017,9 +1199,15 @@ class ResolutionWorkflow:
             )
             try:
                 llm_candidates = parse_experimental_package_payload(cleaned_output)
+                raw_version_output = cleaned_output
             except StructuredOutputError:
                 state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
                 llm_candidates = []
+        _, inferred_python_version = parse_package_inference_output(raw_version_output)
+        if inferred_python_version:
+            state["inferred_target_python"] = inferred_python_version
+            state["target_python"] = inferred_python_version
+            state["python_version_source"] = "llm_prompt_a"
         state["structured_outputs"]["extract"] = llm_candidates
         candidate_sources: dict[str, set[str]] = {}
         candidate_confidence: dict[str, float] = {}
@@ -1175,7 +1363,11 @@ class ResolutionWorkflow:
             state["candidate_provenance"] = provenance
             return state
 
-        if extracted_imports and not self._should_use_extract_llm(state, extracted_imports):
+        if (
+            extracted_imports
+            and not self._should_use_extract_llm(state, extracted_imports)
+            and state.get("mode") != "gistable"
+        ):
             provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
             normalized = sorted(provenance, key=str.lower)
             if normalized:
@@ -1196,14 +1388,18 @@ class ResolutionWorkflow:
         outputs: list[dict[str, str]] = []
 
         for file_name, code in state["source_files"].items():
-            prompt_text = self._format_prompt("initial_imports.txt", code=code)
+            prompt_text = self._format_prompt("initial_imports.txt", raw_file=code)
             prompt_texts.append(prompt_text)
             self._trace_request(state, "extract", prompt_text)
-            raw_output = self.prompt_runner.invoke_template("extract", "initial_imports.txt", {"code": code})
+            raw_output = self.prompt_runner.invoke_template("extract", "initial_imports.txt", {"raw_file": code})
             self._trace_response(state, "extract", raw_output)
             outputs.append({"file": file_name, "output": raw_output})
-            for line in raw_output.splitlines():
-                package = line.strip()
+            packages, inferred_python_version = parse_package_inference_output(raw_output)
+            if inferred_python_version:
+                state["inferred_target_python"] = inferred_python_version
+                state["target_python"] = inferred_python_version
+                state["python_version_source"] = "llm_prompt_a"
+            for package in packages:
                 if package:
                     inferred.add(package)
 
@@ -1245,7 +1441,7 @@ class ResolutionWorkflow:
         repo_evidence_summary = json.dumps(state.get("repo_evidence", {}), indent=2)[:2000]
         prompt_text = self._format_prompt(
             "initial_imports.txt",
-            code=code,
+            raw_file=code,
             target_python=state.get("target_python", ""),
             extracted_imports="\n".join(extracted_imports),
             repo_evidence=repo_evidence_summary,
@@ -1255,7 +1451,7 @@ class ResolutionWorkflow:
             "extract",
             "initial_imports.txt",
             {
-                "code": code,
+                "raw_file": code,
                 "target_python": state.get("target_python", ""),
                 "extracted_imports": "\n".join(extracted_imports),
                 "repo_evidence": repo_evidence_summary,
@@ -1266,6 +1462,7 @@ class ResolutionWorkflow:
         state["model_outputs"]["extract"] = [{"file": next(iter(state["source_files"].keys()), "snippet.py"), "output": raw_output}]
         state["structured_outputs"]["extract_raw"] = raw_output
 
+        raw_version_output = raw_output
         try:
             packages = parse_experimental_package_payload(raw_output)
         except StructuredOutputError:
@@ -1277,12 +1474,18 @@ class ResolutionWorkflow:
             )
             try:
                 packages = parse_experimental_package_payload(cleaned_output)
+                raw_version_output = cleaned_output
             except StructuredOutputError:
                 state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
                 packages = []
 
         inferred = [entry["package"] for entry in packages]
+        _, inferred_python_version = parse_package_inference_output(raw_version_output)
         state["structured_outputs"]["extract"] = packages
+        if inferred_python_version:
+            state["inferred_target_python"] = inferred_python_version
+            state["target_python"] = inferred_python_version
+            state["python_version_source"] = "llm_prompt_a"
         if not inferred:
             inferred = extracted_imports
         provenance = self._candidate_provenance_from(inferred, extracted_imports)
@@ -1484,6 +1687,35 @@ class ResolutionWorkflow:
             state["version_selection_source"] = state.get("repair_outcome") or "repair"
             return state
 
+        if self.settings.resolver in {"pyego", "readpye"}:
+            try:
+                official_plan, source = self._run_official_baseline(state)
+            except OfficialBaselineError as exc:
+                if self.settings.resolver == "pyego":
+                    return self._mark_official_pyego_unavailable(state, str(exc))
+                state["resolver_implementation"] = "internal-fallback"
+                state["prompt_history"]["prompt_b"] = (
+                    f"# official {self.settings.resolver} integration unavailable: {exc}; "
+                    "using internal baseline approximation"
+                )
+                state["model_outputs"]["version"].append(
+                    {
+                        "attempt": state["current_attempt"],
+                        "output": "",
+                        "source": f"{self.settings.resolver}_official_unavailable",
+                        "error": str(exc),
+                    }
+                )
+            else:
+                if official_plan is not None:
+                    return self._apply_official_baseline_plan(state, official_plan, source)
+                if self.settings.resolver == "pyego":
+                    return self._mark_official_pyego_unavailable(
+                        state,
+                        f"PyEGo entrypoint not found at {self.settings.pyego_root / 'PyEGo.py'}",
+                    )
+                state["resolver_implementation"] = "internal-fallback"
+
         if self.settings.resolver == "readpye":
             if state.get("inferred_packages"):
                 selected = [ResolvedDependency(name=package, version="") for package in state.get("inferred_packages", [])]
@@ -1534,21 +1766,6 @@ class ResolutionWorkflow:
             state["version_selection_source"] = "no_version_options"
             return state
 
-        if self.settings.resolver == "pyego":
-            selected = self._deterministic_dependencies(state["version_options"])
-            state["prompt_history"]["prompt_b"] = "# skipped: PyEGo baseline uses deterministic pinned version selection"
-            state["model_outputs"]["version"].append(
-                {
-                    "attempt": state["current_attempt"],
-                    "output": "\n".join(dependency.pin() for dependency in selected),
-                    "source": "pyego_deterministic",
-                }
-            )
-            state["selected_dependencies"] = sorted(selected, key=lambda dependency: dependency.name.lower())
-            state["dependency_reason"] = "deterministic_version_selector"
-            state["version_selection_source"] = "pyego_deterministic"
-            return state
-
         if all(len(option.versions) == 1 for option in state.get("version_options", [])):
             selected = self._deterministic_dependencies(state["version_options"])
             state["prompt_history"]["prompt_b"] = (
@@ -1582,12 +1799,32 @@ class ResolutionWorkflow:
             return state
 
         package_versions = self.pypi_store.format_prompt_block(state.get("version_options", []))
-        prompt_text = self._format_prompt("version_selection.txt", package_versions=package_versions)
+        previous_versions = ", ".join(
+            sorted(
+                {
+                    dependency
+                    for attempt in state.get("attempt_records", [])
+                    for dependency in attempt.dependencies
+                    if dependency
+                }
+            )
+        ) or "none"
+        format_instructions = "package_name==version, one per line"
+        prompt_text = self._format_prompt(
+            "version_selection.txt",
+            package_versions=package_versions,
+            previous_versions=previous_versions,
+            format_instructions=format_instructions,
+        )
         self._trace_request(state, "version", prompt_text)
         raw_output = self.prompt_runner.invoke_template(
             "version",
             "version_selection.txt",
-            {"package_versions": package_versions},
+            {
+                "package_versions": package_versions,
+                "previous_versions": previous_versions,
+                "format_instructions": format_instructions,
+            },
         )
         self._trace_response(state, "version", raw_output)
         state["prompt_history"]["prompt_b"] = prompt_text
@@ -1926,6 +2163,10 @@ class ResolutionWorkflow:
         return state
 
     def normalize_dependency_plan(self, state: ResolutionState) -> ResolutionState:
+        if state.get("stop_reason") == "OfficialPyEGoUnavailable":
+            state["selected_dependencies"] = []
+            state["generated_requirements"] = "# official PyEGo unavailable\n"
+            return state
         state.pop("stop_reason", None)
         if state.get("selected_dependencies"):
             previous_dependencies = (
@@ -2020,6 +2261,7 @@ class ResolutionWorkflow:
                 image_tag,
                 state["target_python"],
                 state.get("current_validation_command") or None,
+                extra_system_packages=state.get("system_dependencies", []),
             )
             shutil.copy2(state["benchmark_case"].snippet_path, artifact_dir / "source.py")
         else:
@@ -2028,6 +2270,7 @@ class ResolutionWorkflow:
                 state["selected_dependencies"],
                 attempt_dir,
                 image_tag,
+                extra_system_packages=state.get("system_dependencies", []),
             )
             first_source = next(iter(state["source_files"].values()), "")
             (artifact_dir / "source.py").write_text(first_source, encoding="utf-8")
@@ -2256,6 +2499,7 @@ class ResolutionWorkflow:
             "case_id": state["case_id"],
             "mode": state["mode"],
             "resolver": state.get("resolver", self.settings.resolver),
+            "resolver_implementation": state.get("resolver_implementation", "internal"),
             "preset": state.get("preset", self.settings.preset),
             "prompt_profile": state.get("prompt_profile", self.settings.prompt_profile),
             "experimental_bundle": state.get("experimental_bundle", "baseline"),
@@ -2275,7 +2519,12 @@ class ResolutionWorkflow:
             "attempts": state["current_attempt"],
             "final_error_category": execution.category,
             "initial_eval": state.get("benchmark_case").initial_eval if state.get("benchmark_case") else "",
+            "benchmark_target_python": state.get("benchmark_target_python", ""),
+            "inferred_target_python": state.get("inferred_target_python", ""),
+            "python_version_source": state.get("python_version_source", ""),
+            "target_python": state.get("target_python", ""),
             "dependencies": [dependency.pin() for dependency in state.get("selected_dependencies", [])],
+            "system_dependencies": list(state.get("system_dependencies", [])),
             "dependency_reason": state.get("dependency_reason", ""),
             "candidate_provenance": state.get("candidate_provenance", {}),
             "repair_outcome": state.get("repair_outcome", ""),

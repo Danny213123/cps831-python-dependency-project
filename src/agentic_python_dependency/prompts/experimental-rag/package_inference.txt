@@ -9,7 +9,8 @@ Return strict JSON only using this schema:
       "source": "llm",
       "evidence": ["short fact"]
     }}
-  ]
+  ],
+  "python_version": "X.Y or X.Y.Z"
 }}
 
 Rules:
@@ -17,7 +18,7 @@ Rules:
 - Do not include stdlib modules.
 - Do not include local modules unless the evidence shows they map to an installable distribution.
 - Every package must be grounded in the code, extracted imports, or repo evidence.
-- If no third-party packages are needed, return {{"packages":[]}}.
+- If no third-party packages are needed, return {{"packages":[],"python_version":"X.Y or X.Y.Z"}}.
 
 Target Python:
 {target_python}
@@ -29,4 +30,4 @@ Repo evidence:
 {repo_evidence}
 
 Python code:
-{code}
+{raw_file}

@@ -145,14 +145,7 @@ class GistableDataset:
                     case_ids.add(token)
         return case_ids
 
-    def competition_case_ids(self, ref: str | None = None) -> set[str]:
-        root = self.dataset_root(ref)
-        case_root = root / "all-gists"
-        if not case_root.exists():
-            return set()
-        known_case_ids = {path.name for path in case_root.iterdir() if path.is_dir() and (path / "snippet.py").exists()}
-        if not known_case_ids:
-            return set()
+    def _load_competition_case_ids_from_csvs(self) -> set[str]:
         selected: set[str] = set()
         for csv_path in self.settings.competition_result_csvs:
             if not csv_path.exists():
@@ -164,7 +157,71 @@ class GistableDataset:
                         selected.update(self._extract_case_ids_from_row(row))
             except OSError:
                 continue
-        return selected & known_case_ids
+        return selected
+
+    def _load_competition_case_ids_from_file(self) -> set[str]:
+        filter_path = self.settings.competition_case_ids_file
+        if not filter_path.exists():
+            return set()
+        selected: set[str] = set()
+        try:
+            lines = filter_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return set()
+        for line in lines:
+            if not line:
+                continue
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            for token in re.split(r"[^0-9A-Za-z]+", stripped):
+                if self._is_case_id_token(token):
+                    selected.add(token)
+        return selected
+
+    def _persist_competition_case_ids_file(self, case_ids: set[str]) -> Path:
+        filter_path = self.settings.competition_case_ids_file
+        filter_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = "\n".join(sorted(case_ids))
+        if payload:
+            payload += "\n"
+        try:
+            if filter_path.exists() and filter_path.read_text(encoding="utf-8", errors="replace") == payload:
+                return filter_path
+        except OSError:
+            pass
+        filter_path.write_text(payload, encoding="utf-8")
+        return filter_path
+
+    def save_competition_case_ids_file(self, ref: str | None = None) -> tuple[Path, int]:
+        root = self.dataset_root(ref)
+        case_root = root / "all-gists"
+        if not case_root.exists():
+            return self.settings.competition_case_ids_file, 0
+        known_case_ids = {path.name for path in case_root.iterdir() if path.is_dir() and (path / "snippet.py").exists()}
+        csv_selected = self._load_competition_case_ids_from_csvs()
+        effective = csv_selected & known_case_ids
+        if not effective:
+            return self.settings.competition_case_ids_file, 0
+        path = self._persist_competition_case_ids_file(effective)
+        return path, len(effective)
+
+    def competition_case_ids(self, ref: str | None = None) -> set[str]:
+        root = self.dataset_root(ref)
+        case_root = root / "all-gists"
+        if not case_root.exists():
+            return set()
+        known_case_ids = {path.name for path in case_root.iterdir() if path.is_dir() and (path / "snippet.py").exists()}
+        if not known_case_ids:
+            return set()
+        csv_selected = self._load_competition_case_ids_from_csvs() & known_case_ids
+        if csv_selected:
+            self._persist_competition_case_ids_file(csv_selected)
+            return csv_selected
+        file_selected = self._load_competition_case_ids_from_file() & known_case_ids
+        if file_selected:
+            return file_selected
+        return set()
 
     def snippet_path_for_case(
         self,

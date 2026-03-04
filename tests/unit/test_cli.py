@@ -40,6 +40,8 @@ def test_benchmark_run_parser_accepts_jobs_flag() -> None:
             "competition-run",
             "--competition-csv",
             "/tmp/official-results.csv",
+            "--competition-filter-file",
+            "/tmp/competition-case-ids.txt",
             "benchmark",
             "run",
             "--subset",
@@ -58,6 +60,7 @@ def test_benchmark_run_parser_accepts_jobs_flag() -> None:
     assert args.fresh_run is True
     assert args.benchmark_source == "competition-run"
     assert args.competition_csv == ["/tmp/official-results.csv"]
+    assert args.competition_filter_file == "/tmp/competition-case-ids.txt"
 
 
 def test_benchmark_run_parser_accepts_new_moe_model_profiles() -> None:
@@ -111,6 +114,16 @@ def test_benchmark_segment_parser_accepts_subset_and_jobs() -> None:
     assert args.benchmark_command == "segment"
     assert args.subset == "smoke30"
     assert args.jobs == 2
+
+
+def test_benchmark_save_competition_filter_parser_accepts_ref() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["benchmark", "save-competition-filter", "--ref", "abc123"])
+
+    assert args.command == "benchmark"
+    assert args.benchmark_command == "save-competition-filter"
+    assert args.ref == "abc123"
 
 
 def test_benchmark_full_parser_accepts_jobs() -> None:

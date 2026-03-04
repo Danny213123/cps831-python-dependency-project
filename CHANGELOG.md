@@ -7,6 +7,23 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-03-04
+
+### Added
+
+- Added a repo-tracked competition gist filter file at `competition/competition-case-ids.txt` so `competition-run` selections are reproducible across machines after `git pull`.
+- Added `apdr benchmark save-competition-filter` to build/sync the repo filter file from configured official CSV sources.
+- Added `--competition-filter-file` CLI override and `APDR_COMPETITION_CASE_IDS_FILE` support for custom filter-file paths.
+- Added dataset tests for competition filter fallback and sync behavior.
+
+### Changed
+
+- Updated `competition-run` case selection to:
+  - prefer CSV-derived IDs when available,
+  - auto-sync those IDs into the filter file,
+  - fall back to the repo filter file when CSVs are missing.
+- Updated README competition-run docs with repo filter workflow for cross-system use.
+
 ## [1.1.2] - 2026-03-04
 
 ### Changed

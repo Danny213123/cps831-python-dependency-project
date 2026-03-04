@@ -160,6 +160,17 @@ def test_settings_from_env_supports_competition_csv_overrides(tmp_path: Path) ->
     assert settings.competition_result_csvs == (csv_path.resolve(),)
 
 
+def test_settings_from_env_supports_competition_filter_file_override(tmp_path: Path) -> None:
+    filter_path = tmp_path / "competition" / "competition-case-ids.txt"
+
+    settings = Settings.from_env(
+        project_root=tmp_path,
+        competition_case_ids_file_override=str(filter_path),
+    )
+
+    assert settings.competition_case_ids_file == filter_path.resolve()
+
+
 def test_settings_from_env_allows_disabling_llm_cache(tmp_path: Path) -> None:
     settings = Settings.from_env(project_root=tmp_path, disable_llm_cache_override=True)
 

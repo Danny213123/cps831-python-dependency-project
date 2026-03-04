@@ -123,6 +123,7 @@ apdr solve --path /path/to/python/repo
 ```bash
 apdr benchmark fetch-gistable --ref 665d39a2bd82543d5196555f0801ef8fd4a3ee48
 apdr benchmark make-subsets
+apdr benchmark save-competition-filter
 apdr benchmark run --subset smoke30
 apdr --benchmark-source competition-run benchmark run --subset smoke30
 apdr --benchmark-source competition-run --competition-csv /abs/path/pyego_results.csv --competition-csv /abs/path/summary-all-runs.csv benchmark run --subset smoke30
@@ -245,6 +246,16 @@ APDR reads CSV IDs from:
 - default detected files:
   - `~/Downloads/pyego_results.csv`
   - `~/Downloads/summary-all-runs.csv`
+
+APDR also supports a repo-tracked fallback filter file for cross-machine reproducibility:
+- default path: `competition/competition-case-ids.txt`
+- override with: `--competition-filter-file` or `APDR_COMPETITION_CASE_IDS_FILE`
+
+To refresh the repo filter file from your current CSV inputs:
+
+```bash
+apdr benchmark save-competition-filter
+```
 
 ## Tests
 

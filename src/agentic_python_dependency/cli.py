@@ -686,6 +686,14 @@ def build_parser() -> argparse.ArgumentParser:
             "(repeatable, merged with APDR_COMPETITION_RESULT_CSVS/defaults)."
         ),
     )
+    parser.add_argument(
+        "--competition-filter-file",
+        default=None,
+        help=(
+            "Path to a repo-tracked competition gist-id filter file. "
+            "When --benchmark-source competition-run is used, APDR falls back to this file if CSVs are unavailable."
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     doctor = subparsers.add_parser("doctor", help="Check Docker, Ollama, models, and dataset readiness.")
@@ -716,6 +724,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     make_subsets = benchmark_sub.add_parser("make-subsets")
     make_subsets.add_argument("--ref", default=None)
+
+    save_comp_filter = benchmark_sub.add_parser("save-competition-filter")
+    save_comp_filter.add_argument("--ref", default=None)
 
     segment = benchmark_sub.add_parser("segment")
     segment.add_argument("--subset", default="smoke30")
@@ -1583,6 +1594,7 @@ def main(argv: list[str] | None = None) -> int:
         research_feature_disable_overrides=args.no_research_feature,
         benchmark_case_source_override=args.benchmark_source,
         competition_result_csvs_override=args.competition_csv,
+        competition_case_ids_file_override=args.competition_filter_file,
     )
     if args.trace_llm:
         settings.trace_llm = True
@@ -1629,6 +1641,18 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.benchmark_command == "make-subsets":
             ensure_smoke_subset(settings, args.ref, "smoke30")
+            return 0
+        if args.benchmark_command == "save-competition-filter":
+            _notify_path("Benchmark dataset ready", dataset.fetch(args.ref))
+            filter_path, case_count = dataset.save_competition_case_ids_file(args.ref)
+            if case_count <= 0:
+                print(
+                    "[ERROR] no competition gist ids found from configured CSV sources; filter file was not updated",
+                    file=sys.stderr,
+                )
+                return 2
+            _notify_path("Competition filter written", filter_path)
+            print(f"[INFO] competition filter case count: {case_count}", file=sys.stderr)
             return 0
         if args.benchmark_command == "segment":
             ensure_smoke_subset(settings, args.ref, args.subset)

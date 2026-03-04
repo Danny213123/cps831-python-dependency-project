@@ -130,6 +130,7 @@ class Settings:
     readpye_python: str = sys.executable
     readpye_language_dir: str = ""
     competition_result_csvs: tuple[Path, ...] = ()
+    competition_case_ids_file: Path = Path("competition/competition-case-ids.txt")
     ollama_base_url: str = "http://127.0.0.1:11434"
     docker_host: str = ""
     resolver: ResolverName = "apdr"
@@ -190,6 +191,7 @@ class Settings:
         research_feature_disable_overrides: list[str] | None = None,
         benchmark_case_source_override: str | None = None,
         competition_result_csvs_override: list[str] | None = None,
+        competition_case_ids_file_override: str | None = None,
     ) -> "Settings":
         root = (project_root or Path(__file__).resolve().parents[2]).resolve()
         data_dir = root / "data"
@@ -217,6 +219,11 @@ class Settings:
         )
         if not competition_result_csvs:
             competition_result_csvs = default_competition_result_csvs(root)
+        competition_case_ids_file = Path(
+            competition_case_ids_file_override
+            or os.getenv("APDR_COMPETITION_CASE_IDS_FILE")
+            or str(root / "competition" / "competition-case-ids.txt")
+        ).expanduser().resolve()
         preset = normalize_preset(preset_override or os.getenv("APDR_PRESET"))
         preset_config = get_preset_config(preset)
         prompt_profile = normalize_prompt_profile(prompt_profile_override or os.getenv("APDR_PROMPT_PROFILE"))
@@ -294,6 +301,7 @@ class Settings:
             resolver=resolver,
             benchmark_case_source=benchmark_case_source,
             competition_result_csvs=competition_result_csvs,
+            competition_case_ids_file=competition_case_ids_file,
             model_profile=effective_model_profile,
             use_moe=use_moe,
             use_rag=use_rag,

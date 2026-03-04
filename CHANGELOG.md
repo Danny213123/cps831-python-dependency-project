@@ -11,6 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Resolver selection support with `apd`, `pyego`, and `readpye` runtime modes, including UI selection and artifact metadata so baseline-style runs can be compared from the same interface.
 - Automatic per-run case results exports in `results.csv`, `results.md`, and `results.json`, including case number, modules, success/failure, attempts, dependencies, and timing fields.
+- Persistent benchmark run-state artifacts in `run-state.json` and `run-state.md`, capturing live progress, elapsed time, active cases, last completed case, and resumable run metadata.
 - PLLM-inspired Python dependency resolver with a LangGraph workflow for extraction, version inference, repair, execution, and result finalization.
 - Ollama-backed LangChain model routing using `gemma3:4b` for extraction and `gemma3:12b` for versioning, repair, and adjudication.
 - Six user-selectable execution presets spanning `performance` through `accuracy`, including `efficient` and `thorough` intermediate tradeoff levels.
@@ -47,6 +48,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added a newcomer-oriented health check flow with `apd doctor` and beginner-friendly top-level commands.
 - Added a live stdout benchmark progress bar with completed-case counts, percent complete, and elapsed time for serial and parallel runs.
 - Integrated the benchmark runner with the terminal UI so smoke/full runs can render a live dashboard with preset, prompt profile, active cases, success/failure counts, elapsed time, and final artifact paths.
+- Restored benchmark dashboards from saved run state when resuming with the same run ID, including previously accumulated elapsed time.
 - Replaced the dry hand-rolled terminal UI with a prompt-toolkit powered command center that uses styled dialogs and a fullscreen benchmark dashboard.
 - Added canonical module-family reporting with raw fallback mode for paper-style comparison tables.
 - Added preset-aware routing for prompt usage, deterministic version selection, repair behavior, and compatibility handling.
@@ -76,6 +78,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed repair-loop stalls by early-stopping unusable retries and adjudicating malformed repair output instead of crashing.
 - Fixed repeated false-positive dependency additions such as stdlib modules, packaging tools, and unrelated repair suggestions.
 - Fixed `readpye` unpinned dependency plans being dropped during normalization by preserving already selected resolver-produced dependencies.
+- Fixed paused or interrupted benchmark runs losing their saved progress context by persisting live run-state updates throughout execution and preserving partial progress on resume.
 - Fixed benchmark noise from upstream LangChain debug deprecation warnings by suppressing the warning in the CLI.
 - Fixed native package classification for missing system prerequisites such as SDL during `pygame` builds.
 - Fixed local-module/API mismatches such as `compress` being treated as generic runtime errors instead of non-PyPI dependency issues.

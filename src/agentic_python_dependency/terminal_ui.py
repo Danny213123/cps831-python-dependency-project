@@ -115,6 +115,7 @@ class TerminalBenchmarkDashboard:
         jobs: int,
         target: str,
         artifacts_dir: Path,
+        elapsed_seconds: float = 0.0,
     ) -> None:
         self.run_id = run_id
         self.total = total
@@ -128,7 +129,7 @@ class TerminalBenchmarkDashboard:
         self.jobs = jobs
         self.target = target
         self.artifacts_dir = artifacts_dir
-        self.started_at = time.monotonic()
+        self.started_at = time.monotonic() - elapsed_seconds
         if self._isatty:
             self._start_prompt_toolkit_app()
         else:
@@ -159,14 +160,15 @@ class TerminalBenchmarkDashboard:
             self.current_cases = [item for item in self.current_cases if item != case_id]
         self._refresh()
 
-    def finish(self, *, summary_path: Path, warnings_path: Path | None) -> None:
+    def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None:
         self.summary_path = summary_path
         self.warnings_path = warnings_path
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=self.refresh_interval + 0.1)
         with self._lock:
-            self.completed = self.total
+            if status == "completed":
+                self.completed = self.total
             self.current_cases.clear()
         self._refresh()
         if self._app is not None:

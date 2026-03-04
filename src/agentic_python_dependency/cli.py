@@ -60,6 +60,7 @@ class BenchmarkObserver(Protocol):
         jobs: int,
         target: str,
         artifacts_dir: Path,
+        elapsed_seconds: float = 0.0,
     ) -> None: ...
 
     def case_started(self, case_id: str) -> None: ...
@@ -68,7 +69,7 @@ class BenchmarkObserver(Protocol):
 
     def stop_requested(self) -> bool: ...
 
-    def finish(self, *, summary_path: Path, warnings_path: Path | None) -> None: ...
+    def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None: ...
 
 
 @contextlib.contextmanager
@@ -93,6 +94,202 @@ def redirect_runtime_warnings(output_path: Path):
                 yield output_path
             finally:
                 warnings.showwarning = original_showwarning
+
+
+def load_run_state(run_dir: Path) -> dict[str, object]:
+    state_path = run_dir / "run-state.json"
+    if not state_path.exists():
+        return {}
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    state_path = run_dir / "run-state.json"
+    state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    active_cases = payload.get("current_cases", [])
+    if not isinstance(active_cases, list):
+        active_cases = []
+    lines = [
+        "# Run Status",
+        "",
+        f"- Run ID: `{payload.get('run_id', run_dir.name)}`",
+        f"- Status: `{payload.get('status', 'unknown')}`",
+        f"- Resolver: `{payload.get('resolver', 'apd')}`",
+        f"- Preset: `{payload.get('preset', 'optimized')}`",
+        f"- Prompt profile: `{payload.get('prompt_profile', 'optimized')}`",
+        f"- Jobs: `{payload.get('jobs', 1)}`",
+        f"- Target: `{payload.get('target', 'benchmark')}`",
+        f"- Progress: `{payload.get('completed', 0)}/{payload.get('total', 0)}`",
+        f"- Successes: `{payload.get('successes', 0)}`",
+        f"- Failures: `{payload.get('failures', 0)}`",
+        f"- Elapsed: `{format_elapsed(float(payload.get('elapsed_seconds', 0.0) or 0.0))}`",
+        f"- Started at: `{payload.get('started_at', '') or 'unknown'}`",
+        f"- Last updated: `{payload.get('last_updated_at', '') or 'unknown'}`",
+        f"- Last case: `{payload.get('last_case_id', '') or 'none'}`",
+        f"- Last status: `{payload.get('last_status', '') or 'none'}`",
+        "",
+    ]
+    if active_cases:
+        lines.append("## Active Cases")
+        lines.append("")
+        for case_id in active_cases:
+            lines.append(f"- `{case_id}`")
+        lines.append("")
+    summary_path = payload.get("summary_path")
+    warnings_path = payload.get("warnings_path")
+    if summary_path or warnings_path:
+        lines.append("## Artifacts")
+        lines.append("")
+        if summary_path:
+            lines.append(f"- Summary: `{summary_path}`")
+        if warnings_path:
+            lines.append(f"- Warnings: `{warnings_path}`")
+        lines.append("")
+    error_text = str(payload.get("last_error", "") or "").strip()
+    if error_text:
+        lines.extend(["## Last Error", "", error_text, ""])
+    (run_dir / "run-state.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+class PersistentBenchmarkObserver:
+    def __init__(self, inner: BenchmarkObserver, run_dir: Path, restored_state: dict[str, object] | None = None):
+        self.inner = inner
+        self.run_dir = run_dir
+        self.restored_state = restored_state or {}
+        self.session_started_at = time.monotonic()
+        self.prior_elapsed_seconds = float(self.restored_state.get("elapsed_seconds", 0.0) or 0.0)
+        self.started_at = str(self.restored_state.get("started_at", "") or datetime.now(timezone.utc).isoformat())
+        self.payload: dict[str, object] = {
+            "run_id": self.restored_state.get("run_id", run_dir.name),
+            "status": "pending",
+            "resolver": self.restored_state.get("resolver", "apd"),
+            "preset": self.restored_state.get("preset", "optimized"),
+            "prompt_profile": self.restored_state.get("prompt_profile", "optimized"),
+            "jobs": int(self.restored_state.get("jobs", 1) or 1),
+            "target": self.restored_state.get("target", "benchmark"),
+            "total": int(self.restored_state.get("total", 0) or 0),
+            "completed": int(self.restored_state.get("completed", 0) or 0),
+            "successes": int(self.restored_state.get("successes", 0) or 0),
+            "failures": int(self.restored_state.get("failures", 0) or 0),
+            "elapsed_seconds": self.prior_elapsed_seconds,
+            "started_at": self.started_at,
+            "last_updated_at": "",
+            "current_cases": [],
+            "last_case_id": str(self.restored_state.get("last_case_id", "") or ""),
+            "last_status": str(self.restored_state.get("last_status", "") or ""),
+            "summary_path": self.restored_state.get("summary_path"),
+            "warnings_path": self.restored_state.get("warnings_path"),
+            "stop_requested": False,
+        }
+
+    def _elapsed_seconds(self) -> float:
+        return self.prior_elapsed_seconds + (time.monotonic() - self.session_started_at)
+
+    def _persist(self, *, status: str | None = None, last_error: str | None = None) -> None:
+        if status is not None:
+            self.payload["status"] = status
+        if last_error is not None:
+            self.payload["last_error"] = last_error
+        self.payload["elapsed_seconds"] = self._elapsed_seconds()
+        self.payload["last_updated_at"] = datetime.now(timezone.utc).isoformat()
+        write_run_state(self.run_dir, self.payload)
+
+    def start(
+        self,
+        *,
+        run_id: str,
+        total: int,
+        completed: int,
+        successes: int,
+        failures: int,
+        resolver: str,
+        preset: str,
+        prompt_profile: str,
+        model_summary: str,
+        jobs: int,
+        target: str,
+        artifacts_dir: Path,
+    ) -> None:
+        self.payload.update(
+            {
+                "run_id": run_id,
+                "status": "running",
+                "resolver": resolver,
+                "preset": preset,
+                "prompt_profile": prompt_profile,
+                "model_summary": model_summary,
+                "jobs": jobs,
+                "target": target,
+                "artifacts_dir": str(artifacts_dir),
+                "total": total,
+                "completed": completed,
+                "successes": successes,
+                "failures": failures,
+                "current_cases": [],
+                "stop_requested": False,
+            }
+        )
+        self._persist(status="running")
+        self.inner.start(
+            run_id=run_id,
+            total=total,
+            completed=completed,
+            successes=successes,
+            failures=failures,
+            resolver=resolver,
+            preset=preset,
+            prompt_profile=prompt_profile,
+            model_summary=model_summary,
+            jobs=jobs,
+            target=target,
+            artifacts_dir=artifacts_dir,
+            elapsed_seconds=self.prior_elapsed_seconds,
+        )
+
+    def case_started(self, case_id: str) -> None:
+        current_cases = list(self.payload.get("current_cases", []))
+        if case_id not in current_cases:
+            current_cases.append(case_id)
+        self.payload["current_cases"] = current_cases
+        self._persist()
+        self.inner.case_started(case_id)
+
+    def advance(self, result: dict[str, object]) -> None:
+        case_id = str(result.get("case_id", ""))
+        current_cases = [item for item in list(self.payload.get("current_cases", [])) if item != case_id]
+        success = bool(result.get("success", False))
+        self.payload["current_cases"] = current_cases
+        self.payload["completed"] = int(self.payload.get("completed", 0) or 0) + 1
+        self.payload["successes"] = int(self.payload.get("successes", 0) or 0) + int(success)
+        self.payload["failures"] = int(self.payload.get("failures", 0) or 0) + int(not success)
+        self.payload["last_case_id"] = case_id
+        self.payload["last_status"] = "success" if success else str(result.get("final_error_category", "failure"))
+        self._persist()
+        self.inner.advance(result)
+
+    def stop_requested(self) -> bool:
+        should_stop = self.inner.stop_requested()
+        if should_stop and not bool(self.payload.get("stop_requested", False)):
+            self.payload["stop_requested"] = True
+            self._persist(status="stopping")
+        return should_stop
+
+    def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None:
+        self.payload["current_cases"] = []
+        self.payload["summary_path"] = str(summary_path)
+        self.payload["warnings_path"] = str(warnings_path) if warnings_path is not None else ""
+        self._persist(status=status)
+        self.inner.finish(summary_path=summary_path, warnings_path=warnings_path, status=status)
+
+    def abort(self, exc: BaseException) -> None:
+        self.payload["current_cases"] = []
+        self._persist(status="interrupted", last_error=f"{type(exc).__name__}: {exc}")
 
 
 def format_progress_bar(completed: int, total: int, width: int = 24) -> str:
@@ -174,6 +371,7 @@ class BenchmarkProgress:
         jobs: int,
         target: str,
         artifacts_dir: Path,
+        elapsed_seconds: float = 0.0,
     ) -> None:
         self.run_id = run_id
         self.total = total
@@ -187,7 +385,7 @@ class BenchmarkProgress:
         self.jobs = jobs
         self.target = target
         self.artifacts_dir = artifacts_dir
-        self.started_at = time.monotonic()
+        self.started_at = time.monotonic() - elapsed_seconds
         self.render()
         if not self._isatty or self._thread is not None:
             return
@@ -228,12 +426,13 @@ class BenchmarkProgress:
         with self._lock:
             return self._cancel_requested
 
-    def _finish_render(self) -> None:
+    def _finish_render(self, status: str) -> None:
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=self._refresh_interval + 0.1)
         with self._lock:
-            self.completed = self.total
+            if status == "completed":
+                self.completed = self.total
             line = self._line()
             if self._isatty:
                 print(f"\r{line}", end="", file=sys.stdout, flush=True)
@@ -241,8 +440,8 @@ class BenchmarkProgress:
             else:
                 print(line, file=sys.stdout, flush=True)
 
-    def finish(self, *, summary_path: Path, warnings_path: Path | None) -> None:
-        self._finish_render()
+    def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None:
+        self._finish_render(status)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -585,6 +784,7 @@ def run_benchmark(
     if fresh_run and run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    restored_state = load_run_state(run_dir)
     started_at = time.monotonic()
     warnings_path = run_dir / "warnings.log"
 
@@ -594,7 +794,8 @@ def run_benchmark(
     completed_results = load_existing_case_results(run_dir, completed_case_ids)
     completed_successes = sum(1 for result in completed_results if bool(result.get("success", False)))
     completed_failures = len(completed_results) - completed_successes
-    progress_observer = observer or BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
+    inner_observer = observer or BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
+    progress_observer = PersistentBenchmarkObserver(inner_observer, run_dir, restored_state)
     progress_observer.start(
         run_id=active_run_id,
         total=len(case_ids),
@@ -617,41 +818,52 @@ def run_benchmark(
         final_state = workflow.run(state)
         return dict(final_state["final_result"])
 
-    with redirect_runtime_warnings(warnings_path):
-        if jobs <= 1:
-            for case_id in pending_case_ids:
-                if progress_observer.stop_requested():
-                    break
-                progress_observer.case_started(case_id)
-                result = process_case(case_id)
-                progress_observer.advance(result)
-        else:
-            with ThreadPoolExecutor(max_workers=jobs) as executor:
-                pending_iterator = iter(pending_case_ids)
-                futures: dict[object, str] = {}
-                for _ in range(min(jobs, len(pending_case_ids))):
+    try:
+        with redirect_runtime_warnings(warnings_path):
+            if jobs <= 1:
+                for case_id in pending_case_ids:
                     if progress_observer.stop_requested():
-                        break
-                    case_id = next(pending_iterator, None)
-                    if case_id is None:
                         break
                     progress_observer.case_started(case_id)
-                    futures[executor.submit(process_case, case_id)] = case_id
-                while futures:
-                    future = next(as_completed(futures))
-                    case_id = futures.pop(future)
-                    result = future.result()
+                    result = process_case(case_id)
                     progress_observer.advance(result)
-                    if progress_observer.stop_requested():
-                        continue
-                    next_case_id = next(pending_iterator, None)
-                    if next_case_id is not None:
-                        progress_observer.case_started(next_case_id)
-                        futures[executor.submit(process_case, next_case_id)] = next_case_id
+            else:
+                with ThreadPoolExecutor(max_workers=jobs) as executor:
+                    pending_iterator = iter(pending_case_ids)
+                    futures: dict[object, str] = {}
+                    for _ in range(min(jobs, len(pending_case_ids))):
+                        if progress_observer.stop_requested():
+                            break
+                        case_id = next(pending_iterator, None)
+                        if case_id is None:
+                            break
+                        progress_observer.case_started(case_id)
+                        futures[executor.submit(process_case, case_id)] = case_id
+                    while futures:
+                        future = next(as_completed(futures))
+                        case_id = futures.pop(future)
+                        result = future.result()
+                        progress_observer.advance(result)
+                        if progress_observer.stop_requested():
+                            continue
+                        next_case_id = next(pending_iterator, None)
+                        if next_case_id is not None:
+                            progress_observer.case_started(next_case_id)
+                            futures[executor.submit(process_case, next_case_id)] = next_case_id
+    except BaseException as exc:
+        progress_observer.abort(exc)
+        raise
 
-    summary = summarize_run(run_dir, total_elapsed_seconds=time.monotonic() - started_at)
+    restored_elapsed_seconds = float(restored_state.get("elapsed_seconds", 0.0) or 0.0)
+    summary = summarize_run(run_dir, total_elapsed_seconds=restored_elapsed_seconds + (time.monotonic() - started_at))
     non_empty_warnings_path = warnings_path if warnings_path.exists() and warnings_path.stat().st_size > 0 else None
-    progress_observer.finish(summary_path=run_dir / "summary.json", warnings_path=non_empty_warnings_path)
+    completed_total = len([case_id for case_id in case_ids if (run_dir / case_id / "result.json").exists()])
+    final_status = "completed" if completed_total >= len(case_ids) else "paused"
+    progress_observer.finish(
+        summary_path=run_dir / "summary.json",
+        warnings_path=non_empty_warnings_path,
+        status=final_status,
+    )
     if notify_paths:
         _notify_path("Summary written", run_dir / "summary.json")
         if non_empty_warnings_path is not None:

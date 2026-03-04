@@ -4,10 +4,12 @@ from pathlib import Path
 
 from agentic_python_dependency.cli import (
     BenchmarkProgress,
+    PersistentBenchmarkObserver,
     build_parser,
     collect_doctor_report,
     format_elapsed,
     format_progress_bar,
+    load_run_state,
     redirect_runtime_warnings,
     resolve_trace_path,
 )
@@ -294,6 +296,78 @@ def test_benchmark_progress_can_request_stop() -> None:
     progress.request_stop()
 
     assert progress.stop_requested() is True
+
+
+def test_persistent_benchmark_observer_writes_run_state_files(tmp_path: Path) -> None:
+    inner = BenchmarkProgress("run123", total=5)
+    observer = PersistentBenchmarkObserver(inner, tmp_path / "run123")
+
+    observer.start(
+        run_id="run123",
+        total=5,
+        completed=1,
+        successes=1,
+        failures=0,
+        resolver="apd",
+        preset="optimized",
+        prompt_profile="optimized",
+        model_summary="gemma-moe",
+        jobs=1,
+        target="smoke30",
+        artifacts_dir=tmp_path / "run123",
+    )
+    observer.case_started("case-2")
+    observer.advance({"case_id": "case-2", "success": True, "final_error_category": "Success"})
+    observer.finish(summary_path=tmp_path / "run123" / "summary.json", warnings_path=None, status="paused")
+
+    payload = load_run_state(tmp_path / "run123")
+    assert payload["status"] == "paused"
+    assert payload["completed"] == 2
+    assert payload["successes"] == 2
+    assert (tmp_path / "run123" / "run-state.md").exists()
+
+
+def test_persistent_benchmark_observer_restores_elapsed_seconds(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    class RecordingObserver(BenchmarkProgress):
+        def start(self, **kwargs):  # type: ignore[override]
+            captured.update(kwargs)
+
+        def case_started(self, case_id: str) -> None:
+            return None
+
+        def advance(self, result: dict[str, object]) -> None:
+            return None
+
+        def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None:
+            return None
+
+        def stop_requested(self) -> bool:
+            return False
+
+    observer = PersistentBenchmarkObserver(
+        RecordingObserver("run123", total=5),
+        tmp_path / "run123",
+        {"elapsed_seconds": 42.0, "started_at": "2026-03-03T00:00:00+00:00"},
+    )
+
+    observer.start(
+        run_id="run123",
+        total=5,
+        completed=2,
+        successes=1,
+        failures=1,
+        resolver="apd",
+        preset="optimized",
+        prompt_profile="optimized",
+        model_summary="gemma-moe",
+        jobs=1,
+        target="smoke30",
+        artifacts_dir=tmp_path / "run123",
+    )
+
+    assert captured["elapsed_seconds"] == 42.0
 
 
 def test_redirect_runtime_warnings_writes_warning_to_file(tmp_path: Path) -> None:

@@ -111,9 +111,17 @@ def parse_dockerfile_plan(dockerfile_text: str) -> OfficialBaselinePlan:
     )
 
 
-def _write_process_logs(artifact_dir: Path, stem: str, completed: subprocess.CompletedProcess[str]) -> None:
-    (artifact_dir / f"{stem}.stdout.log").write_text(completed.stdout or "", encoding="utf-8")
-    (artifact_dir / f"{stem}.stderr.log").write_text(completed.stderr or "", encoding="utf-8")
+def _decode_output(output: str | bytes | None) -> str:
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        return output.decode("utf-8", errors="replace")
+    return output
+
+
+def _write_process_logs(artifact_dir: Path, stem: str, completed: subprocess.CompletedProcess[bytes]) -> None:
+    (artifact_dir / f"{stem}.stdout.log").write_text(_decode_output(completed.stdout), encoding="utf-8")
+    (artifact_dir / f"{stem}.stderr.log").write_text(_decode_output(completed.stderr), encoding="utf-8")
 
 
 def run_pyego(settings: Settings, program_root: Path, artifact_dir: Path) -> OfficialBaselinePlan:
@@ -136,12 +144,11 @@ def run_pyego(settings: Settings, program_root: Path, artifact_dir: Path) -> Off
         command,
         cwd=settings.pyego_root,
         capture_output=True,
-        text=True,
         check=False,
     )
     _write_process_logs(artifact_dir, "pyego", completed)
     if completed.returncode != 0:
-        raise OfficialBaselineError((completed.stderr or completed.stdout or "PyEGo failed").strip())
+        raise OfficialBaselineError((_decode_output(completed.stderr) or _decode_output(completed.stdout) or "PyEGo failed").strip())
     if not output_path.exists():
         raise OfficialBaselineError("PyEGo did not write dependency json output")
     payload = json.loads(output_path.read_text(encoding="utf-8"))
@@ -172,12 +179,11 @@ def run_readpye(settings: Settings, program_path: Path, artifact_dir: Path) -> O
         command,
         cwd=settings.readpye_root,
         capture_output=True,
-        text=True,
         check=False,
     )
     _write_process_logs(artifact_dir, "readpye", completed)
     if completed.returncode != 0:
-        raise OfficialBaselineError((completed.stderr or completed.stdout or "ReadPyE failed").strip())
+        raise OfficialBaselineError((_decode_output(completed.stderr) or _decode_output(completed.stdout) or "ReadPyE failed").strip())
     if not output_path.exists():
         raise OfficialBaselineError("ReadPyE did not write Dockerfile output")
     return parse_dockerfile_plan(output_path.read_text(encoding="utf-8"))

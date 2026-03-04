@@ -181,7 +181,6 @@ def test_experimental_prompt_templates_render_without_format_key_errors(tmp_path
         "package_inference": workflow._format_prompt(
             "package_inference.txt",
             raw_file="import yaml\n",
-            target_python="3.12",
             extracted_imports="yaml",
             repo_evidence="{}",
         ),
@@ -220,3 +219,4 @@ def test_experimental_prompt_templates_render_without_format_key_errors(tmp_path
     }
 
     assert all(rendered.values())
+    assert "Target Python:" not in rendered["package_inference"]

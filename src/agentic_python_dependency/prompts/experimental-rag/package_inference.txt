@@ -20,9 +20,6 @@ Rules:
 - Every package must be grounded in the code, extracted imports, or repo evidence.
 - If no third-party packages are needed, return {{"packages":[],"python_version":"X.Y or X.Y.Z"}}.
 
-Target Python:
-{target_python}
-
 Extracted imports:
 {extracted_imports}
 

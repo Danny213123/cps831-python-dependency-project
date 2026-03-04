@@ -21,9 +21,6 @@ Rules:
 - If no third-party packages are needed, return {{"packages":[],"python_version":"X.Y or X.Y.Z"}}.
 - Do not return markdown, code fences, or commentary.
 
-Target Python:
-{target_python}
-
 Extracted imports:
 {extracted_imports}
 

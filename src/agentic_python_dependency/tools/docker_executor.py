@@ -309,7 +309,6 @@ class DockerExecutor:
             build = subprocess.run(
                 build_cmd,
                 capture_output=True,
-                text=True,
                 timeout=self.settings.build_timeout_seconds,
                 env=env,
                 check=False,
@@ -356,7 +355,6 @@ class DockerExecutor:
                 run = subprocess.run(
                     run_cmd,
                     capture_output=True,
-                    text=True,
                     timeout=self.settings.run_timeout_seconds,
                     env=env,
                     check=False,
@@ -375,7 +373,6 @@ class DockerExecutor:
                 subprocess.run(
                     ["docker", "rm", "-f", container_name],
                     capture_output=True,
-                    text=True,
                     env=env,
                     check=False,
                 )
@@ -384,7 +381,6 @@ class DockerExecutor:
             subprocess.run(
                 ["docker", "image", "rm", "-f", context.image_tag],
                 capture_output=True,
-                text=True,
                 env=env,
                 check=False,
             )

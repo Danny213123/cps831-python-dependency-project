@@ -42,6 +42,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Removed the `target_python` hint from experimental Prompt A and multipass package-inference prompts so APD must infer the required Python version from code and evidence instead of inheriting the benchmark Dockerfile version as prompt input.
 - Aligned Prompt A with the paper-style modules-plus-Python-version flow by having initial package inference return both dependency modules and an inferred Python version, recording benchmark vs inferred Python version metadata in run artifacts, and rewriting benchmark Docker base images to the inferred Python version for APD-driven execution.
 - Extended the experimental workflow so enhanced/full runs can perform repo-derived alias discovery, multipass package inference, version-specific metadata retrieval, constraint prechecks, feedback-memory loading, candidate-bundle generation, and version negotiation before execution.
 - Extended the interactive UI and CLI to configure experimental bundles/features explicitly and preserve that configuration in run state, dashboards, and resumed runs.
@@ -83,6 +84,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+- Fixed Windows subprocess decoding in Docker execution and official-baseline wrappers by capturing byte output and decoding with UTF-8 replacement instead of relying on CP1252 text decoding, preventing `_readerthread` `UnicodeDecodeError` crashes during runs.
 - Fixed experimental-rag prompt template rendering by escaping literal JSON braces in the new structured prompt files, preventing `str.format` crashes such as `KeyError: '\n  "packages"'` during experimental package inference.
 - Fixed experimental classification routing so legacy experimental-baseline behavior does not silently inherit the new smart-repair retry policy unless that feature is explicitly enabled.
 - Fixed host runtime defaults for Ollama and Docker so local execution works outside Compose.

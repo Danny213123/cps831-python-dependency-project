@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 from agentic_python_dependency.tools.official_baselines import (
+    _write_process_logs,
     parse_dockerfile_plan,
     parse_pyego_dependency_json,
 )
@@ -46,3 +50,12 @@ def test_parse_dockerfile_plan_extracts_dependencies_and_system_packages() -> No
         "twisted==20.3",
     ]
     assert plan.system_packages == ["libjpeg-dev", "pkg-config"]
+
+
+def test_write_process_logs_decodes_non_utf8_bytes(tmp_path: Path) -> None:
+    completed = subprocess.CompletedProcess(["tool"], 1, stdout=b"out\x81\n", stderr=b"err\x81\n")
+
+    _write_process_logs(tmp_path, "baseline", completed)
+
+    assert "out" in (tmp_path / "baseline.stdout.log").read_text(encoding="utf-8")
+    assert "err" in (tmp_path / "baseline.stderr.log").read_text(encoding="utf-8")

@@ -1168,7 +1168,6 @@ class ResolutionWorkflow:
         prompt_text = self._format_prompt(
             "package_inference.txt",
             raw_file=code,
-            target_python=state.get("target_python", ""),
             extracted_imports="\n".join(state.get("extracted_imports", [])),
             repo_evidence=repo_evidence_summary,
         )
@@ -1178,7 +1177,6 @@ class ResolutionWorkflow:
             "package_inference.txt",
             {
                 "raw_file": code,
-                "target_python": state.get("target_python", ""),
                 "extracted_imports": "\n".join(state.get("extracted_imports", [])),
                 "repo_evidence": repo_evidence_summary,
             },
@@ -1442,7 +1440,6 @@ class ResolutionWorkflow:
         prompt_text = self._format_prompt(
             "initial_imports.txt",
             raw_file=code,
-            target_python=state.get("target_python", ""),
             extracted_imports="\n".join(extracted_imports),
             repo_evidence=repo_evidence_summary,
         )
@@ -1452,7 +1449,6 @@ class ResolutionWorkflow:
             "initial_imports.txt",
             {
                 "raw_file": code,
-                "target_python": state.get("target_python", ""),
                 "extracted_imports": "\n".join(extracted_imports),
                 "repo_evidence": repo_evidence_summary,
             },

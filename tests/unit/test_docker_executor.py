@@ -198,3 +198,33 @@ def test_execute_handles_none_stdout_on_windows_subprocess(monkeypatch, tmp_path
     assert result.run_succeeded is True
     assert result.build_log == "built\n"
     assert result.run_log == "ran\n"
+
+
+def test_execute_decodes_non_utf8_bytes_with_replacement(monkeypatch, tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    executor = DockerExecutor(settings)
+    context = PreparedExecutionContext(
+        context_dir=tmp_path,
+        dockerfile_path=tmp_path / "Dockerfile.generated",
+        image_tag="pllm-test-case-4",
+        validation_command=None,
+        artifact_dir=tmp_path,
+    )
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        if command[:2] == ["docker", "build"]:
+            return subprocess.CompletedProcess(command, 0, stdout=b"ok\x81\n", stderr=b"")
+        if command[:2] == ["docker", "run"]:
+            return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"warn\x81\n")
+        if command[:3] == ["docker", "image", "rm"]:
+            return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = executor.execute(context)
+
+    assert result.build_succeeded is True
+    assert result.run_succeeded is True
+    assert "ok" in result.build_log
+    assert "warn" in result.run_log

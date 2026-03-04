@@ -80,6 +80,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+- Fixed experimental-rag prompt template rendering by escaping literal JSON braces in the new structured prompt files, preventing `str.format` crashes such as `KeyError: '\n  "packages"'` during experimental package inference.
 - Fixed experimental classification routing so legacy experimental-baseline behavior does not silently inherit the new smart-repair retry policy unless that feature is explicitly enabled.
 - Fixed host runtime defaults for Ollama and Docker so local execution works outside Compose.
 - Fixed SSL certificate handling for Gistable fetches and PyPI metadata downloads on macOS environments with incomplete trust stores.

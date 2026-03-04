@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentic_python_dependency.config import Settings
+from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.presets import resolve_experimental_features
 from agentic_python_dependency.state import PackageVersionOptions
 from agentic_python_dependency.tools.constraint_pack import build_constraint_pack, generate_candidate_bundles
@@ -169,3 +170,53 @@ def test_feedback_memory_summary_aggregates_workspace_local_history(tmp_path: Pa
     assert summary["entries"][0]["strategy_type"] == "downgrade"
     assert summary["entries"][0]["successes"] == 1
     assert summary["entries"][0]["failures"] == 1
+
+
+def test_experimental_prompt_templates_render_without_format_key_errors(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="experimental")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+    workflow = ResolutionWorkflow(settings)
+
+    rendered = {
+        "package_inference": workflow._format_prompt(
+            "package_inference.txt",
+            code="import yaml\n",
+            target_python="3.12",
+            extracted_imports="yaml",
+            repo_evidence="{}",
+        ),
+        "package_cross_validate": workflow._format_prompt(
+            "package_cross_validate.txt",
+            target_python="3.12",
+            enabled_features="multipass_inference",
+            candidate_payload="[]",
+            repo_evidence="{}",
+        ),
+        "candidate_plans_v2": workflow._format_prompt(
+            "candidate_plans_v2.txt",
+            target_python="3.12",
+            allowed_packages="PyYAML",
+            rag_context="{}",
+            max_plan_count=3,
+        ),
+        "repair_attempt_v2": workflow._format_prompt(
+            "repair_attempt_v2.txt",
+            target_python="3.12",
+            allowed_packages="PyYAML",
+            previous_plan="PyYAML==6.0.2",
+            attempted_plans="",
+            error_details="ModuleNotFoundError",
+            repair_memory="{}",
+            feedback_summary="{}",
+            rag_context="{}",
+        ),
+        "version_negotiation": workflow._format_prompt(
+            "version_negotiation.txt",
+            target_python="3.12",
+            candidate_bundles="[]",
+            conflict_notes="[]",
+            repo_evidence="{}",
+        ),
+    }
+
+    assert all(rendered.values())

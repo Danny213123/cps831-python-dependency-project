@@ -1,17 +1,17 @@
 Rank candidate dependency bundles for the best compatibility.
 
 Return strict JSON only using this schema:
-{
+{{
   "selected_bundles": [
-    {
+    {{
       "rank": 1,
       "reason": "short reason",
       "dependencies": [
-        {"name": "package", "version": "1.0.0"}
+        {{"name": "package", "version": "1.0.0"}}
       ]
-    }
+    }}
   ]
-}
+}}
 
 Rules:
 - Only use the candidate bundles provided.

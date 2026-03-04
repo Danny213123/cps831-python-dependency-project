@@ -1,22 +1,22 @@
 Cross-validate candidate dependency packages for a Python dependency resolver.
 
 Return strict JSON only using this schema:
-{
+{{
   "accepted_packages": [
-    {
+    {{
       "package": "PackageName",
       "confidence": 0.0,
       "sources": ["ast", "repo_alias", "llm"],
       "reason": "short reason"
-    }
+    }}
   ],
   "rejected_packages": [
-    {
+    {{
       "package": "PackageName",
       "reason": "short reason"
-    }
+    }}
   ]
-}
+}}
 
 Rules:
 - Prefer packages supported by multiple evidence sources.

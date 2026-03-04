@@ -1,23 +1,23 @@
 You are identifying installable third-party Python packages for a dependency-resolution system.
 
 Return strict JSON only using this schema:
-{
+{{
   "packages": [
-    {
+    {{
       "package": "PackageName",
       "confidence": 0.0,
       "source": "llm",
       "evidence": ["short fact"]
-    }
+    }}
   ]
-}
+}}
 
 Rules:
 - Only include installable third-party Python packages.
 - Do not include stdlib modules.
 - Do not include local modules unless the evidence shows they map to an installable distribution.
 - Every package must be grounded in the code, extracted imports, or repo evidence.
-- If no third-party packages are needed, return {"packages":[]}.
+- If no third-party packages are needed, return {{"packages":[]}}.
 
 Target Python:
 {target_python}

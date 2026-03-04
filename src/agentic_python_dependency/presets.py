@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-PresetName = Literal["performance", "efficient", "optimized", "balanced", "thorough", "accuracy"]
-PromptProfile = Literal["paper", "optimized-lite", "optimized", "optimized-strict"]
+PresetName = Literal["performance", "efficient", "optimized", "balanced", "thorough", "accuracy", "experimental"]
+PromptProfile = Literal["paper", "optimized-lite", "optimized", "optimized-strict", "experimental-rag"]
 GroupingMode = Literal["canonical", "raw"]
 CompatibilityPolicyMode = Literal["essential", "curated", "full"]
 VersionPromptMode = Literal["high_risk_only", "efficient", "optimized", "balanced", "thorough", "accuracy"]
+RagMode = Literal["disabled", "pypi", "hybrid"]
 
 
 COMPATIBILITY_SENSITIVE_PACKAGES = {
@@ -37,6 +38,12 @@ class PresetConfig:
     extract_llm_for_project_frameworks: bool
     accuracy_extract_cleanup: bool
     reporting_grouping: GroupingMode = "canonical"
+    rag_mode: RagMode = "pypi"
+    structured_prompting: bool = False
+    candidate_plan_count: int = 1
+    allow_candidate_fallback_before_repair: bool = False
+    repair_cycle_limit: int = 0
+    repo_evidence_enabled: bool = False
 
 
 PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
@@ -106,6 +113,23 @@ PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
         extract_llm_for_project_frameworks=True,
         accuracy_extract_cleanup=True,
     ),
+    "experimental": PresetConfig(
+        name="experimental",
+        prompt_profile="experimental-rag",
+        max_attempts=6,
+        compatibility_policy="full",
+        version_prompt_mode="accuracy",
+        allow_adjudication=True,
+        allow_alias_retry=True,
+        extract_llm_for_project_frameworks=True,
+        accuracy_extract_cleanup=True,
+        rag_mode="hybrid",
+        structured_prompting=True,
+        candidate_plan_count=3,
+        allow_candidate_fallback_before_repair=True,
+        repair_cycle_limit=2,
+        repo_evidence_enabled=True,
+    ),
 }
 
 
@@ -122,7 +146,7 @@ def normalize_prompt_profile(value: str | None) -> PromptProfile | None:
     if value is None:
         return None
     normalized = value.strip().lower()
-    if normalized not in {"paper", "optimized-lite", "optimized", "optimized-strict"}:
+    if normalized not in {"paper", "optimized-lite", "optimized", "optimized-strict", "experimental-rag"}:
         raise ValueError(f"Unsupported prompt profile: {value}")
     return normalized  # type: ignore[return-value]
 

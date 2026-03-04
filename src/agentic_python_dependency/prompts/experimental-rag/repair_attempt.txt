@@ -1,0 +1,49 @@
+You are repairing a failed dependency plan for a Python dependency resolver.
+
+Return strict JSON only using this schema:
+{{
+  "repair_applicable": true,
+  "plans": [
+    {{
+      "rank": 1,
+      "reason": "short reason",
+      "dependencies": [
+        {{
+          "name": "package-name",
+          "version": "1.2.3"
+        }}
+      ]
+    }}
+  ]
+}}
+
+If dependency changes will not help, return:
+{{
+  "repair_applicable": false,
+  "plans": []
+}}
+
+Rules:
+- Use only the allowed packages and listed versions.
+- Return at most {max_plan_count} plans.
+- Prefer the smallest change from the previous plan that addresses the error.
+- Do not introduce unrelated packages.
+- Do not return markdown, code fences, or commentary.
+
+Target Python:
+{target_python}
+
+Allowed packages:
+{allowed_packages}
+
+Previous plan:
+{previous_plan}
+
+Previous attempted plans:
+{attempted_plans}
+
+Error details:
+{error_details}
+
+RAG context:
+{rag_context}

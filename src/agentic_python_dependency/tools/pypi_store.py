@@ -261,12 +261,14 @@ class PyPIMetadataStore:
         payload = self.fetch_package_json(package)
         compatible = self.compatible_release_records(payload, target_python=target_python, limit=limit)
         compatible, policy_notes = self._apply_policy(package, compatible, target_python, preset)
+        package_requires_dist = payload.get("info", {}).get("requires_dist") or []
         return PackageVersionOptions(
             package=package,
             versions=[record.version for record in compatible],
             requires_python={record.version: record.requires_python for record in compatible},
             upload_time={record.version: record.upload_time for record in compatible},
             policy_notes=policy_notes,
+            requires_dist={record.version: list(package_requires_dist) for record in compatible},
         )
 
     @staticmethod

@@ -501,6 +501,69 @@ def test_workflow_pyego_does_not_enter_repair_loop(tmp_path: Path) -> None:
     assert final_state["final_result"]["attempts"] == 1
 
 
+def test_experimental_workflow_tries_ranked_candidate_plans_before_repair(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.preset = "experimental"
+    settings.prompt_profile = "experimental-rag"
+    settings.max_attempts = 6
+    settings.rag_mode = "hybrid"
+    settings.structured_prompting = True
+    settings.candidate_plan_count = 3
+    settings.repo_evidence_enabled = True
+    project_root = write_project(tmp_path, "import yaml\nprint('ok')\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner(
+            {
+                "extract": [
+                    '{"packages":[{"package":"PyYAML","confidence":0.98,"source":"alias","evidence":["import yaml"]}]}'
+                ],
+                "version": [
+                    '{"plans":['
+                    '{"rank":1,"reason":"older candidate","dependencies":[{"name":"PyYAML","version":"6.0.1"}]},'
+                    '{"rank":2,"reason":"newer candidate","dependencies":[{"name":"PyYAML","version":"6.0.2"}]}'
+                    ']}'
+                ],
+                "repair": [],
+                "adjudicate": [],
+            }
+        ),
+        pypi_store=FakePyPIStore({"PyYAML": ["6.0.2", "6.0.1"]}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=False,
+                    exit_code=1,
+                    build_log="",
+                    run_log="ModuleNotFoundError: No module named 'yaml'",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                ),
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-2",
+                    wall_clock_seconds=0.1,
+                ),
+            ]
+        ),
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["final_result"]["success"] is True
+    assert final_state["final_result"]["attempts"] == 2
+    assert final_state["final_result"]["selected_candidate_rank"] == 2
+    assert final_state["final_result"]["experimental_path"] is True
+    assert final_state["repair_cycle_count"] == 0
+    assert (Path(final_state["artifact_dir"]) / "repo-evidence.json").exists()
+    assert (Path(final_state["artifact_dir"]) / "candidate-plans.json").exists()
+
+
 def test_workflow_stops_on_syntax_error(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     project_root = write_project(tmp_path, "print('hello')\n")

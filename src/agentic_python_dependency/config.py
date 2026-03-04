@@ -9,6 +9,7 @@ from agentic_python_dependency.presets import (
     GroupingMode,
     PresetName,
     PromptProfile,
+    RagMode,
     get_preset_config,
     normalize_preset,
     normalize_prompt_profile,
@@ -102,6 +103,12 @@ class Settings:
     preset: PresetName = "optimized"
     prompt_profile: PromptProfile = "optimized"
     default_module_grouping: GroupingMode = "canonical"
+    rag_mode: RagMode = "pypi"
+    structured_prompting: bool = False
+    candidate_plan_count: int = 1
+    allow_candidate_fallback_before_repair: bool = False
+    repair_cycle_limit: int = 0
+    repo_evidence_enabled: bool = False
 
     @classmethod
     def from_env(
@@ -196,6 +203,12 @@ class Settings:
             prompt_profile=prompt_profile or preset_config.prompt_profile,
             default_module_grouping=preset_config.reporting_grouping,
             max_attempts=preset_config.max_attempts,
+            rag_mode=preset_config.rag_mode,
+            structured_prompting=preset_config.structured_prompting,
+            candidate_plan_count=preset_config.candidate_plan_count,
+            allow_candidate_fallback_before_repair=preset_config.allow_candidate_fallback_before_repair,
+            repair_cycle_limit=preset_config.repair_cycle_limit,
+            repo_evidence_enabled=preset_config.repo_evidence_enabled,
         )
         settings.ensure_directories()
         return settings

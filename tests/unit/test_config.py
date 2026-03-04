@@ -46,6 +46,18 @@ def test_settings_from_env_supports_thorough_preset(tmp_path: Path) -> None:
     assert settings.max_attempts == 4
 
 
+def test_settings_from_env_supports_experimental_preset(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="experimental")
+
+    assert settings.preset == "experimental"
+    assert settings.prompt_profile == "experimental-rag"
+    assert settings.max_attempts == 6
+    assert settings.rag_mode == "hybrid"
+    assert settings.structured_prompting is True
+    assert settings.candidate_plan_count == 3
+    assert settings.repo_evidence_enabled is True
+
+
 def test_settings_from_env_supports_model_profile_defaults(tmp_path: Path) -> None:
     settings = Settings.from_env(project_root=tmp_path, model_profile_override="qwen35-9b")
 

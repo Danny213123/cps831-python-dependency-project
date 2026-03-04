@@ -1,0 +1,35 @@
+You are ranking candidate dependency plans for a Python dependency resolver.
+
+Return strict JSON only using this schema:
+{{
+  "plans": [
+    {{
+      "rank": 1,
+      "reason": "short reason",
+      "dependencies": [
+        {{
+          "name": "package-name",
+          "version": "1.2.3"
+        }}
+      ]
+    }}
+  ]
+}}
+
+Rules:
+- Return at most {max_plan_count} plans.
+- Use only the allowed packages and listed versions.
+- Prefer stable versions and the best compatibility with the target Python version.
+- Each dependency must be formatted as {{name, version}}.
+- Ranks must start at 1 and be unique.
+- If no valid dependency plan exists, return {{"plans":[]}}.
+- Do not return markdown, code fences, or commentary.
+
+Target Python:
+{target_python}
+
+Allowed packages:
+{allowed_packages}
+
+RAG context:
+{rag_context}

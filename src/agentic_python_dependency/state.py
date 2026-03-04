@@ -37,12 +37,29 @@ class PackageCandidate:
 
 
 @dataclass(slots=True)
+class CandidateDependency:
+    name: str
+    version: str
+
+    def pin(self) -> str:
+        return f"{self.name}=={self.version}" if self.version else self.name
+
+
+@dataclass(slots=True)
+class CandidatePlan:
+    rank: int
+    reason: str
+    dependencies: list[CandidateDependency] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class PackageVersionOptions:
     package: str
     versions: list[str]
     requires_python: dict[str, str] = field(default_factory=dict)
     upload_time: dict[str, str] = field(default_factory=dict)
     policy_notes: list[str] = field(default_factory=list)
+    requires_dist: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -103,6 +120,8 @@ class BenchmarkSummary:
     use_moe: bool = True
     use_rag: bool = True
     use_langchain: bool = True
+    rag_mode: str = "pypi"
+    structured_prompting: bool = False
     extraction_model: str = "gemma3:4b"
     runner_model: str = "gemma3:12b"
     version_model: str = "gemma3:12b"
@@ -112,6 +131,11 @@ class BenchmarkSummary:
     total_wall_clock_human: str = "00:00:00"
     transitions: dict[str, int] = field(default_factory=dict)
     dependency_reason_counts: dict[str, int] = field(default_factory=dict)
+    experimental_case_count: int = 0
+    candidate_plan_attempts: int = 0
+    average_candidate_rank_selected: float = 0.0
+    repair_cycle_count: int = 0
+    structured_prompt_failures: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -158,3 +182,14 @@ class ResolutionState(TypedDict, total=False):
     repair_outcome: str
     applied_compatibility_policy: dict[str, list[str]]
     version_selection_source: str
+    repo_evidence: dict[str, Any]
+    pypi_evidence: dict[str, Any]
+    rag_context: dict[str, Any]
+    candidate_plans: list[CandidatePlan]
+    remaining_candidate_plans: list[CandidatePlan]
+    selected_candidate_plan: CandidatePlan | None
+    selected_candidate_rank: int | None
+    repair_cycle_count: int
+    structured_outputs: dict[str, Any]
+    experimental_path: bool
+    structured_prompt_failures: int

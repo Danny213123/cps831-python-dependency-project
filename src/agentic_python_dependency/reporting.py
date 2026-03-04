@@ -192,11 +192,18 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     use_moe = bool(results[0].get("use_moe", True)) if results else True
     use_rag = bool(results[0].get("use_rag", True)) if results else True
     use_langchain = bool(results[0].get("use_langchain", True)) if results else True
+    rag_mode = str(results[0].get("rag_mode", "pypi")) if results else "pypi"
+    structured_prompting = bool(results[0].get("structured_prompting", False)) if results else False
     extraction_model = results[0].get("extraction_model", "gemma3:4b") if results else "gemma3:4b"
     runner_model = results[0].get("runner_model", "gemma3:12b") if results else "gemma3:12b"
     version_model = results[0].get("version_model", runner_model) if results else "gemma3:12b"
     repair_model = results[0].get("repair_model", runner_model) if results else "gemma3:12b"
     adjudication_model = results[0].get("adjudication_model", runner_model) if results else "gemma3:12b"
+    experimental_case_count = sum(1 for item in results if bool(item.get("experimental_path", False)))
+    candidate_plan_attempts = sum(int(item.get("candidate_plan_count", 0) or 0) for item in results)
+    selected_candidate_ranks = [float(item.get("selected_candidate_rank", 0) or 0) for item in results if item.get("selected_candidate_rank")]
+    repair_cycle_count = sum(int(item.get("repair_cycle_count", 0) or 0) for item in results)
+    structured_prompt_failures = sum(int(item.get("structured_prompt_failures", 0) or 0) for item in results)
     for item in results:
         key = f'{item.get("initial_eval", "")}->{item.get("final_error_category", "Success" if item["success"] else "UnknownError")}'
         transitions[key] = transitions.get(key, 0) + 1
@@ -221,6 +228,8 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         use_moe=use_moe,
         use_rag=use_rag,
         use_langchain=use_langchain,
+        rag_mode=rag_mode,
+        structured_prompting=structured_prompting,
         extraction_model=extraction_model,
         runner_model=runner_model,
         version_model=version_model,
@@ -230,6 +239,13 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         total_wall_clock_human=format_duration(total_wall_clock),
         transitions=transitions,
         dependency_reason_counts=dependency_reason_counts,
+        experimental_case_count=experimental_case_count,
+        candidate_plan_attempts=candidate_plan_attempts,
+        average_candidate_rank_selected=(
+            sum(selected_candidate_ranks) / len(selected_candidate_ranks) if selected_candidate_ranks else 0.0
+        ),
+        repair_cycle_count=repair_cycle_count,
+        structured_prompt_failures=structured_prompt_failures,
     )
     write_summary_artifacts(run_dir, results, summary)
     build_timeline_view(run_dir)
@@ -277,11 +293,18 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Prompt profile: `{summary.prompt_profile}`",
         f"- Model profile: `{summary.model_profile}`",
         f"- Runtime: `{'moe' if summary.use_moe else 'single'}` / `{'rag' if summary.use_rag else 'no-rag'}` / `{'langchain' if summary.use_langchain else 'direct'}`",
+        f"- RAG mode: `{summary.rag_mode}`",
+        f"- Structured prompting: `{'enabled' if summary.structured_prompting else 'disabled'}`",
         f"- Models: `{summary.extraction_model}` / `{summary.runner_model}` / `{summary.version_model}` / `{summary.repair_model}` / `{summary.adjudication_model}`",
         f"- Total cases: `{summary.total_cases}`",
         f"- Success rate: `{summary.success_rate:.2%}`",
         f"- Initial ImportErrors: `{summary.initial_import_errors}`",
         f"- Final ImportErrors: `{summary.final_import_errors}`",
+        f"- Experimental cases: `{summary.experimental_case_count}`",
+        f"- Candidate plan attempts: `{summary.candidate_plan_attempts}`",
+        f"- Average selected candidate rank: `{summary.average_candidate_rank_selected:.2f}`",
+        f"- Repair cycles: `{summary.repair_cycle_count}`",
+        f"- Structured prompt failures: `{summary.structured_prompt_failures}`",
         f"- Time to finish: `{summary.total_wall_clock_human}`",
     ]
     (run_dir / "leaderboard.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

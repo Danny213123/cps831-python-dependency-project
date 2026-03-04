@@ -19,8 +19,11 @@ from agentic_python_dependency.router import OllamaPromptRunner
 from agentic_python_dependency.state import (
     AttemptRecord,
     BenchmarkCase,
+    CandidateDependency,
+    CandidatePlan,
     ExecutionOutcome,
     ProjectTarget,
+    PackageVersionOptions,
     ResolutionState,
     ResolvedDependency,
 )
@@ -37,6 +40,14 @@ from agentic_python_dependency.tools.import_extractor import (
     runtime_package_alias,
 )
 from agentic_python_dependency.tools.pypi_store import PyPIMetadataStore
+from agentic_python_dependency.tools.rag_context import build_experimental_rag_context, summarize_rag_context
+from agentic_python_dependency.tools.repo_evidence import build_repo_evidence
+from agentic_python_dependency.tools.structured_outputs import (
+    StructuredOutputError,
+    parse_candidate_plan_payload,
+    parse_experimental_package_payload,
+    parse_repair_plan_payload,
+)
 
 
 def normalize_package_name(value: str) -> str:
@@ -92,6 +103,25 @@ def route_after_classification(state: ResolutionState, max_attempts: int) -> str
     if execution.dependency_retryable and state["current_attempt"] < max_attempts:
         return "repair_prompt_c"
     return "finalize_result"
+
+
+def route_after_experimental_plan_selection(state: ResolutionState) -> str:
+    return "materialize_execution_context" if state.get("selected_candidate_plan") else "finalize_result"
+
+
+def route_after_experimental_classification(state: ResolutionState, settings: Settings) -> str:
+    execution = state["last_execution"]
+    if not execution.dependency_retryable or state["current_attempt"] >= settings.max_attempts:
+        return "finalize_result"
+    if state.get("remaining_candidate_plans"):
+        return "select_next_candidate_plan"
+    if state.get("repair_cycle_count", 0) < settings.repair_cycle_limit:
+        return "repair_prompt_c_experimental"
+    return "finalize_result"
+
+
+def route_after_experimental_repair(state: ResolutionState) -> str:
+    return "select_next_candidate_plan" if state.get("candidate_plans") else "finalize_result"
 
 
 def infer_validation_command(project_root: Path) -> str:
@@ -385,6 +415,90 @@ class ResolutionWorkflow:
     def _resolver_uses_rag(self) -> bool:
         return self.settings.use_rag and self.settings.resolver != "readpye"
 
+    def _is_experimental(self) -> bool:
+        return self.settings.preset == "experimental"
+
+    @staticmethod
+    def _write_json_artifact(state: ResolutionState, filename: str, payload: Any) -> None:
+        artifact_dir = state.get("artifact_dir")
+        if not artifact_dir:
+            return
+        Path(artifact_dir, filename).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    @staticmethod
+    def _candidate_plan_payload(plans: list[CandidatePlan]) -> list[dict[str, Any]]:
+        return [
+            {
+                "rank": plan.rank,
+                "reason": plan.reason,
+                "dependencies": [{"name": dep.name, "version": dep.version} for dep in plan.dependencies],
+            }
+            for plan in plans
+        ]
+
+    @staticmethod
+    def _allowed_versions_map(options: list[PackageVersionOptions]) -> dict[str, set[str]]:
+        return {normalize_package_name(option.package): set(option.versions) for option in options}
+
+    def _experimental_allowed_packages(self, state: ResolutionState) -> set[str]:
+        return {normalize_package_name(package) for package in state.get("inferred_packages", [])}
+
+    def _adjudicate_json(self, state: ResolutionState, stage: str, raw_output: str, schema_hint: str) -> str:
+        cleanup_prompt = (
+            "Rewrite the following content as strict JSON only. "
+            f"Use this schema: {schema_hint}. "
+            "Do not include markdown or commentary.\n\n"
+            f"{raw_output}"
+        )
+        self._trace_request(state, "adjudicate", cleanup_prompt)
+        cleaned_output = self.prompt_runner.invoke_text("adjudicate", cleanup_prompt)
+        self._trace_response(state, "adjudicate", cleaned_output)
+        state["model_outputs"]["adjudicate"].append({"stage": stage, "output": cleaned_output})
+        return cleaned_output
+
+    def _prepare_selected_dependencies(self, state: ResolutionState) -> None:
+        dependencies = sorted(state.get("selected_dependencies", []), key=lambda dep: dep.name.lower())
+        state["selected_dependencies"] = dependencies
+        state["generated_requirements"] = (
+            "\n".join(dependency.pin() for dependency in dependencies) + "\n"
+            if dependencies
+            else "# no inferred third-party dependencies\n"
+        )
+
+    def _default_experimental_plans(self, state: ResolutionState) -> list[CandidatePlan]:
+        options = state.get("version_options", [])
+        if not state.get("inferred_packages"):
+            state["dependency_reason"] = "stdlib_only"
+            return [CandidatePlan(rank=1, reason="no third-party dependencies detected", dependencies=[])]
+        if not options:
+            state["dependency_reason"] = "no_compatible_versions"
+            return [CandidatePlan(rank=1, reason="no compatible versions available", dependencies=[])]
+        if all(len(option.versions) == 1 for option in options):
+            state["dependency_reason"] = "single_version_fast_path"
+            return [
+                CandidatePlan(
+                    rank=1,
+                    reason="single compatible version per package",
+                    dependencies=[
+                        CandidateDependency(name=option.package, version=option.versions[0])
+                        for option in options
+                        if option.versions
+                    ],
+                )
+            ]
+        state["dependency_reason"] = "deterministic_version_selector"
+        return [
+            CandidatePlan(
+                rank=1,
+                reason="deterministic newest compatible stable versions",
+                dependencies=[
+                    CandidateDependency(name=option.package, version=option.versions[0])
+                    for option in options
+                    if option.versions
+                ],
+            )
+        ]
+
     def initial_state_for_case(self, case: BenchmarkCase, run_id: str | None = None) -> ResolutionState:
         return ResolutionState(
             run_id=run_id or uuid4().hex[:12],
@@ -405,6 +519,17 @@ class ResolutionWorkflow:
             repair_outcome="",
             applied_compatibility_policy={},
             version_selection_source="",
+            repo_evidence={},
+            pypi_evidence={},
+            rag_context={},
+            candidate_plans=[],
+            remaining_candidate_plans=[],
+            selected_candidate_plan=None,
+            selected_candidate_rank=None,
+            repair_cycle_count=0,
+            structured_outputs={},
+            experimental_path=self._is_experimental(),
+            structured_prompt_failures=0,
         )
 
     def initial_state_for_project(
@@ -435,17 +560,28 @@ class ResolutionWorkflow:
             repair_outcome="",
             applied_compatibility_policy={},
             version_selection_source="",
+            repo_evidence={},
+            pypi_evidence={},
+            rag_context={},
+            candidate_plans=[],
+            remaining_candidate_plans=[],
+            selected_candidate_plan=None,
+            selected_candidate_rank=None,
+            repair_cycle_count=0,
+            structured_outputs={},
+            experimental_path=self._is_experimental(),
+            structured_prompt_failures=0,
         )
 
     def run(self, state: ResolutionState) -> ResolutionState:
         try:
-            graph = self.build_graph()
+            graph = self.build_experimental_graph() if self._is_experimental() else self.build_graph()
             return graph.invoke(
                 state,
                 config={"recursion_limit": infer_graph_recursion_limit(self.settings.max_attempts)},
             )
         except ImportError:  # pragma: no cover - fallback for environments without langgraph
-            return self._run_fallback(state)
+            return self._run_experimental_fallback(state) if self._is_experimental() else self._run_fallback(state)
 
     def _run_fallback(self, state: ResolutionState) -> ResolutionState:
         current = state
@@ -470,6 +606,39 @@ class ResolutionWorkflow:
             current = self.infer_versions_prompt_b(current)
             current = self.normalize_dependency_plan(current)
             if route_after_normalize(current) == "finalize_result":
+                return self.finalize_result(current)
+
+    def _run_experimental_fallback(self, state: ResolutionState) -> ResolutionState:
+        current = state
+        current = self.load_target(current)
+        current = self.extract_imports(current)
+        current = self.gather_repo_evidence(current)
+        current = self.infer_packages_prompt_a(current)
+        current = self.retrieve_pypi_metadata(current)
+        current = self.build_rag_context(current)
+        current = self.generate_candidate_plans(current)
+        current = self.select_next_candidate_plan(current)
+        if not current.get("selected_candidate_plan"):
+            return self.finalize_result(current)
+        while True:
+            current = self.materialize_execution_context(current)
+            current = self.execute_candidate(current)
+            if route_after_execute(current) == "finalize_result":
+                return self.finalize_result(current)
+            current = self.classify_outcome(current)
+            next_step = route_after_experimental_classification(current, self.settings)
+            if next_step == "finalize_result":
+                return self.finalize_result(current)
+            if next_step == "select_next_candidate_plan":
+                current = self.select_next_candidate_plan(current)
+                if not current.get("selected_candidate_plan"):
+                    return self.finalize_result(current)
+                continue
+            current = self.repair_prompt_c_experimental(current)
+            if route_after_experimental_repair(current) == "finalize_result":
+                return self.finalize_result(current)
+            current = self.select_next_candidate_plan(current)
+            if not current.get("selected_candidate_plan"):
                 return self.finalize_result(current)
 
     def build_graph(self):
@@ -514,6 +683,60 @@ class ResolutionWorkflow:
         graph.add_edge("finalize_result", END)
         return graph.compile()
 
+    def build_experimental_graph(self):
+        from langgraph.graph import END, START, StateGraph
+
+        graph = StateGraph(ResolutionState)
+        graph.add_node("load_target", self.load_target)
+        graph.add_node("extract_imports", self.extract_imports)
+        graph.add_node("gather_repo_evidence", self.gather_repo_evidence)
+        graph.add_node("infer_packages_prompt_a", self.infer_packages_prompt_a)
+        graph.add_node("retrieve_pypi_metadata", self.retrieve_pypi_metadata)
+        graph.add_node("build_rag_context", self.build_rag_context)
+        graph.add_node("generate_candidate_plans", self.generate_candidate_plans)
+        graph.add_node("select_next_candidate_plan", self.select_next_candidate_plan)
+        graph.add_node("materialize_execution_context", self.materialize_execution_context)
+        graph.add_node("execute_candidate", self.execute_candidate)
+        graph.add_node("classify_outcome", self.classify_outcome)
+        graph.add_node("repair_prompt_c_experimental", self.repair_prompt_c_experimental)
+        graph.add_node("finalize_result", self.finalize_result)
+
+        graph.add_edge(START, "load_target")
+        graph.add_edge("load_target", "extract_imports")
+        graph.add_edge("extract_imports", "gather_repo_evidence")
+        graph.add_edge("gather_repo_evidence", "infer_packages_prompt_a")
+        graph.add_edge("infer_packages_prompt_a", "retrieve_pypi_metadata")
+        graph.add_edge("retrieve_pypi_metadata", "build_rag_context")
+        graph.add_edge("build_rag_context", "generate_candidate_plans")
+        graph.add_edge("generate_candidate_plans", "select_next_candidate_plan")
+        graph.add_conditional_edges(
+            "select_next_candidate_plan",
+            route_after_experimental_plan_selection,
+            {"materialize_execution_context": "materialize_execution_context", "finalize_result": "finalize_result"},
+        )
+        graph.add_edge("materialize_execution_context", "execute_candidate")
+        graph.add_conditional_edges(
+            "execute_candidate",
+            route_after_execute,
+            {"classify_outcome": "classify_outcome", "finalize_result": "finalize_result"},
+        )
+        graph.add_conditional_edges(
+            "classify_outcome",
+            lambda state: route_after_experimental_classification(state, self.settings),
+            {
+                "select_next_candidate_plan": "select_next_candidate_plan",
+                "repair_prompt_c_experimental": "repair_prompt_c_experimental",
+                "finalize_result": "finalize_result",
+            },
+        )
+        graph.add_conditional_edges(
+            "repair_prompt_c_experimental",
+            route_after_experimental_repair,
+            {"select_next_candidate_plan": "select_next_candidate_plan", "finalize_result": "finalize_result"},
+        )
+        graph.add_edge("finalize_result", END)
+        return graph.compile()
+
     def load_target(self, state: ResolutionState) -> ResolutionState:
         artifact_dir = self.settings.artifacts_dir / state["run_id"] / state["case_id"]
         artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -548,8 +771,33 @@ class ResolutionWorkflow:
             state["current_validation_command"] = command
         return state
 
+    def gather_repo_evidence(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_experimental() or not self.settings.repo_evidence_enabled:
+            state["repo_evidence"] = {}
+            return state
+        evidence = build_repo_evidence(state)
+        state["repo_evidence"] = evidence
+        self._write_json_artifact(state, "repo-evidence.json", evidence)
+        return state
+
+    def build_rag_context(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_experimental():
+            return state
+        pypi_evidence = state.get("pypi_evidence", {})
+        repo_evidence = state.get("repo_evidence", {})
+        rag_context = build_experimental_rag_context(
+            state,
+            repo_evidence=repo_evidence,
+            pypi_evidence=pypi_evidence,
+        )
+        state["rag_context"] = rag_context
+        self._write_json_artifact(state, "rag-context.json", rag_context)
+        return state
+
     def infer_packages_prompt_a(self, state: ResolutionState) -> ResolutionState:
         extracted_imports = state.get("extracted_imports", [])
+        if self._is_experimental():
+            return self._infer_packages_prompt_a_experimental(state, extracted_imports)
         if not self._uses_full_apd():
             provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
             normalized = sorted(provenance, key=str.lower)
@@ -622,6 +870,71 @@ class ResolutionWorkflow:
         state["candidate_provenance"] = provenance
         return state
 
+    def _infer_packages_prompt_a_experimental(
+        self, state: ResolutionState, extracted_imports: list[str]
+    ) -> ResolutionState:
+        if not self._uses_full_apd():
+            provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
+            state["inferred_packages"] = sorted(provenance, key=str.lower)
+            state["candidate_provenance"] = provenance
+            return state
+
+        code = next(iter(state["source_files"].values()), "")
+        repo_evidence_summary = json.dumps(state.get("repo_evidence", {}), indent=2)[:2000]
+        prompt_text = self._format_prompt(
+            "initial_imports.txt",
+            code=code,
+            target_python=state.get("target_python", ""),
+            extracted_imports="\n".join(extracted_imports),
+            repo_evidence=repo_evidence_summary,
+        )
+        self._trace_request(state, "extract", prompt_text)
+        raw_output = self.prompt_runner.invoke_template(
+            "extract",
+            "initial_imports.txt",
+            {
+                "code": code,
+                "target_python": state.get("target_python", ""),
+                "extracted_imports": "\n".join(extracted_imports),
+                "repo_evidence": repo_evidence_summary,
+            },
+        )
+        self._trace_response(state, "extract", raw_output)
+        state["prompt_history"]["prompt_a"] = [prompt_text]
+        state["model_outputs"]["extract"] = [{"file": next(iter(state["source_files"].keys()), "snippet.py"), "output": raw_output}]
+        state["structured_outputs"]["extract_raw"] = raw_output
+
+        try:
+            packages = parse_experimental_package_payload(raw_output)
+        except StructuredOutputError:
+            cleaned_output = self._adjudicate_json(
+                state,
+                "extract",
+                raw_output,
+                '{"packages":[{"package":"PackageName","confidence":0.0,"source":"llm","evidence":["hint"]}]}',
+            )
+            try:
+                packages = parse_experimental_package_payload(cleaned_output)
+            except StructuredOutputError:
+                state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
+                packages = []
+
+        inferred = [entry["package"] for entry in packages]
+        state["structured_outputs"]["extract"] = packages
+        if not inferred:
+            inferred = extracted_imports
+        provenance = self._candidate_provenance_from(inferred, extracted_imports)
+        for entry in packages:
+            normalized_name = next(
+                (package for package in provenance if normalize_package_name(package) == normalize_package_name(entry["package"])),
+                None,
+            )
+            if normalized_name:
+                provenance[normalized_name] = str(entry.get("source", provenance[normalized_name]) or provenance[normalized_name])
+        state["inferred_packages"] = sorted(provenance, key=str.lower)
+        state["candidate_provenance"] = provenance
+        return state
+
     def retrieve_pypi_metadata(self, state: ResolutionState) -> ResolutionState:
         allowed_packages = state.get("inferred_packages", [])
         if state.get("repaired_dependency_lines"):
@@ -639,6 +952,7 @@ class ResolutionWorkflow:
             state["version_options"] = []
             state["unresolved_packages"] = []
             state["applied_compatibility_policy"] = {}
+            state["pypi_evidence"] = {}
             return state
         options = []
         unresolved: list[str] = []
@@ -666,6 +980,22 @@ class ResolutionWorkflow:
         state["applied_compatibility_policy"] = {
             option.package: option.policy_notes for option in options if option.policy_notes
         }
+        if self._is_experimental():
+            pypi_evidence = {
+                "packages": [
+                    {
+                        "package": option.package,
+                        "versions": option.versions,
+                        "requires_python": option.requires_python,
+                        "requires_dist": option.requires_dist,
+                        "policy_notes": option.policy_notes,
+                    }
+                    for option in options
+                ],
+                "unresolved_packages": unresolved,
+            }
+            state["pypi_evidence"] = pypi_evidence
+            self._write_json_artifact(state, "pypi-evidence.json", pypi_evidence)
         return state
 
     def infer_versions_prompt_b(self, state: ResolutionState) -> ResolutionState:
@@ -803,6 +1133,204 @@ class ResolutionWorkflow:
         state["version_selection_source"] = "llm_version_selection"
         return state
 
+    def generate_candidate_plans(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_experimental():
+            return state
+
+        default_plans = self._default_experimental_plans(state)
+        options = state.get("version_options", [])
+        if default_plans and (
+            not options
+            or all(len(option.versions) == 1 for option in options)
+        ):
+            if not options:
+                state["version_selection_source"] = "experimental_default_no_versions"
+            elif all(len(option.versions) == 1 for option in options):
+                state["version_selection_source"] = "experimental_single_version_fast_path"
+            else:
+                state["version_selection_source"] = "experimental_deterministic_default"
+            state["candidate_plans"] = default_plans
+            state["remaining_candidate_plans"] = list(default_plans)
+            state["structured_outputs"]["candidate_plans"] = self._candidate_plan_payload(default_plans)
+            self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(default_plans))
+            return state
+
+        if not options:
+            state["candidate_plans"] = default_plans
+            state["remaining_candidate_plans"] = list(default_plans)
+            self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(default_plans))
+            return state
+
+        allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
+        allowed_package_set = self._experimental_allowed_packages(state)
+        allowed_versions = self._allowed_versions_map(options)
+        rag_context_summary = summarize_rag_context(state.get("rag_context", {}), limit=6000)
+        prompt_text = self._format_prompt(
+            "candidate_plans.txt",
+            target_python=state.get("target_python", ""),
+            allowed_packages="\n".join(allowed_packages),
+            rag_context=rag_context_summary,
+            max_plan_count=self.settings.candidate_plan_count,
+        )
+        self._trace_request(state, "version", prompt_text)
+        raw_output = self.prompt_runner.invoke_template(
+            "version",
+            "candidate_plans.txt",
+            {
+                "target_python": state.get("target_python", ""),
+                "allowed_packages": "\n".join(allowed_packages),
+                "rag_context": rag_context_summary,
+                "max_plan_count": self.settings.candidate_plan_count,
+            },
+        )
+        self._trace_response(state, "version", raw_output)
+        state["prompt_history"]["prompt_b"] = prompt_text
+        state["model_outputs"]["version"].append({"attempt": state["current_attempt"], "output": raw_output})
+        state["structured_outputs"]["candidate_plans_raw"] = raw_output
+
+        try:
+            plans = parse_candidate_plan_payload(
+                raw_output,
+                allowed_packages=allowed_package_set,
+                allowed_versions=allowed_versions,
+            )
+        except StructuredOutputError:
+            cleaned_output = self._adjudicate_json(
+                state,
+                "candidate_plans",
+                raw_output,
+                '{"plans":[{"rank":1,"reason":"short reason","dependencies":[{"name":"package","version":"1.0.0"}]}]}',
+            )
+            try:
+                plans = parse_candidate_plan_payload(
+                    cleaned_output,
+                    allowed_packages=allowed_package_set,
+                    allowed_versions=allowed_versions,
+                )
+            except StructuredOutputError:
+                state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
+                plans = default_plans
+
+        if not plans:
+            plans = default_plans
+
+        state["candidate_plans"] = plans
+        state["remaining_candidate_plans"] = list(plans)
+        state["structured_outputs"]["candidate_plans"] = self._candidate_plan_payload(plans)
+        self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(plans))
+        if not state.get("dependency_reason"):
+            state["dependency_reason"] = "llm_version_selection"
+        state["version_selection_source"] = "experimental_candidate_plans"
+        return state
+
+    def select_next_candidate_plan(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_experimental():
+            return state
+        remaining = list(state.get("remaining_candidate_plans", []))
+        selected_plan = remaining.pop(0) if remaining else None
+        state["remaining_candidate_plans"] = remaining
+        state["selected_candidate_plan"] = selected_plan
+        state["selected_candidate_rank"] = selected_plan.rank if selected_plan else None
+        if selected_plan is None:
+            state["selected_dependencies"] = []
+            state["generated_requirements"] = "# no inferred third-party dependencies\n"
+            return state
+        state["selected_dependencies"] = [
+            ResolvedDependency(name=dependency.name, version=dependency.version) for dependency in selected_plan.dependencies
+        ]
+        self._prepare_selected_dependencies(state)
+        state["repair_outcome"] = "candidate_plan"
+        self._write_json_artifact(
+            state,
+            "selected-plan.json",
+            {
+                "rank": selected_plan.rank,
+                "reason": selected_plan.reason,
+                "dependencies": [dependency.pin() for dependency in selected_plan.dependencies],
+            },
+        )
+        return state
+
+    def repair_prompt_c_experimental(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_experimental():
+            return state
+        state["repair_cycle_count"] = state.get("repair_cycle_count", 0) + 1
+        allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
+        allowed_package_set = self._experimental_allowed_packages(state)
+        allowed_versions = self._allowed_versions_map(state.get("version_options", []))
+        previous_plan = "\n".join(dep.pin() for dep in state.get("selected_dependencies", []))
+        attempted_plans = "\n".join(
+            ", ".join(attempt.dependencies)
+            for attempt in state.get("attempt_records", [])
+            if attempt.dependencies
+        )
+        rag_context_summary = summarize_rag_context(state.get("rag_context", {}), limit=8000)
+        prompt_text = self._format_prompt(
+            "repair_attempt.txt",
+            target_python=state.get("target_python", ""),
+            allowed_packages="\n".join(allowed_packages),
+            previous_plan=previous_plan,
+            attempted_plans=attempted_plans,
+            error_details=state.get("last_error_details", ""),
+            rag_context=rag_context_summary,
+            max_plan_count=min(2, self.settings.candidate_plan_count),
+        )
+        self._trace_request(state, "repair", prompt_text)
+        raw_output = self.prompt_runner.invoke_template(
+            "repair",
+            "repair_attempt.txt",
+            {
+                "target_python": state.get("target_python", ""),
+                "allowed_packages": "\n".join(allowed_packages),
+                "previous_plan": previous_plan,
+                "attempted_plans": attempted_plans,
+                "error_details": state.get("last_error_details", ""),
+                "rag_context": rag_context_summary,
+                "max_plan_count": min(2, self.settings.candidate_plan_count),
+            },
+        )
+        self._trace_response(state, "repair", raw_output)
+        state["prompt_history"]["prompt_c"].append(prompt_text)
+        state["model_outputs"]["repair"].append({"attempt": state["current_attempt"], "output": raw_output})
+        state["structured_outputs"]["repair_raw"] = raw_output
+        try:
+            repair_applicable, plans = parse_repair_plan_payload(
+                raw_output,
+                allowed_packages=allowed_package_set,
+                allowed_versions=allowed_versions,
+            )
+        except StructuredOutputError:
+            cleaned_output = self._adjudicate_json(
+                state,
+                "repair",
+                raw_output,
+                '{"repair_applicable":true,"plans":[{"rank":1,"reason":"short reason","dependencies":[{"name":"package","version":"1.0.0"}]}]}',
+            )
+            try:
+                repair_applicable, plans = parse_repair_plan_payload(
+                    cleaned_output,
+                    allowed_packages=allowed_package_set,
+                    allowed_versions=allowed_versions,
+                )
+            except StructuredOutputError:
+                state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
+                repair_applicable, plans = False, []
+
+        state["structured_outputs"]["repair"] = {
+            "repair_applicable": repair_applicable,
+            "plans": self._candidate_plan_payload(plans),
+        }
+        if not repair_applicable or not plans:
+            state["repair_outcome"] = "repair_not_applicable"
+            state["candidate_plans"] = []
+            state["remaining_candidate_plans"] = []
+            return state
+        state["repair_outcome"] = "llm_repair"
+        state["candidate_plans"] = plans
+        state["remaining_candidate_plans"] = list(plans)
+        self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(plans))
+        return state
+
     def normalize_dependency_plan(self, state: ResolutionState) -> ResolutionState:
         state.pop("stop_reason", None)
         if state.get("selected_dependencies"):
@@ -919,6 +1447,8 @@ class ResolutionWorkflow:
         (artifact_dir / "prompt_b.txt").write_text(state["prompt_history"]["prompt_b"], encoding="utf-8")
         for index, prompt_c in enumerate(state["prompt_history"]["prompt_c"], start=1):
             (artifact_dir / f"prompt_c_attempt_{index}.txt").write_text(prompt_c, encoding="utf-8")
+        if self._is_experimental():
+            self._write_json_artifact(state, "structured-outputs.json", state.get("structured_outputs", {}))
         return state
 
     def execute_candidate(self, state: ResolutionState) -> ResolutionState:
@@ -1049,6 +1579,8 @@ class ResolutionWorkflow:
             "use_moe": self.settings.use_moe,
             "use_rag": self.settings.use_rag,
             "use_langchain": self.settings.use_langchain,
+            "rag_mode": self.settings.rag_mode,
+            "structured_prompting": self.settings.structured_prompting,
             "extraction_model": self.settings.stage_model("extract"),
             "runner_model": self.settings.reasoning_model,
             "version_model": self.settings.stage_model("version"),
@@ -1064,6 +1596,13 @@ class ResolutionWorkflow:
             "repair_outcome": state.get("repair_outcome", ""),
             "version_selection_source": state.get("version_selection_source", ""),
             "compatibility_policy": state.get("applied_compatibility_policy", {}),
+            "retrieval_sources": ["pypi"] + (["repo_evidence"] if state.get("repo_evidence") else []),
+            "candidate_plan_count": len(state.get("candidate_plans", [])),
+            "selected_candidate_rank": state.get("selected_candidate_rank"),
+            "selected_candidate_reason": state.get("selected_candidate_plan").reason if state.get("selected_candidate_plan") else "",
+            "repair_cycle_count": state.get("repair_cycle_count", 0),
+            "experimental_path": state.get("experimental_path", False),
+            "structured_prompt_failures": state.get("structured_prompt_failures", 0),
             "wall_clock_seconds": total_wall_clock,
             "started_at": state.get("case_started_at", ""),
             "finished_at": case_finished_at,
@@ -1072,5 +1611,11 @@ class ResolutionWorkflow:
             "attempt_records": [asdict(attempt) for attempt in state.get("attempt_records", [])],
         }
         state["final_result"] = result
+        if self._is_experimental():
+            self._write_json_artifact(state, "repo-evidence.json", state.get("repo_evidence", {}))
+            self._write_json_artifact(state, "pypi-evidence.json", state.get("pypi_evidence", {}))
+            self._write_json_artifact(state, "rag-context.json", state.get("rag_context", {}))
+            self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(state.get("candidate_plans", [])))
+            self._write_json_artifact(state, "structured-outputs.json", state.get("structured_outputs", {}))
         (artifact_dir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         return state

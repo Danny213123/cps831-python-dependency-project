@@ -490,7 +490,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--prompt-profile",
-        choices=["paper", "optimized-lite", "optimized", "optimized-strict"],
+        choices=["paper", "optimized-lite", "optimized", "optimized-strict", "experimental-rag"],
         default=None,
         help="Override the prompt profile independently of the selected preset.",
     )
@@ -746,6 +746,8 @@ def doctor_command(settings: Settings, ref: str | None) -> int:
     print(f"[INFO] model_profile: {settings.model_profile}")
     print(f"[INFO] moe: {'enabled' if settings.use_moe else 'disabled'}")
     print(f"[INFO] rag: {'enabled' if settings.use_rag else 'disabled'}")
+    print(f"[INFO] rag_mode: {settings.rag_mode}")
+    print(f"[INFO] structured_prompting: {'enabled' if settings.structured_prompting else 'disabled'}")
     print(f"[INFO] langchain: {'enabled' if settings.use_langchain else 'disabled'}")
     print(f"[INFO] extraction_model: {settings.extraction_model}")
     print(f"[INFO] runner_model: {settings.reasoning_model}")
@@ -999,6 +1001,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.trace_llm:
         settings.trace_llm = True
+    if settings.preset == "experimental" and settings.resolver != "apd":
+        parser.error("The experimental preset is only supported with the apd resolver.")
 
     if args.command == "doctor":
         return doctor_command(settings, args.ref)

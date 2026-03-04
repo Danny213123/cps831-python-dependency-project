@@ -9,6 +9,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+- Experimental APD-only preset with a hybrid-RAG workflow that gathers repo evidence, builds structured retrieval context, generates ranked candidate dependency plans, tries those plans before repair, and records repo/PyPI/RAG/plan artifacts for each case.
+- Experimental prompt profile `experimental-rag` with strict JSON outputs for package inference, candidate-plan generation, and repair planning.
+- Repo-evidence, RAG-context, and structured-output helper modules to support evidence-driven experimental runs without hardcoded package-specific final answers.
 - Resolver selection support with `apd`, `pyego`, and `readpye` runtime modes, including UI selection and artifact metadata so baseline-style runs can be compared from the same interface.
 - Automatic per-run case results exports in `results.csv`, `results.md`, and `results.json`, including case number, modules, success/failure, attempts, dependencies, and timing fields.
 - Persistent benchmark run-state artifacts in `run-state.json` and `run-state.md`, capturing live progress, elapsed time, active cases, last completed case, and resumable run metadata.
@@ -55,6 +58,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added preset-aware routing for prompt usage, deterministic version selection, repair behavior, and compatibility handling.
 - Added fresh-run and no-LLM-cache execution options plus bundled model selection for `gemma-moe`, `qwen35-9b`, and `gpt-oss-20b`, with per-stage extraction/reasoning model overrides.
 - Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.
+- Added experimental summary and result metadata including RAG mode, structured-prompting status, candidate-plan counts, selected candidate rank, repair-cycle counts, and structured-prompt failure counts.
 - Added resolver metadata to doctor output, benchmark dashboards, result artifacts, and summary artifacts.
 - Added timeline artifacts (`timeline.json`, `timeline.csv`, `timeline.md`) and exposed timeline viewing in the interactive terminal UI.
 - Added a paper-compatible module report mode that builds top-module tables from the hard subset in `all-gists` so the reported module families line up more closely with the paper.
@@ -62,6 +66,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Parallelized module report generation across snippet reads and import extraction to improve throughput on large benchmark cohorts.
 - Updated the interactive module report flow so `apd ui` renders the generated markdown table instead of dumping raw captured command output.
 - Updated the interactive reporting flows so summary, failures, module report, and timeline views list existing run directories and let users select a run instead of manually typing a run ID.
+- Updated the CLI and terminal UI to validate that the `experimental` preset can only be used with the `apd` resolver, and to preserve resolver/preset context when resuming runs from saved state.
 - Updated paper-compatible markdown tables to prefer modules covered by the current run when displaying the top rows for preview and partial runs.
 - Corrected the paper-compatible module-report cohort to use the repair benchmark set (`initial-eval = ImportError`) so APD overlap and success-rate calculations match the benchmark runs.
 - Switched documentation away from Compose sidecars to host Ollama plus host Docker usage for local GPU testing.

@@ -432,6 +432,8 @@ class TerminalUI:
         return 0
 
     def _run_smoke(self) -> int:
+        if not self._validate_runtime_selection():
+            return 1
         jobs = self._prompt_int("Jobs", 1)
         run_id = self._prompt_optional("Run ID", "")
         self.ensure_smoke_subset(self.settings, None, "smoke30", notify=False)
@@ -449,6 +451,8 @@ class TerminalUI:
         )
 
     def _run_full(self) -> int:
+        if not self._validate_runtime_selection():
+            return 1
         jobs = self._prompt_int("Jobs", 1)
         run_id = self._prompt_optional("Run ID", "")
         dashboard = TerminalBenchmarkDashboard()
@@ -467,6 +471,18 @@ class TerminalUI:
     def _run_resume_benchmark(self) -> int:
         run_entry = self._prompt_resume_run()
         if run_entry is None:
+            return 1
+        saved_resolver = str(run_entry.get("resolver", "") or "")
+        if saved_resolver:
+            self.settings.resolver = saved_resolver
+        saved_preset = str(run_entry.get("preset", "") or "")
+        if saved_preset in PRESET_CONFIGS:
+            preset_config = PRESET_CONFIGS[saved_preset]
+            self.settings.preset = saved_preset
+            self.settings.prompt_profile = preset_config.prompt_profile
+            self.settings.max_attempts = preset_config.max_attempts
+            self.settings.default_module_grouping = preset_config.reporting_grouping
+        if not self._validate_runtime_selection():
             return 1
         target = str(run_entry.get("target", "benchmark") or "benchmark")
         jobs = int(run_entry.get("jobs", 1) or 1)
@@ -487,6 +503,8 @@ class TerminalUI:
         )
 
     def _run_project_solve(self) -> int:
+        if not self._validate_runtime_selection():
+            return 1
         project_path = self._prompt_required("Project path")
         validation = self._prompt_optional("Validation command override", "")
         run_id = self._prompt_optional("Run ID", "")
@@ -607,7 +625,9 @@ class TerminalUI:
                 continue
             target = str(state.get("target", "benchmark") or "benchmark")
             jobs = int(state.get("jobs", 1) or 1)
-            label = f"{run_id} [{status}] {completed}/{total} target={target} jobs={jobs}"
+            resolver = str(state.get("resolver", "apd") or "apd")
+            preset = str(state.get("preset", "optimized") or "optimized")
+            label = f"{run_id} [{status}] {completed}/{total} target={target} jobs={jobs} resolver={resolver} preset={preset}"
             entries.append(
                 {
                     "run_id": run_id,
@@ -617,9 +637,17 @@ class TerminalUI:
                     "total": total,
                     "target": target,
                     "jobs": jobs,
+                    "resolver": resolver,
+                    "preset": preset,
                 }
             )
         return entries
+
+    def _validate_runtime_selection(self) -> bool:
+        if self.settings.preset == "experimental" and self.settings.resolver != "apd":
+            self._show_status_dialog("The experimental preset is only supported with the apd resolver.")
+            return False
+        return True
 
     def _prompt_run_id(self) -> str | None:
         run_entries = self._available_run_entries()
@@ -708,6 +736,8 @@ class TerminalUI:
         self.settings.prompt_profile = preset_config.prompt_profile
         self.settings.max_attempts = preset_config.max_attempts
         self.settings.default_module_grouping = preset_config.reporting_grouping
+        if selected == "experimental" and self.settings.resolver != "apd":
+            self.settings.resolver = "apd"
         self._show_status_dialog(f"Preset switched to {selected}.")
 
     def _choose_resolver(self) -> None:
@@ -736,6 +766,12 @@ class TerminalUI:
                 return
             selected = visible_resolvers[index]
         self.settings.resolver = selected
+        if selected != "apd" and self.settings.preset == "experimental":
+            self.settings.preset = "accuracy"
+            preset_config = PRESET_CONFIGS["accuracy"]
+            self.settings.prompt_profile = preset_config.prompt_profile
+            self.settings.max_attempts = preset_config.max_attempts
+            self.settings.default_module_grouping = preset_config.reporting_grouping
         self._show_status_dialog(f"Resolver switched to {selected}.")
 
     def _choose_model_profile(self) -> None:

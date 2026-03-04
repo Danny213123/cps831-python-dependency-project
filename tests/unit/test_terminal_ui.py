@@ -62,6 +62,33 @@ def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
     assert settings.max_attempts == 5
 
 
+def test_terminal_ui_switching_to_experimental_forces_apd_resolver(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.resolver = "pyego"
+    outputs: list[str] = []
+    inputs = iter(["p", "7", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert settings.preset == "experimental"
+    assert settings.resolver == "apd"
+
+
 def test_terminal_ui_can_switch_resolver(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
@@ -85,6 +112,34 @@ def test_terminal_ui_can_switch_resolver(tmp_path: Path, monkeypatch) -> None:
     ui.run()
 
     assert settings.resolver == "pyego"
+
+
+def test_terminal_ui_switching_resolver_from_experimental_restores_supported_preset(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.preset = "experimental"
+    settings.prompt_profile = "experimental-rag"
+    outputs: list[str] = []
+    inputs = iter(["v", "2", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert settings.resolver == "pyego"
+    assert settings.preset == "accuracy"
 
 
 def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> None:

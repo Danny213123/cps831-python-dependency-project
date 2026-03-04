@@ -1,6 +1,7 @@
 import time
 import warnings
 from pathlib import Path
+import pytest
 
 from agentic_python_dependency.cli import (
     BenchmarkProgress,
@@ -12,6 +13,7 @@ from agentic_python_dependency.cli import (
     load_run_state,
     redirect_runtime_warnings,
     resolve_trace_path,
+    main,
 )
 from agentic_python_dependency.config import Settings
 
@@ -192,6 +194,24 @@ def test_report_timeline_parser_accepts_run_id() -> None:
     assert args.command == "report"
     assert args.report_command == "timeline"
     assert args.run_id == "run123"
+
+
+def test_parser_accepts_experimental_preset_and_prompt_profile() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["--preset", "experimental", "--prompt-profile", "experimental-rag", "smoke"])
+
+    assert args.preset == "experimental"
+    assert args.prompt_profile == "experimental-rag"
+
+
+def test_main_rejects_experimental_with_non_apd_resolver(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--preset", "experimental", "--resolver", "pyego", "doctor"])
+
+    assert excinfo.value.code == 2
 
 
 def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, monkeypatch) -> None:

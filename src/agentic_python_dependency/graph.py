@@ -1091,7 +1091,11 @@ class ResolutionWorkflow:
         if state["mode"] == "gistable":
             case = state["benchmark_case"]
             source = case.snippet_path.read_text(encoding="utf-8")
-            dockerfile_text = case.dockerfile_path.read_text(encoding="utf-8")
+            dockerfile_text = (
+                case.dockerfile_path.read_text(encoding="utf-8")
+                if case.dockerfile_path is not None and case.dockerfile_path.exists()
+                else ""
+            )
             state["source_files"] = {"snippet.py": source}
             state["current_validation_command"] = ""
             state["current_runtime_profile"] = "docker_cmd"
@@ -1099,7 +1103,7 @@ class ResolutionWorkflow:
             state["benchmark_target_python"] = benchmark_target_python
             state["target_python"] = benchmark_target_python
             state["inferred_target_python"] = ""
-            state["python_version_source"] = "benchmark_dockerfile"
+            state["python_version_source"] = "benchmark_dockerfile" if dockerfile_text else "benchmark_default"
         else:
             target = state["project_target"]
             state["source_files"] = load_python_sources(target.root_dir)
@@ -1120,6 +1124,9 @@ class ResolutionWorkflow:
         if state["mode"] == "gistable":
             source = state["source_files"].get("snippet.py", "")
             profile, command = infer_benchmark_validation_profile(source, state["extracted_imports"])
+            if profile == "docker_cmd" and not command and state["benchmark_case"].case_source == "all-gists":
+                profile = "snippet_exec"
+                command = "python snippet.py"
             state["current_runtime_profile"] = profile
             state["current_validation_command"] = command
         return state
@@ -2541,6 +2548,7 @@ class ResolutionWorkflow:
             "run_id": state["run_id"],
             "case_id": state["case_id"],
             "mode": state["mode"],
+            "case_source": state.get("benchmark_case").case_source if state.get("benchmark_case") else "",
             "resolver": state.get("resolver", self.settings.resolver),
             "resolver_implementation": state.get("resolver_implementation", "internal"),
             "preset": state.get("preset", self.settings.preset),

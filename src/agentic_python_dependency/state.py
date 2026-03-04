@@ -22,7 +22,8 @@ class BenchmarkCase:
     case_id: str
     root_dir: Path
     snippet_path: Path
-    dockerfile_path: Path
+    dockerfile_path: Path | None = None
+    case_source: str = "all-gists"
     initial_eval: str = ""
     final_eval: str = ""
     source_url: str = ""

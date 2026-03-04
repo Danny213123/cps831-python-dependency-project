@@ -193,12 +193,15 @@ class DockerExecutor:
     ) -> PreparedExecutionContext:
         context_dir = artifact_dir / "context"
         context_dir.mkdir(parents=True, exist_ok=True)
-        for child in case.root_dir.iterdir():
-            target = context_dir / child.name
-            if child.is_dir():
-                shutil.copytree(child, target, dirs_exist_ok=True)
-            else:
-                shutil.copy2(child, target)
+        if case.root_dir.exists():
+            for child in case.root_dir.iterdir():
+                target = context_dir / child.name
+                if child.is_dir():
+                    shutil.copytree(child, target, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(child, target)
+        elif case.snippet_path.exists():
+            shutil.copy2(case.snippet_path, context_dir / "snippet.py")
         requirements_path = context_dir / "requirements.generated.txt"
         dockerfile_path = context_dir / "Dockerfile.generated"
         requirements_path.write_text(self.render_requirements(dependencies), encoding="utf-8")
@@ -206,18 +209,43 @@ class DockerExecutor:
         for package in extra_system_packages or []:
             if package not in merged_system_packages:
                 merged_system_packages.append(package)
-        dockerfile_text = case.dockerfile_path.read_text(encoding="utf-8")
-        dockerfile_path.write_text(
-            self.patch_dockerfile(
-                dockerfile_text,
-                rewrite_python_installs=True,
-                rewrite_base_python=True,
-                target_python=target_python,
-                bootstrap_pins=self.bootstrap_pins(dependencies),
-                system_packages=merged_system_packages,
-            ),
-            encoding="utf-8",
-        )
+        if case.dockerfile_path is not None and case.dockerfile_path.exists():
+            dockerfile_text = case.dockerfile_path.read_text(encoding="utf-8")
+            dockerfile_path.write_text(
+                self.patch_dockerfile(
+                    dockerfile_text,
+                    rewrite_python_installs=True,
+                    rewrite_base_python=True,
+                    target_python=target_python,
+                    bootstrap_pins=self.bootstrap_pins(dependencies),
+                    system_packages=merged_system_packages,
+                ),
+                encoding="utf-8",
+            )
+        else:
+            dockerfile_path.write_text(
+                "\n".join(
+                    [
+                        f"FROM python:{target_python}-slim",
+                        "WORKDIR /workspace",
+                        *(
+                            [
+                                "RUN apt-get update && apt-get install -y --no-install-recommends "
+                                + " ".join(merged_system_packages)
+                                + " && rm -rf /var/lib/apt/lists/*"
+                            ]
+                            if merged_system_packages
+                            else []
+                        ),
+                        "COPY . /workspace",
+                        "COPY requirements.generated.txt /tmp/requirements.generated.txt",
+                        "RUN pip install --no-cache-dir -r /tmp/requirements.generated.txt",
+                        'CMD ["python", "snippet.py"]',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
         return PreparedExecutionContext(
             context_dir,
             dockerfile_path,

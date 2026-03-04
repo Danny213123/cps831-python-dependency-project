@@ -22,7 +22,9 @@ EVIDENCE_FILE_CANDIDATES = (
 )
 
 
-def _read_text(path: Path) -> str | None:
+def _read_text(path: Path | None) -> str | None:
+    if path is None:
+        return None
     try:
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError:

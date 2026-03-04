@@ -9,6 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+- Benchmark source selection across CLI and UI, including global `--benchmark-source` and `APD_BENCHMARK_CASE_SOURCE` support for `all-gists` vs `dockerized-gists`.
+- Benchmark source metadata in run-state/progress artifacts and per-case results (`case_source`) to keep resume/report behavior aligned with the executed corpus.
 - Experimental v2 bundle/feature layer for the `experimental` preset, with `baseline`, `enhanced`, and `full` bundle modes plus per-feature overrides for dynamic aliases, transitive conflicts, smart repair routing, multipass inference, repair memory, Python constraint intersection, version negotiation, repair feedback, and dynamic imports.
 - Workspace-local experimental helpers for package metadata extraction, repo-derived alias discovery, dynamic import detection, retry-policy routing, constraint-pack generation, candidate-bundle generation, and repair feedback memory.
 - New experimental-rag prompt templates for package inference, package cross-validation, candidate plan generation, repair memory-aware repair planning, and version negotiation.
@@ -42,6 +44,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Switched Gistable benchmark execution default from `dockerized-gists` to `all-gists`, while retaining an explicit source switch for dockerized-only replay.
+- Simplified the interactive command center layout to grouped `Run`, `Reports`, and `Configure` flows so the UI fits smaller terminal screens.
+- Extended benchmark case loading to resolve snippets from the selected source and generate an ephemeral Dockerfile automatically when a case has no Dockerfile.
 - Removed the `target_python` hint from experimental Prompt A and multipass package-inference prompts so APD must infer the required Python version from code and evidence instead of inheriting the benchmark Dockerfile version as prompt input.
 - Aligned Prompt A with the paper-style modules-plus-Python-version flow by having initial package inference return both dependency modules and an inferred Python version, recording benchmark vs inferred Python version metadata in run artifacts, and rewriting benchmark Docker base images to the inferred Python version for APD-driven execution.
 - Extended the experimental workflow so enhanced/full runs can perform repo-derived alias discovery, multipass package inference, version-specific metadata retrieval, constraint prechecks, feedback-memory loading, candidate-bundle generation, and version negotiation before execution.
@@ -84,6 +89,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+- Fixed module-report snippet lookup for mixed run corpora by resolving snippet paths from recorded case source metadata instead of assuming dockerized-only paths.
+- Fixed gistable load/evidence/runtime paths to handle cases where Dockerfiles are absent, preventing all-gists cases from failing before execution.
 - Fixed benchmark Python-version reconciliation so APD keeps the benchmark Dockerfile Python when Prompt A infers a conflicting Python 3 version for code that is not even Python-3-syntax-compatible, preventing obvious Python 2 vs 3 syntax breakage during execution.
 - Fixed Windows subprocess decoding in Docker execution and official-baseline wrappers by capturing byte output and decoding with UTF-8 replacement instead of relying on CP1252 text decoding, preventing `_readerthread` `UnicodeDecodeError` crashes during runs.
 - Fixed experimental-rag prompt template rendering by escaping literal JSON braces in the new structured prompt files, preventing `str.format` crashes such as `KeyError: '\n  "packages"'` during experimental package inference.

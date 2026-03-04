@@ -103,6 +103,7 @@ class TerminalBenchmarkDashboard:
         self.prompt_profile = "optimized"
         self.experimental_bundle = "baseline"
         self.experimental_features: tuple[str, ...] = ()
+        self.benchmark_source = "all-gists"
         self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
         self.jobs = 1
         self.target = "benchmark"
@@ -135,6 +136,7 @@ class TerminalBenchmarkDashboard:
         model_summary: str,
         experimental_bundle: str = "baseline",
         experimental_features: tuple[str, ...] = (),
+        benchmark_source: str = "all-gists",
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -150,6 +152,7 @@ class TerminalBenchmarkDashboard:
         self.prompt_profile = prompt_profile
         self.experimental_bundle = experimental_bundle
         self.experimental_features = tuple(experimental_features)
+        self.benchmark_source = benchmark_source
         self.model_summary = model_summary
         self.jobs = jobs
         self.target = target
@@ -268,6 +271,7 @@ class TerminalBenchmarkDashboard:
             ("class:label", "Preset       "), ("class:value", f"{self.preset}\n"),
             ("class:label", "Exp bundle   "), ("class:value", f"{self.experimental_bundle}\n"),
             ("class:label", "Prompt       "), ("class:value", f"{self.prompt_profile}\n"),
+            ("class:label", "Source       "), ("class:value", f"{self.benchmark_source}\n"),
             ("class:label", "Models       "), ("class:value", f"{getattr(self, 'model_summary', 'default')}\n"),
             ("class:label", "Jobs         "), ("class:value", f"{self.jobs}\n"),
             ("class:label", "Artifacts    "), ("class:value", f"{self.artifacts_dir}\n\n"),
@@ -341,6 +345,7 @@ class TerminalBenchmarkDashboard:
             f"Preset: {self.preset}",
             f"Experimental bundle: {self.experimental_bundle}",
             f"Prompt profile: {self.prompt_profile}",
+            f"Benchmark source: {self.benchmark_source}",
             f"Models: {getattr(self, 'model_summary', 'default')}",
             f"Jobs: {self.jobs}",
             f"Artifacts: {self.artifacts_dir}",
@@ -419,32 +424,19 @@ class TerminalUI:
                 title="APD Command Center",
                 text=self._menu_dialog_text(),
                 buttons=[
-                    ("Doctor", "1"),
-                    ("Smoke benchmark", "2"),
-                    ("Full benchmark", "3"),
-                    ("Resume benchmark", "u"),
-                    ("Retry failed cases", "9"),
-                    ("Solve local project", "4"),
-                    ("Summarize run", "5"),
-                    ("Failure report", "6"),
-                    ("Module report", "7"),
-                    ("Timeline view", "l"),
-                    ("Resolver", "v"),
-                    ("Preset", "p"),
-                    ("Models", "m"),
-                    ("Experimental", "x"),
-                    ("Runtime", "r"),
-                    ("Fresh run", "f"),
-                    ("Trace", "t"),
-                    ("Quit", "8"),
+                    ("Run", "run"),
+                    ("Reports", "report"),
+                    ("Configure", "config"),
+                    ("Doctor", "doctor"),
+                    ("Quit", "quit"),
                 ],
                 style=UI_STYLE,
             ).run()
-            if choice in {None, "8"}:
+            if choice in {None, "quit"}:
                 message_dialog(title="APD", text="Exiting APD UI.", style=UI_STYLE).run()
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice in {"2", "3", "u"}:
+            if choice in {"run", "report"} and exit_code >= 0:
                 self._show_status_dialog(f"Command finished with exit code {exit_code}.")
 
     def _run_basic(self) -> int:
@@ -457,54 +449,197 @@ class TerminalUI:
                 self.output("\nExiting APD UI.")
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice not in {"v", "p", "m", "r", "f", "t"}:
+            if choice in {"1", "2", "3", "4"} and exit_code >= 0:
                 self._pause_after(exit_code)
 
     def _dispatch_choice(self, choice: str | None) -> int:
-        if choice == "1":
+        if choice in {"doctor", "1"}:
             return self._run_captured(self.doctor_command, self.settings, None)
-        if choice == "2":
+        if choice in {"run", "2"}:
+            return self._run_menu()
+        if choice in {"report", "3"}:
+            return self._report_menu()
+        if choice in {"config", "4"}:
+            return self._configure_menu()
+        self._show_status_dialog("Invalid choice.")
+        return 0
+
+    def _run_menu(self) -> int:
+        if self._use_prompt_toolkit:
+            return self._run_menu_prompt_toolkit()
+        return self._run_menu_basic()
+
+    def _run_menu_prompt_toolkit(self) -> int:
+        while True:
+            choice = button_dialog(
+                title="Run Workflows",
+                text="Choose a run command.",
+                buttons=[
+                    ("Smoke benchmark", "2"),
+                    ("Full benchmark", "3"),
+                    ("Resume benchmark", "u"),
+                    ("Retry failed cases", "9"),
+                    ("Solve local project", "4"),
+                    ("Back", "back"),
+                ],
+                style=UI_STYLE,
+            ).run()
+            if choice in {None, "back"}:
+                return -1
+            if choice == "2":
+                return self._run_smoke()
+            if choice == "3":
+                return self._run_full()
+            if choice == "u":
+                return self._run_resume_benchmark()
+            if choice == "9":
+                return self._run_failed_cases_from_run()
+            if choice == "4":
+                return self._run_project_solve()
+
+    def _run_menu_basic(self) -> int:
+        self.output("\nRun workflows")
+        self.output("  1. Smoke benchmark")
+        self.output("  2. Full benchmark")
+        self.output("  3. Resume benchmark")
+        self.output("  4. Retry failed cases")
+        self.output("  5. Solve local project")
+        self.output("  6. Back")
+        choice = self.input_fn("Select run option: ").strip().lower()
+        if choice == "1":
             return self._run_smoke()
-        if choice == "3":
+        if choice == "2":
             return self._run_full()
-        if choice == "u":
+        if choice == "3":
             return self._run_resume_benchmark()
-        if choice == "9":
-            return self._run_failed_cases_from_run()
         if choice == "4":
-            return self._run_project_solve()
+            return self._run_failed_cases_from_run()
         if choice == "5":
+            return self._run_project_solve()
+        return -1
+
+    def _report_menu(self) -> int:
+        if self._use_prompt_toolkit:
+            return self._report_menu_prompt_toolkit()
+        return self._report_menu_basic()
+
+    def _report_menu_prompt_toolkit(self) -> int:
+        while True:
+            choice = button_dialog(
+                title="Reports",
+                text="Choose a report command.",
+                buttons=[
+                    ("Summarize run", "5"),
+                    ("Failure report", "6"),
+                    ("Module report", "7"),
+                    ("Timeline view", "l"),
+                    ("Back", "back"),
+                ],
+                style=UI_STYLE,
+            ).run()
+            if choice in {None, "back"}:
+                return -1
+            if choice == "5":
+                return self._run_summary()
+            if choice == "6":
+                return self._run_failures()
+            if choice == "7":
+                return self._run_modules()
+            if choice == "l":
+                return self._run_timeline()
+
+    def _report_menu_basic(self) -> int:
+        self.output("\nReports")
+        self.output("  1. Summarize run")
+        self.output("  2. Failure report")
+        self.output("  3. Module report")
+        self.output("  4. Timeline view")
+        self.output("  5. Back")
+        choice = self.input_fn("Select report option: ").strip().lower()
+        if choice == "1":
             return self._run_summary()
-        if choice == "6":
+        if choice == "2":
             return self._run_failures()
-        if choice == "7":
+        if choice == "3":
             return self._run_modules()
-        if choice == "l":
+        if choice == "4":
             return self._run_timeline()
-        if choice == "v":
+        return -1
+
+    def _configure_menu(self) -> int:
+        if self._use_prompt_toolkit:
+            return self._configure_menu_prompt_toolkit()
+        return self._configure_menu_basic()
+
+    def _configure_menu_prompt_toolkit(self) -> int:
+        while True:
+            choice = button_dialog(
+                title="Configure",
+                text="Adjust resolver, preset, models, and runtime options.",
+                buttons=[
+                    ("Resolver", "v"),
+                    ("Preset", "p"),
+                    ("Models", "m"),
+                    ("Experimental", "x"),
+                    ("Runtime", "r"),
+                    ("Benchmark source", "s"),
+                    ("Fresh run", "f"),
+                    ("Trace LLM", "t"),
+                    ("Back", "back"),
+                ],
+                style=UI_STYLE,
+            ).run()
+            if choice in {None, "back"}:
+                return 0
+            if choice == "v":
+                self._choose_resolver()
+            elif choice == "p":
+                self._choose_preset()
+            elif choice == "m":
+                self._choose_model_profile()
+            elif choice == "x":
+                self._configure_experimental()
+            elif choice == "r":
+                self._configure_runtime()
+            elif choice == "s":
+                self._choose_benchmark_source()
+            elif choice == "f":
+                self._fresh_run = not self._fresh_run
+                self._show_status_dialog(f"Fresh run is now {'on' if self._fresh_run else 'off'}.")
+            elif choice == "t":
+                self.settings.trace_llm = not self.settings.trace_llm
+                self._show_status_dialog(f"LLM tracing is now {'on' if self.settings.trace_llm else 'off'}.")
+
+    def _configure_menu_basic(self) -> int:
+        self.output("\nConfigure")
+        self.output("  1. Change resolver")
+        self.output("  2. Change preset")
+        self.output("  3. Change model bundle")
+        self.output("  4. Configure experimental bundle/features")
+        self.output("  5. Runtime controls")
+        self.output("  6. Change benchmark source")
+        self.output("  7. Toggle fresh run / no LLM cache")
+        self.output("  8. Toggle LLM tracing")
+        self.output("  9. Back")
+        choice = self.input_fn("Select configuration option: ").strip().lower()
+        if choice == "1":
             self._choose_resolver()
-            return 0
-        if choice == "p":
+        elif choice == "2":
             self._choose_preset()
-            return 0
-        if choice == "m":
+        elif choice == "3":
             self._choose_model_profile()
-            return 0
-        if choice == "x":
+        elif choice == "4":
             self._configure_experimental()
-            return 0
-        if choice == "r":
+        elif choice == "5":
             self._configure_runtime()
-            return 0
-        if choice == "f":
+        elif choice == "6":
+            self._choose_benchmark_source()
+        elif choice == "7":
             self._fresh_run = not self._fresh_run
             self._show_status_dialog(f"Fresh run is now {'on' if self._fresh_run else 'off'}.")
-            return 0
-        if choice == "t":
+        elif choice == "8":
             self.settings.trace_llm = not self.settings.trace_llm
             self._show_status_dialog(f"LLM tracing is now {'on' if self.settings.trace_llm else 'off'}.")
-            return 0
-        self._show_status_dialog("Invalid choice.")
         return 0
 
     def _run_smoke(self) -> int:
@@ -566,6 +701,9 @@ class TerminalUI:
             self.settings.experimental_features = tuple(
                 feature for feature in saved_features if feature in EXPERIMENTAL_FEATURES
             )
+        saved_benchmark_source = str(run_entry.get("benchmark_source", "") or "")
+        if saved_benchmark_source in {"all-gists", "dockerized-gists"}:
+            self.settings.benchmark_case_source = saved_benchmark_source
         if not self._validate_runtime_selection():
             return 1
         target = str(run_entry.get("target", "benchmark") or "benchmark")
@@ -732,9 +870,10 @@ class TerminalUI:
             resolver = str(state.get("resolver", "apd") or "apd")
             preset = str(state.get("preset", "optimized") or "optimized")
             experimental_bundle = str(state.get("experimental_bundle", "baseline") or "baseline")
+            benchmark_source = str(state.get("benchmark_source", "all-gists") or "all-gists")
             label = (
                 f"{run_id} [{status}] {completed}/{total} target={target} jobs={jobs} "
-                f"resolver={resolver} preset={preset}/{experimental_bundle}"
+                f"resolver={resolver} preset={preset}/{experimental_bundle} source={benchmark_source}"
             )
             entries.append(
                 {
@@ -748,6 +887,7 @@ class TerminalUI:
                     "resolver": resolver,
                     "preset": preset,
                     "experimental_bundle": experimental_bundle,
+                    "benchmark_source": benchmark_source,
                     "experimental_features": state.get("experimental_features", []),
                 }
             )
@@ -943,6 +1083,37 @@ class TerminalUI:
             self.settings.experimental_features = ()
         self._show_status_dialog(f"Resolver switched to {selected}.")
 
+    def _choose_benchmark_source(self) -> None:
+        options = [
+            ("all-gists", "all-gists (default)"),
+            ("dockerized-gists", "dockerized-gists"),
+        ]
+        if self._use_prompt_toolkit:
+            selected = radiolist_dialog(
+                title="Benchmark source",
+                text="Choose which Gistable case collection APD runs.",
+                values=options,
+                default=self.settings.benchmark_case_source,
+                style=UI_STYLE,
+            ).run()
+            if selected is None:
+                return
+        else:
+            self.output("\nBenchmark case sources:")
+            visible_sources = [source for source, _ in options]
+            for index, source in enumerate(visible_sources, start=1):
+                marker = "*" if source == self.settings.benchmark_case_source else " "
+                self.output(f"  {index}. [{marker}] {source}")
+            choice = self.input_fn("Choose source number: ").strip()
+            if not choice.isdigit():
+                return
+            index = int(choice) - 1
+            if index < 0 or index >= len(visible_sources):
+                return
+            selected = visible_sources[index]
+        self.settings.benchmark_case_source = selected
+        self._show_status_dialog(f"Benchmark source switched to {selected}.")
+
     def _configure_experimental(self) -> None:
         if self.settings.preset != "experimental":
             self._show_status_dialog("Experimental controls are only available when the preset is experimental.")
@@ -1110,21 +1281,18 @@ class TerminalUI:
     def _menu_dialog_text(self) -> AnyFormattedText:
         return HTML(
             "<b><ansibrightyellow>APD Command Center</ansibrightyellow></b>\n"
-            "<style fg='#98c1d9'>Run benchmarks, inspect reports, and solve local projects without memorizing subcommands.</style>\n\n"
-            f"<b>Preset:</b> {self.settings.preset}\n"
-            f"<b>Resolver:</b> {self.settings.resolver}\n"
+            "<style fg='#98c1d9'>Run, report, and configure without memorizing commands.</style>\n\n"
+            f"<b>Preset/Resolver:</b> {self.settings.preset} / {self.settings.resolver}\n"
+            f"<b>Benchmark source:</b> {self.settings.benchmark_case_source}\n"
             f"<b>Model bundle:</b> {self.settings.model_profile}\n"
-            f"<b>Experimental bundle:</b> {self.settings.experimental_bundle}\n"
-            f"<b>Experimental features:</b> {', '.join(self.settings.experimental_features) or 'none'}\n"
-            f"<b>MoE:</b> {'on' if self.settings.use_moe else 'off'}\n"
-            f"<b>RAG:</b> {'on' if self.settings.use_rag else 'off'}\n"
-            f"<b>LangChain:</b> {'on' if self.settings.use_langchain else 'off'}\n"
             f"<b>Models:</b> {self.settings.extraction_model} / {self.settings.reasoning_model}\n"
-            f"<b>Version/Repair/Adj:</b> {self.settings.version_model} / {self.settings.repair_model} / {self.settings.adjudication_model}\n"
-            f"<b>Prompt profile:</b> {self.settings.prompt_profile}\n"
-            f"<b>Fresh run:</b> {'on' if self._fresh_run else 'off'}\n"
+            f"<b>Runtime:</b> MoE {'on' if self.settings.use_moe else 'off'} | "
+            f"RAG {'on' if self.settings.use_rag else 'off'} | "
+            f"LangChain {'on' if self.settings.use_langchain else 'off'}\n"
+            f"<b>Experimental:</b> {self.settings.experimental_bundle} "
+            f"({len(self.settings.experimental_features)} feature(s))\n"
+            f"<b>Fresh run:</b> {'on' if self._fresh_run else 'off'} | "
             f"<b>Trace LLM:</b> {'on' if self.settings.trace_llm else 'off'}\n"
-            f"<b>Ollama:</b> {self.settings.ollama_base_url}\n"
             f"<b>Artifacts:</b> {self.settings.artifacts_dir}"
         )
 
@@ -1191,6 +1359,7 @@ class TerminalUI:
         self.output("=" * width)
         self.output(f"Preset: {self.settings.preset}")
         self.output(f"Resolver: {self.settings.resolver}")
+        self.output(f"Benchmark source: {self.settings.benchmark_case_source}")
         self.output(f"Model bundle: {self.settings.model_profile}")
         self.output(f"Experimental bundle: {self.settings.experimental_bundle}")
         self.output(f"Experimental features: {', '.join(self.settings.experimental_features) or 'none'}")
@@ -1210,22 +1379,9 @@ class TerminalUI:
     def _print_menu(self) -> None:
         self.output("\nActions")
         self.output("  1. Doctor")
-        self.output("  2. Smoke benchmark")
-        self.output("  3. Full benchmark")
-        self.output("  U. Resume benchmark")
-        self.output("  9. Retry failed cases from prior run")
-        self.output("  4. Solve local project")
-        self.output("  5. Summarize run")
-        self.output("  6. Failure report")
-        self.output("  7. Module report")
-        self.output("  L. Timeline view")
-        self.output("  V. Change resolver")
-        self.output("  P. Change preset")
-        self.output("  M. Change model bundle")
-        self.output("  X. Configure experimental bundle/features")
-        self.output("  R. Runtime controls")
-        self.output("  F. Toggle fresh run / no LLM cache")
-        self.output("  T. Toggle LLM tracing")
+        self.output("  2. Run workflows")
+        self.output("  3. Reports")
+        self.output("  4. Configure")
         self.output("  8. Quit")
 
 

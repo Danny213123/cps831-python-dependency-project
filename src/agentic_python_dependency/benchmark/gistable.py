@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from agentic_python_dependency.config import Settings
+from agentic_python_dependency.config import BenchmarkCaseSource, Settings
 from agentic_python_dependency.state import BenchmarkCase
 
 
@@ -111,24 +111,86 @@ class GistableDataset:
     def results_by_id(self, ref: str | None = None) -> dict[str, dict[str, str]]:
         return {row["id"]: row for row in self.load_results_rows(ref)}
 
-    def valid_case_ids(self, ref: str | None = None) -> list[str]:
+    def _resolve_case_source(self, case_source: BenchmarkCaseSource | None) -> BenchmarkCaseSource:
+        return case_source or self.settings.benchmark_case_source
+
+    def snippet_path_for_case(
+        self,
+        case_id: str,
+        ref: str | None = None,
+        *,
+        case_source: BenchmarkCaseSource | None = None,
+    ) -> Path | None:
         root = self.dataset_root(ref)
+        resolved_source = self._resolve_case_source(case_source)
+        primary = root / resolved_source / case_id / "snippet.py"
+        if primary.exists():
+            return primary
+        fallback_source: BenchmarkCaseSource = "dockerized-gists" if resolved_source == "all-gists" else "all-gists"
+        fallback = root / fallback_source / case_id / "snippet.py"
+        if fallback.exists():
+            return fallback
+        return None
+
+    def dockerfile_path_for_case(
+        self,
+        case_id: str,
+        ref: str | None = None,
+        *,
+        case_source: BenchmarkCaseSource | None = None,
+    ) -> Path | None:
+        root = self.dataset_root(ref)
+        resolved_source = self._resolve_case_source(case_source)
+        if resolved_source == "all-gists":
+            candidates = [root / "all-gists" / case_id / "Dockerfile"]
+        else:
+            candidates = [
+                root / "dockerized-gists" / case_id / "Dockerfile",
+                root / "all-gists" / case_id / "Dockerfile",
+            ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
+    def valid_case_ids(self, ref: str | None = None, case_source: BenchmarkCaseSource | None = None) -> list[str]:
+        root = self.dataset_root(ref)
+        resolved_source = self._resolve_case_source(case_source)
         ids = []
-        dockerized = root / "dockerized-gists"
-        for case_dir in sorted(path for path in dockerized.iterdir() if path.is_dir()):
-            if (case_dir / "snippet.py").exists() and (case_dir / "Dockerfile").exists():
-                ids.append(case_dir.name)
+        case_root = root / resolved_source
+        if not case_root.exists():
+            return ids
+        for case_dir in sorted(path for path in case_root.iterdir() if path.is_dir()):
+            has_snippet = (case_dir / "snippet.py").exists()
+            if not has_snippet:
+                continue
+            if resolved_source == "dockerized-gists" and not (case_dir / "Dockerfile").exists():
+                continue
+            ids.append(case_dir.name)
         return ids
 
-    def load_case(self, case_id: str, ref: str | None = None) -> BenchmarkCase:
+    def load_case(
+        self,
+        case_id: str,
+        ref: str | None = None,
+        case_source: BenchmarkCaseSource | None = None,
+    ) -> BenchmarkCase:
         root = self.dataset_root(ref)
-        case_root = root / "dockerized-gists" / case_id
+        resolved_source = self._resolve_case_source(case_source)
+        case_root = root / resolved_source / case_id
+        snippet_path = self.snippet_path_for_case(case_id, ref, case_source=resolved_source)
+        if snippet_path is None:
+            raise FileNotFoundError(f"Snippet not found for case {case_id} in {resolved_source} or fallback source")
+        dockerfile_path = self.dockerfile_path_for_case(case_id, ref, case_source=resolved_source)
+        if not case_root.exists():
+            case_root = snippet_path.parent
         row = self.results_by_id(ref).get(case_id, {})
         return BenchmarkCase(
             case_id=case_id,
             root_dir=case_root,
-            snippet_path=case_root / "snippet.py",
-            dockerfile_path=case_root / "Dockerfile",
+            snippet_path=snippet_path,
+            dockerfile_path=dockerfile_path,
+            case_source=resolved_source,
             initial_eval=row.get("initial-eval", ""),
             final_eval=row.get("final-eval", ""),
             source_url=row.get("url", ""),

@@ -21,6 +21,7 @@ from agentic_python_dependency.presets import (
 )
 
 ResolverName = Literal["apd", "pyego", "readpye"]
+BenchmarkCaseSource = Literal["all-gists", "dockerized-gists"]
 
 ModelProfileName = Literal[
     "gemma-moe",
@@ -59,6 +60,15 @@ def normalize_resolver(value: str | None) -> ResolverName:
     normalized = value.strip().lower()
     if normalized not in {"apd", "pyego", "readpye"}:
         raise ValueError(f"Unsupported resolver: {value}")
+    return normalized  # type: ignore[return-value]
+
+
+def normalize_benchmark_case_source(value: str | None) -> BenchmarkCaseSource:
+    if not value:
+        return "all-gists"
+    normalized = value.strip().lower()
+    if normalized not in {"all-gists", "dockerized-gists"}:
+        raise ValueError(f"Unsupported benchmark case source: {value}")
     return normalized  # type: ignore[return-value]
 
 
@@ -113,6 +123,7 @@ class Settings:
     trace_llm: bool = False
     disable_llm_cache: bool = False
     benchmark_ref: str = "665d39a2bd82543d5196555f0801ef8fd4a3ee48"
+    benchmark_case_source: BenchmarkCaseSource = "all-gists"
     preset: PresetName = "optimized"
     prompt_profile: PromptProfile = "optimized"
     default_module_grouping: GroupingMode = "canonical"
@@ -147,6 +158,7 @@ class Settings:
         experimental_bundle_override: str | None = None,
         experimental_feature_overrides: list[str] | None = None,
         experimental_feature_disable_overrides: list[str] | None = None,
+        benchmark_case_source_override: str | None = None,
     ) -> "Settings":
         root = (project_root or Path(__file__).resolve().parents[2]).resolve()
         data_dir = root / "data"
@@ -164,6 +176,9 @@ class Settings:
         readpye_python = os.getenv("APD_READPYE_PYTHON", sys.executable)
         readpye_language_dir = os.getenv("APD_READPYE_LANGDIR", "")
         resolver = normalize_resolver(resolver_override or os.getenv("APD_RESOLVER"))
+        benchmark_case_source = normalize_benchmark_case_source(
+            benchmark_case_source_override or os.getenv("APD_BENCHMARK_CASE_SOURCE")
+        )
         preset = normalize_preset(preset_override or os.getenv("APD_PRESET"))
         preset_config = get_preset_config(preset)
         prompt_profile = normalize_prompt_profile(prompt_profile_override or os.getenv("APD_PROMPT_PROFILE"))
@@ -239,6 +254,7 @@ class Settings:
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
             docker_host=os.getenv("DOCKER_HOST", ""),
             resolver=resolver,
+            benchmark_case_source=benchmark_case_source,
             model_profile=effective_model_profile,
             use_moe=use_moe,
             use_rag=use_rag,

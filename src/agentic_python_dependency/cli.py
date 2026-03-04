@@ -63,6 +63,7 @@ class BenchmarkObserver(Protocol):
         model_summary: str,
         experimental_bundle: str = "baseline",
         experimental_features: tuple[str, ...] = (),
+        benchmark_source: str = "all-gists",
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -128,6 +129,7 @@ def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
         f"- Status: `{payload.get('status', 'unknown')}`",
         f"- Resolver: `{payload.get('resolver', 'apd')}`",
         f"- Preset: `{payload.get('preset', 'optimized')}`",
+        f"- Benchmark source: `{payload.get('benchmark_source', 'all-gists')}`",
         f"- Prompt profile: `{payload.get('prompt_profile', 'optimized')}`",
         f"- Experimental bundle: `{payload.get('experimental_bundle', 'baseline')}`",
         f"- Experimental features: `{', '.join(payload.get('experimental_features', [])) if isinstance(payload.get('experimental_features', []), list) and payload.get('experimental_features', []) else 'none'}`",
@@ -178,6 +180,7 @@ class PersistentBenchmarkObserver:
             "status": "pending",
             "resolver": self.restored_state.get("resolver", "apd"),
             "preset": self.restored_state.get("preset", "optimized"),
+            "benchmark_source": self.restored_state.get("benchmark_source", "all-gists"),
             "prompt_profile": self.restored_state.get("prompt_profile", "optimized"),
             "experimental_bundle": self.restored_state.get("experimental_bundle", "baseline"),
             "experimental_features": self.restored_state.get("experimental_features", []),
@@ -224,6 +227,7 @@ class PersistentBenchmarkObserver:
         model_summary: str,
         experimental_bundle: str = "baseline",
         experimental_features: tuple[str, ...] = (),
+        benchmark_source: str = "all-gists",
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -234,6 +238,7 @@ class PersistentBenchmarkObserver:
                 "status": "running",
                 "resolver": resolver,
                 "preset": preset,
+                "benchmark_source": benchmark_source,
                 "prompt_profile": prompt_profile,
                 "experimental_bundle": experimental_bundle,
                 "experimental_features": list(experimental_features),
@@ -262,6 +267,7 @@ class PersistentBenchmarkObserver:
             model_summary=model_summary,
             experimental_bundle=experimental_bundle,
             experimental_features=experimental_features,
+            benchmark_source=benchmark_source,
             jobs=jobs,
             target=target,
             artifacts_dir=artifacts_dir,
@@ -338,6 +344,7 @@ class BenchmarkProgress:
         self.prompt_profile = "optimized"
         self.experimental_bundle = "baseline"
         self.experimental_features: tuple[str, ...] = ()
+        self.benchmark_source = "all-gists"
         self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
         self.jobs = 1
         self.target = "benchmark"
@@ -363,6 +370,7 @@ class BenchmarkProgress:
             f"Benchmark {self.run_id} {bar} "
             f"{self.completed}/{self.total} {percent:5.1f}% "
             f"resolver {self.resolver} preset {self.preset}/{self.experimental_bundle} {' '.join(status_bits)} "
+            f"source {self.benchmark_source} "
             f"elapsed {format_elapsed(time.monotonic() - self.started_at)}"
         )
 
@@ -388,6 +396,7 @@ class BenchmarkProgress:
         model_summary: str,
         experimental_bundle: str = "baseline",
         experimental_features: tuple[str, ...] = (),
+        benchmark_source: str = "all-gists",
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -403,6 +412,7 @@ class BenchmarkProgress:
         self.prompt_profile = prompt_profile
         self.experimental_bundle = experimental_bundle
         self.experimental_features = tuple(experimental_features)
+        self.benchmark_source = benchmark_source
         self.model_summary = model_summary
         self.jobs = jobs
         self.target = target
@@ -589,6 +599,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--adjudication-model",
         default=None,
         help="Override the adjudication/cleanup model name.",
+    )
+    parser.add_argument(
+        "--benchmark-source",
+        choices=["all-gists", "dockerized-gists"],
+        default=None,
+        help="Select which Gistable case collection to execute (default: all-gists).",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -810,6 +826,7 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
         "overall_status": overall_status,
         "resolver": settings.resolver,
         "preset": settings.preset,
+        "benchmark_source": settings.benchmark_case_source,
         "prompt_profile": settings.prompt_profile,
         "experimental_bundle": settings.experimental_bundle,
         "experimental_features": list(settings.experimental_features),
@@ -829,6 +846,7 @@ def doctor_command(settings: Settings, ref: str | None) -> int:
     print(f"[INFO] preset: {settings.preset}")
     print(f"[INFO] resolver: {settings.resolver}")
     print(f"[INFO] prompt_profile: {settings.prompt_profile}")
+    print(f"[INFO] benchmark_source: {settings.benchmark_case_source}")
     print(f"[INFO] experimental_bundle: {settings.experimental_bundle}")
     print(f"[INFO] experimental_features: {', '.join(settings.experimental_features) or 'none'}")
     print(f"[INFO] model_profile: {settings.model_profile}")
@@ -871,7 +889,7 @@ def run_benchmark(
     if subset:
         case_ids = dataset.load_subset(subset, ref)
     else:
-        case_ids = dataset.valid_case_ids(ref)
+        case_ids = dataset.valid_case_ids(ref, case_source=settings.benchmark_case_source)
     return run_case_batch(
         settings,
         ref,
@@ -929,13 +947,14 @@ def run_case_batch(
         model_summary=format_model_summary(settings),
         experimental_bundle=settings.experimental_bundle,
         experimental_features=settings.experimental_features,
+        benchmark_source=settings.benchmark_case_source,
         jobs=jobs,
         target=target_label,
         artifacts_dir=run_dir,
     )
 
     def process_case(case_id: str) -> dict[str, object]:
-        case = dataset.load_case(case_id, ref)
+        case = dataset.load_case(case_id, ref, case_source=settings.benchmark_case_source)
         workflow = ResolutionWorkflow(settings)
         state = workflow.initial_state_for_case(case, run_id=active_run_id)
         final_state = workflow.run(state)
@@ -1032,7 +1051,7 @@ def run_case(settings: Settings, case_id: str, ref: str | None, run_id: str | No
         case_run_dir = settings.artifacts_dir / run_id
         if case_run_dir.exists():
             shutil.rmtree(case_run_dir)
-    case = dataset.load_case(case_id, ref)
+    case = dataset.load_case(case_id, ref, case_source=settings.benchmark_case_source)
     workflow = ResolutionWorkflow(settings)
     state = workflow.initial_state_for_case(case, run_id=run_id)
     final_state = workflow.run(state)
@@ -1151,6 +1170,7 @@ def main(argv: list[str] | None = None) -> int:
         experimental_bundle_override=args.experimental_bundle,
         experimental_feature_overrides=args.experimental_feature,
         experimental_feature_disable_overrides=args.no_experimental_feature,
+        benchmark_case_source_override=args.benchmark_source,
     )
     if args.trace_llm:
         settings.trace_llm = True

@@ -595,9 +595,14 @@ def build_module_success_table(
 
     def process_case(case_id: str) -> tuple[str, list[str] | None]:
         if paper_compatible:
-            snippet_path = dataset.dataset_root(ref) / "all-gists" / case_id / "snippet.py"
+            snippet_path = dataset.snippet_path_for_case(case_id, ref, case_source="all-gists")
         else:
-            snippet_path = dataset.load_case(case_id, ref).snippet_path
+            result = result_map.get(case_id, {})
+            raw_source = str(result.get("case_source", "") or "")
+            case_source = raw_source if raw_source in {"all-gists", "dockerized-gists"} else None
+            snippet_path = dataset.snippet_path_for_case(case_id, ref, case_source=case_source)
+        if snippet_path is None:
+            return case_id, None
         source_code = safe_read_text(snippet_path)
         if source_code is None:
             return case_id, None

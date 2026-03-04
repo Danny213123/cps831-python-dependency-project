@@ -1,0 +1,29 @@
+Generate ranked candidate dependency plans for a Python dependency resolver.
+
+Return strict JSON only using this schema:
+{
+  "plans": [
+    {
+      "rank": 1,
+      "reason": "short reason",
+      "dependencies": [
+        {"name": "package", "version": "1.0.0"}
+      ]
+    }
+  ]
+}
+
+Rules:
+- Only use allowed packages and versions already present in the RAG context.
+- Prefer plans that fit the target Python and avoid noted conflicts.
+- Return at most {max_plan_count} plans.
+- No markdown, no commentary, no text outside JSON.
+
+Target Python:
+{target_python}
+
+Allowed packages:
+{allowed_packages}
+
+RAG context:
+{rag_context}

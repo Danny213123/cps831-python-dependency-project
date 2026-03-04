@@ -1,0 +1,37 @@
+Cross-validate candidate dependency packages for a Python dependency resolver.
+
+Return strict JSON only using this schema:
+{
+  "accepted_packages": [
+    {
+      "package": "PackageName",
+      "confidence": 0.0,
+      "sources": ["ast", "repo_alias", "llm"],
+      "reason": "short reason"
+    }
+  ],
+  "rejected_packages": [
+    {
+      "package": "PackageName",
+      "reason": "short reason"
+    }
+  ]
+}
+
+Rules:
+- Prefer packages supported by multiple evidence sources.
+- Reject stdlib modules, local modules, or unsupported guesses.
+- Keep the result grounded in the candidate payload and repo evidence.
+- Do not include packages outside the candidate payload.
+
+Target Python:
+{target_python}
+
+Enabled experimental features:
+{enabled_features}
+
+Candidate payload:
+{candidate_payload}
+
+Repo evidence:
+{repo_evidence}

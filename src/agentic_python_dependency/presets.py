@@ -10,6 +10,18 @@ GroupingMode = Literal["canonical", "raw"]
 CompatibilityPolicyMode = Literal["essential", "curated", "full"]
 VersionPromptMode = Literal["high_risk_only", "efficient", "optimized", "balanced", "thorough", "accuracy"]
 RagMode = Literal["disabled", "pypi", "hybrid"]
+ExperimentalBundleName = Literal["baseline", "enhanced", "full"]
+ExperimentalFeatureName = Literal[
+    "dynamic_aliases",
+    "transitive_conflicts",
+    "smart_repair_routing",
+    "multipass_inference",
+    "repair_memory",
+    "python_constraint_intersection",
+    "version_negotiation",
+    "repair_feedback_loop",
+    "dynamic_imports",
+]
 
 
 COMPATIBILITY_SENSITIVE_PACKAGES = {
@@ -23,6 +35,41 @@ COMPATIBILITY_SENSITIVE_PACKAGES = {
     "pandas",
     "tensorflow",
     "lxml",
+}
+
+EXPERIMENTAL_FEATURES: tuple[ExperimentalFeatureName, ...] = (
+    "dynamic_aliases",
+    "transitive_conflicts",
+    "smart_repair_routing",
+    "multipass_inference",
+    "repair_memory",
+    "python_constraint_intersection",
+    "version_negotiation",
+    "repair_feedback_loop",
+    "dynamic_imports",
+)
+
+EXPERIMENTAL_BUNDLE_DEFAULTS: dict[ExperimentalBundleName, tuple[ExperimentalFeatureName, ...]] = {
+    "baseline": (),
+    "enhanced": (
+        "dynamic_aliases",
+        "transitive_conflicts",
+        "smart_repair_routing",
+        "multipass_inference",
+        "repair_memory",
+        "python_constraint_intersection",
+    ),
+    "full": (
+        "dynamic_aliases",
+        "transitive_conflicts",
+        "smart_repair_routing",
+        "multipass_inference",
+        "repair_memory",
+        "python_constraint_intersection",
+        "version_negotiation",
+        "repair_feedback_loop",
+        "dynamic_imports",
+    ),
 }
 
 
@@ -44,6 +91,7 @@ class PresetConfig:
     allow_candidate_fallback_before_repair: bool = False
     repair_cycle_limit: int = 0
     repo_evidence_enabled: bool = False
+    experimental_bundle: ExperimentalBundleName = "baseline"
 
 
 PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
@@ -129,6 +177,7 @@ PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
         allow_candidate_fallback_before_repair=True,
         repair_cycle_limit=2,
         repo_evidence_enabled=True,
+        experimental_bundle="baseline",
     ),
 }
 
@@ -149,6 +198,37 @@ def normalize_prompt_profile(value: str | None) -> PromptProfile | None:
     if normalized not in {"paper", "optimized-lite", "optimized", "optimized-strict", "experimental-rag"}:
         raise ValueError(f"Unsupported prompt profile: {value}")
     return normalized  # type: ignore[return-value]
+
+
+def normalize_experimental_bundle(value: str | None) -> ExperimentalBundleName:
+    if not value:
+        return "baseline"
+    normalized = value.strip().lower()
+    if normalized not in EXPERIMENTAL_BUNDLE_DEFAULTS:
+        raise ValueError(f"Unsupported experimental bundle: {value}")
+    return normalized  # type: ignore[return-value]
+
+
+def normalize_experimental_feature(value: str) -> ExperimentalFeatureName:
+    normalized = value.strip().lower()
+    if normalized not in EXPERIMENTAL_FEATURES:
+        raise ValueError(f"Unsupported experimental feature: {value}")
+    return normalized  # type: ignore[return-value]
+
+
+def resolve_experimental_features(
+    bundle: ExperimentalBundleName,
+    *,
+    enabled: list[str] | tuple[str, ...] | None = None,
+    disabled: list[str] | tuple[str, ...] | None = None,
+) -> tuple[ExperimentalFeatureName, ...]:
+    selected = set(EXPERIMENTAL_BUNDLE_DEFAULTS[bundle])
+    for value in enabled or ():
+        selected.add(normalize_experimental_feature(value))
+    for value in disabled or ():
+        selected.discard(normalize_experimental_feature(value))
+    ordered = [feature for feature in EXPERIMENTAL_FEATURES if feature in selected]
+    return tuple(ordered)
 
 
 def get_preset_config(preset: str | None) -> PresetConfig:

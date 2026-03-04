@@ -34,7 +34,7 @@ class FakePromptRunner:
 
 
 class FakePyPIStore:
-    def __init__(self, options: dict[str, list[str]]):
+    def __init__(self, options: dict[str, list[str] | PackageVersionOptions]):
         self.options = options
 
     def get_version_options(
@@ -47,11 +47,18 @@ class FakePyPIStore:
     ) -> PackageVersionOptions:
         if package not in self.options:
             raise FileNotFoundError(package)
-        return PackageVersionOptions(package=package, versions=self.options[package])
+        configured = self.options[package]
+        if isinstance(configured, PackageVersionOptions):
+            return configured
+        return PackageVersionOptions(package=package, versions=configured)
 
     @staticmethod
     def format_prompt_block(options: list[PackageVersionOptions]) -> str:
         return "\n".join(f"{option.package}: {', '.join(option.versions)}" for option in options)
+
+    @staticmethod
+    def release_files(package: str, version: str) -> list[dict[str, str]]:
+        return [{"url": f"https://example.invalid/{package}/{version}.whl"}]
 
 
 class FakeDockerExecutor:
@@ -562,6 +569,47 @@ def test_experimental_workflow_tries_ranked_candidate_plans_before_repair(tmp_pa
     assert final_state["repair_cycle_count"] == 0
     assert (Path(final_state["artifact_dir"]) / "repo-evidence.json").exists()
     assert (Path(final_state["artifact_dir"]) / "candidate-plans.json").exists()
+
+
+def test_experimental_enhanced_stops_before_execution_when_python_constraints_are_impossible(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.preset = "experimental"
+    settings.prompt_profile = "experimental-rag"
+    settings.experimental_bundle = "enhanced"
+    settings.experimental_features = ("python_constraint_intersection",)
+    project_root = write_project(tmp_path, "import badpkg\n")
+    docker_executor = FakeDockerExecutor([])
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner(
+            {
+                "extract": [
+                    '{"packages":[{"package":"badpkg","confidence":0.99,"source":"llm","evidence":["import badpkg"]}]}'
+                ],
+                "version": [],
+                "repair": [],
+                "adjudicate": [],
+            }
+        ),
+        pypi_store=FakePyPIStore(
+            {
+                "badpkg": PackageVersionOptions(
+                    package="badpkg",
+                    versions=["1.0.0"],
+                    requires_python={"1.0.0": ">=4"},
+                )
+            }
+        ),
+        docker_executor=docker_executor,
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["final_result"]["success"] is False
+    assert final_state["final_result"]["attempts"] == 0
+    assert final_state["final_result"]["final_error_category"] == "ConstraintConflictError"
+    assert final_state["final_result"]["conflict_precheck_failed"] is True
+    assert final_state["final_result"]["python_constraint_intersection"] == ["badpkg:"]
 
 
 def test_workflow_stops_on_syntax_error(tmp_path: Path) -> None:

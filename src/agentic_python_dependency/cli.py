@@ -19,7 +19,11 @@ from uuid import uuid4
 from agentic_python_dependency.benchmark.gistable import GistableDataset
 from agentic_python_dependency.benchmark.subsets import build_smoke30
 from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
-from agentic_python_dependency.presets import PRESET_CONFIGS
+from agentic_python_dependency.presets import (
+    EXPERIMENTAL_BUNDLE_DEFAULTS,
+    EXPERIMENTAL_FEATURES,
+    PRESET_CONFIGS,
+)
 from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, build_timeline_view, summarize_run
 from agentic_python_dependency.terminal_ui import launch_terminal_ui
@@ -57,6 +61,8 @@ class BenchmarkObserver(Protocol):
         preset: str,
         prompt_profile: str,
         model_summary: str,
+        experimental_bundle: str = "baseline",
+        experimental_features: tuple[str, ...] = (),
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -123,6 +129,8 @@ def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
         f"- Resolver: `{payload.get('resolver', 'apd')}`",
         f"- Preset: `{payload.get('preset', 'optimized')}`",
         f"- Prompt profile: `{payload.get('prompt_profile', 'optimized')}`",
+        f"- Experimental bundle: `{payload.get('experimental_bundle', 'baseline')}`",
+        f"- Experimental features: `{', '.join(payload.get('experimental_features', [])) if isinstance(payload.get('experimental_features', []), list) and payload.get('experimental_features', []) else 'none'}`",
         f"- Jobs: `{payload.get('jobs', 1)}`",
         f"- Target: `{payload.get('target', 'benchmark')}`",
         f"- Progress: `{payload.get('completed', 0)}/{payload.get('total', 0)}`",
@@ -171,6 +179,8 @@ class PersistentBenchmarkObserver:
             "resolver": self.restored_state.get("resolver", "apd"),
             "preset": self.restored_state.get("preset", "optimized"),
             "prompt_profile": self.restored_state.get("prompt_profile", "optimized"),
+            "experimental_bundle": self.restored_state.get("experimental_bundle", "baseline"),
+            "experimental_features": self.restored_state.get("experimental_features", []),
             "jobs": int(self.restored_state.get("jobs", 1) or 1),
             "target": self.restored_state.get("target", "benchmark"),
             "total": int(self.restored_state.get("total", 0) or 0),
@@ -212,6 +222,8 @@ class PersistentBenchmarkObserver:
         preset: str,
         prompt_profile: str,
         model_summary: str,
+        experimental_bundle: str = "baseline",
+        experimental_features: tuple[str, ...] = (),
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -223,6 +235,8 @@ class PersistentBenchmarkObserver:
                 "resolver": resolver,
                 "preset": preset,
                 "prompt_profile": prompt_profile,
+                "experimental_bundle": experimental_bundle,
+                "experimental_features": list(experimental_features),
                 "model_summary": model_summary,
                 "jobs": jobs,
                 "target": target,
@@ -246,6 +260,8 @@ class PersistentBenchmarkObserver:
             preset=preset,
             prompt_profile=prompt_profile,
             model_summary=model_summary,
+            experimental_bundle=experimental_bundle,
+            experimental_features=experimental_features,
             jobs=jobs,
             target=target,
             artifacts_dir=artifacts_dir,
@@ -320,6 +336,8 @@ class BenchmarkProgress:
         self.resolver = "apd"
         self.preset = "optimized"
         self.prompt_profile = "optimized"
+        self.experimental_bundle = "baseline"
+        self.experimental_features: tuple[str, ...] = ()
         self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
         self.jobs = 1
         self.target = "benchmark"
@@ -344,7 +362,7 @@ class BenchmarkProgress:
         return (
             f"Benchmark {self.run_id} {bar} "
             f"{self.completed}/{self.total} {percent:5.1f}% "
-            f"resolver {self.resolver} {' '.join(status_bits)} "
+            f"resolver {self.resolver} preset {self.preset}/{self.experimental_bundle} {' '.join(status_bits)} "
             f"elapsed {format_elapsed(time.monotonic() - self.started_at)}"
         )
 
@@ -368,6 +386,8 @@ class BenchmarkProgress:
         preset: str,
         prompt_profile: str,
         model_summary: str,
+        experimental_bundle: str = "baseline",
+        experimental_features: tuple[str, ...] = (),
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -381,6 +401,8 @@ class BenchmarkProgress:
         self.resolver = resolver
         self.preset = preset
         self.prompt_profile = prompt_profile
+        self.experimental_bundle = experimental_bundle
+        self.experimental_features = tuple(experimental_features)
         self.model_summary = model_summary
         self.jobs = jobs
         self.target = target
@@ -493,6 +515,26 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["paper", "optimized-lite", "optimized", "optimized-strict", "experimental-rag"],
         default=None,
         help="Override the prompt profile independently of the selected preset.",
+    )
+    parser.add_argument(
+        "--experimental-bundle",
+        choices=sorted(EXPERIMENTAL_BUNDLE_DEFAULTS),
+        default=None,
+        help="Select the experimental feature bundle when --preset experimental is active.",
+    )
+    parser.add_argument(
+        "--experimental-feature",
+        action="append",
+        choices=list(EXPERIMENTAL_FEATURES),
+        default=[],
+        help="Enable an additional experimental feature. Repeatable.",
+    )
+    parser.add_argument(
+        "--no-experimental-feature",
+        action="append",
+        choices=list(EXPERIMENTAL_FEATURES),
+        default=[],
+        help="Disable an experimental feature from the selected bundle. Repeatable.",
     )
     parser.add_argument(
         "--model-profile",
@@ -727,6 +769,8 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
         "resolver": settings.resolver,
         "preset": settings.preset,
         "prompt_profile": settings.prompt_profile,
+        "experimental_bundle": settings.experimental_bundle,
+        "experimental_features": list(settings.experimental_features),
         "model_profile": settings.model_profile,
         "use_moe": settings.use_moe,
         "use_rag": settings.use_rag,
@@ -743,6 +787,8 @@ def doctor_command(settings: Settings, ref: str | None) -> int:
     print(f"[INFO] preset: {settings.preset}")
     print(f"[INFO] resolver: {settings.resolver}")
     print(f"[INFO] prompt_profile: {settings.prompt_profile}")
+    print(f"[INFO] experimental_bundle: {settings.experimental_bundle}")
+    print(f"[INFO] experimental_features: {', '.join(settings.experimental_features) or 'none'}")
     print(f"[INFO] model_profile: {settings.model_profile}")
     print(f"[INFO] moe: {'enabled' if settings.use_moe else 'disabled'}")
     print(f"[INFO] rag: {'enabled' if settings.use_rag else 'disabled'}")
@@ -808,6 +854,8 @@ def run_benchmark(
         preset=settings.preset,
         prompt_profile=settings.prompt_profile,
         model_summary=format_model_summary(settings),
+        experimental_bundle=settings.experimental_bundle,
+        experimental_features=settings.experimental_features,
         jobs=jobs,
         target=subset or ("full" if full else "benchmark"),
         artifacts_dir=run_dir,
@@ -998,11 +1046,20 @@ def main(argv: list[str] | None = None) -> int:
         repair_model_override=args.repair_model,
         adjudication_model_override=args.adjudication_model,
         disable_llm_cache_override=args.no_llm_cache or args.fresh_run,
+        experimental_bundle_override=args.experimental_bundle,
+        experimental_feature_overrides=args.experimental_feature,
+        experimental_feature_disable_overrides=args.no_experimental_feature,
     )
     if args.trace_llm:
         settings.trace_llm = True
     if settings.preset == "experimental" and settings.resolver != "apd":
         parser.error("The experimental preset is only supported with the apd resolver.")
+    if (
+        args.experimental_bundle is not None
+        or args.experimental_feature
+        or args.no_experimental_feature
+    ) and settings.preset != "experimental":
+        parser.error("Experimental bundles and features are only supported with --preset experimental.")
 
     if args.command == "doctor":
         return doctor_command(settings, args.ref)

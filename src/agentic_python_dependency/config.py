@@ -6,13 +6,17 @@ from pathlib import Path
 from typing import Literal
 
 from agentic_python_dependency.presets import (
+    ExperimentalBundleName,
+    ExperimentalFeatureName,
     GroupingMode,
     PresetName,
     PromptProfile,
     RagMode,
     get_preset_config,
+    normalize_experimental_bundle,
     normalize_preset,
     normalize_prompt_profile,
+    resolve_experimental_features,
 )
 
 ResolverName = Literal["apd", "pyego", "readpye"]
@@ -76,6 +80,8 @@ class Settings:
     benchmark_dir: Path
     pypi_cache_dir: Path
     llm_cache_dir: Path
+    package_metadata_dir: Path
+    workspace_memory_dir: Path
     prompts_dir: Path
     ollama_base_url: str = "http://127.0.0.1:11434"
     docker_host: str = ""
@@ -109,6 +115,8 @@ class Settings:
     allow_candidate_fallback_before_repair: bool = False
     repair_cycle_limit: int = 0
     repo_evidence_enabled: bool = False
+    experimental_bundle: ExperimentalBundleName = "baseline"
+    experimental_features: tuple[ExperimentalFeatureName, ...] = ()
 
     @classmethod
     def from_env(
@@ -129,6 +137,9 @@ class Settings:
         repair_model_override: str | None = None,
         adjudication_model_override: str | None = None,
         disable_llm_cache_override: bool | None = None,
+        experimental_bundle_override: str | None = None,
+        experimental_feature_overrides: list[str] | None = None,
+        experimental_feature_disable_overrides: list[str] | None = None,
     ) -> "Settings":
         root = (project_root or Path(__file__).resolve().parents[2]).resolve()
         data_dir = root / "data"
@@ -136,11 +147,31 @@ class Settings:
         benchmark_dir = data_dir / "benchmarks"
         pypi_cache_dir = data_dir / "pypi_cache"
         llm_cache_dir = data_dir / "llm_cache"
+        package_metadata_dir = data_dir / "package_metadata"
+        workspace_memory_dir = data_dir / "experimental_memory"
         prompts_dir = root / "src" / "agentic_python_dependency" / "prompts"
         resolver = normalize_resolver(resolver_override or os.getenv("APD_RESOLVER"))
         preset = normalize_preset(preset_override or os.getenv("APD_PRESET"))
         preset_config = get_preset_config(preset)
         prompt_profile = normalize_prompt_profile(prompt_profile_override or os.getenv("APD_PROMPT_PROFILE"))
+        experimental_bundle = normalize_experimental_bundle(
+            experimental_bundle_override or os.getenv("APD_EXPERIMENTAL_BUNDLE") or preset_config.experimental_bundle
+        )
+        env_enabled_features = [
+            value.strip()
+            for value in os.getenv("APD_EXPERIMENTAL_FEATURES", "").split(",")
+            if value.strip()
+        ]
+        env_disabled_features = [
+            value.strip()
+            for value in os.getenv("APD_NO_EXPERIMENTAL_FEATURES", "").split(",")
+            if value.strip()
+        ]
+        experimental_features = resolve_experimental_features(
+            experimental_bundle,
+            enabled=[*(experimental_feature_overrides or []), *env_enabled_features],
+            disabled=[*(experimental_feature_disable_overrides or []), *env_disabled_features],
+        )
         env_disable_llm_cache = os.getenv("APD_DISABLE_LLM_CACHE", "").lower() in TRUE_VALUES
         env_use_moe = parse_optional_bool(os.getenv("APD_USE_MOE", ""))
         env_use_rag = parse_optional_bool(os.getenv("APD_USE_RAG", ""))
@@ -183,6 +214,8 @@ class Settings:
             benchmark_dir=benchmark_dir,
             pypi_cache_dir=pypi_cache_dir,
             llm_cache_dir=llm_cache_dir,
+            package_metadata_dir=package_metadata_dir,
+            workspace_memory_dir=workspace_memory_dir,
             prompts_dir=prompts_dir,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
             docker_host=os.getenv("DOCKER_HOST", ""),
@@ -209,6 +242,8 @@ class Settings:
             allow_candidate_fallback_before_repair=preset_config.allow_candidate_fallback_before_repair,
             repair_cycle_limit=preset_config.repair_cycle_limit,
             repo_evidence_enabled=preset_config.repo_evidence_enabled,
+            experimental_bundle=experimental_bundle,
+            experimental_features=experimental_features if preset == "experimental" else (),
         )
         settings.ensure_directories()
         return settings
@@ -221,6 +256,10 @@ class Settings:
             self.pypi_cache_dir,
             self.pypi_cache_dir / "raw",
             self.llm_cache_dir,
+            self.package_metadata_dir,
+            self.package_metadata_dir / "raw",
+            self.package_metadata_dir / "parsed",
+            self.workspace_memory_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
 
@@ -250,3 +289,6 @@ class Settings:
             "repair": self.stage_model("repair"),
             "adjudicate": self.stage_model("adjudicate"),
         }
+
+    def experimental_feature_enabled(self, feature: ExperimentalFeatureName | str) -> bool:
+        return feature in self.experimental_features

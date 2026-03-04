@@ -194,6 +194,8 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     use_langchain = bool(results[0].get("use_langchain", True)) if results else True
     rag_mode = str(results[0].get("rag_mode", "pypi")) if results else "pypi"
     structured_prompting = bool(results[0].get("structured_prompting", False)) if results else False
+    experimental_bundle = str(results[0].get("experimental_bundle", "baseline")) if results else "baseline"
+    experimental_features = list(results[0].get("experimental_features", [])) if results else []
     extraction_model = results[0].get("extraction_model", "gemma3:4b") if results else "gemma3:4b"
     runner_model = results[0].get("runner_model", "gemma3:12b") if results else "gemma3:12b"
     version_model = results[0].get("version_model", runner_model) if results else "gemma3:12b"
@@ -204,6 +206,18 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     selected_candidate_ranks = [float(item.get("selected_candidate_rank", 0) or 0) for item in results if item.get("selected_candidate_rank")]
     repair_cycle_count = sum(int(item.get("repair_cycle_count", 0) or 0) for item in results)
     structured_prompt_failures = sum(int(item.get("structured_prompt_failures", 0) or 0) for item in results)
+    conflict_precheck_failures = sum(1 for item in results if bool(item.get("conflict_precheck_failed", False)))
+    python_constraint_blocked_cases = sum(
+        1 for item in results if bool(item.get("conflict_precheck_failed", False)) and item.get("python_constraint_intersection")
+    )
+    dynamic_alias_hits = sum(int(item.get("dynamic_alias_hits", 0) or 0) for item in results)
+    repair_memory_hits = sum(int(item.get("repair_memory_hits", 0) or 0) for item in results)
+    repeated_strategy_avoidance_count = sum(
+        1 for item in results if str(item.get("strategy_type", "")).strip() in {"drop_package", "transitive_conflict_avoidance"}
+    )
+    version_negotiation_case_count = sum(1 for item in results if bool(item.get("version_negotiation_used", False)))
+    dynamic_import_case_count = sum(1 for item in results if bool(item.get("dynamic_import_candidates", False)))
+    feedback_memory_case_count = sum(1 for item in results if bool(item.get("feedback_memory_used", False)))
     for item in results:
         key = f'{item.get("initial_eval", "")}->{item.get("final_error_category", "Success" if item["success"] else "UnknownError")}'
         transitions[key] = transitions.get(key, 0) + 1
@@ -230,6 +244,8 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         use_langchain=use_langchain,
         rag_mode=rag_mode,
         structured_prompting=structured_prompting,
+        experimental_bundle=experimental_bundle,
+        experimental_features=experimental_features,
         extraction_model=extraction_model,
         runner_model=runner_model,
         version_model=version_model,
@@ -246,6 +262,14 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         ),
         repair_cycle_count=repair_cycle_count,
         structured_prompt_failures=structured_prompt_failures,
+        conflict_precheck_failures=conflict_precheck_failures,
+        python_constraint_blocked_cases=python_constraint_blocked_cases,
+        dynamic_alias_hit_rate=(dynamic_alias_hits / total_cases) if total_cases else 0.0,
+        repair_memory_hit_rate=(repair_memory_hits / total_cases) if total_cases else 0.0,
+        repeated_strategy_avoidance_count=repeated_strategy_avoidance_count,
+        version_negotiation_case_count=version_negotiation_case_count,
+        dynamic_import_case_count=dynamic_import_case_count,
+        feedback_memory_case_count=feedback_memory_case_count,
     )
     write_summary_artifacts(run_dir, results, summary)
     build_timeline_view(run_dir)
@@ -291,6 +315,8 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Resolver: `{summary.resolver}`",
         f"- Preset: `{summary.preset}`",
         f"- Prompt profile: `{summary.prompt_profile}`",
+        f"- Experimental bundle: `{summary.experimental_bundle}`",
+        f"- Experimental features: `{', '.join(summary.experimental_features) or 'none'}`",
         f"- Model profile: `{summary.model_profile}`",
         f"- Runtime: `{'moe' if summary.use_moe else 'single'}` / `{'rag' if summary.use_rag else 'no-rag'}` / `{'langchain' if summary.use_langchain else 'direct'}`",
         f"- RAG mode: `{summary.rag_mode}`",
@@ -305,6 +331,14 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Average selected candidate rank: `{summary.average_candidate_rank_selected:.2f}`",
         f"- Repair cycles: `{summary.repair_cycle_count}`",
         f"- Structured prompt failures: `{summary.structured_prompt_failures}`",
+        f"- Conflict precheck failures: `{summary.conflict_precheck_failures}`",
+        f"- Python constraint blocked cases: `{summary.python_constraint_blocked_cases}`",
+        f"- Dynamic alias hit rate: `{summary.dynamic_alias_hit_rate:.2%}`",
+        f"- Repair memory hit rate: `{summary.repair_memory_hit_rate:.2%}`",
+        f"- Repeated strategy avoidance count: `{summary.repeated_strategy_avoidance_count}`",
+        f"- Version negotiation cases: `{summary.version_negotiation_case_count}`",
+        f"- Dynamic import cases: `{summary.dynamic_import_case_count}`",
+        f"- Feedback memory cases: `{summary.feedback_memory_case_count}`",
         f"- Time to finish: `{summary.total_wall_clock_human}`",
     ]
     (run_dir / "leaderboard.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -342,6 +376,12 @@ def write_results_artifacts(run_dir: Path, results: list[dict[str, Any]]) -> Non
                 "final_error_category": row.get("final_error_category", ""),
                 "dependencies": ", ".join(str(item) for item in row.get("dependencies", [])),
                 "dependency_reason": row.get("dependency_reason", ""),
+                "experimental_bundle": row.get("experimental_bundle", "baseline"),
+                "experimental_features": ",".join(str(item) for item in row.get("experimental_features", [])),
+                "selected_candidate_rank": row.get("selected_candidate_rank", ""),
+                "strategy_type": row.get("strategy_type", ""),
+                "retry_severity": row.get("retry_severity", ""),
+                "conflict_precheck_failed": row.get("conflict_precheck_failed", False),
                 "wall_clock_seconds": row.get("wall_clock_seconds", 0.0),
                 "started_at": row.get("started_at", ""),
                 "finished_at": row.get("finished_at", ""),
@@ -363,6 +403,12 @@ def write_results_artifacts(run_dir: Path, results: list[dict[str, Any]]) -> Non
                 "final_error_category",
                 "dependencies",
                 "dependency_reason",
+                "experimental_bundle",
+                "experimental_features",
+                "selected_candidate_rank",
+                "strategy_type",
+                "retry_severity",
+                "conflict_precheck_failed",
                 "wall_clock_seconds",
                 "started_at",
                 "finished_at",

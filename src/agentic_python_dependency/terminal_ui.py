@@ -17,12 +17,12 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.shortcuts import button_dialog, input_dialog, message_dialog, radiolist_dialog
+from prompt_toolkit.shortcuts import button_dialog, checkboxlist_dialog, input_dialog, message_dialog, radiolist_dialog
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Box, Frame
 
 from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
-from agentic_python_dependency.presets import PRESET_CONFIGS
+from agentic_python_dependency.presets import EXPERIMENTAL_BUNDLE_DEFAULTS, EXPERIMENTAL_FEATURES, PRESET_CONFIGS
 
 
 ActionCallback = Callable[..., int]
@@ -83,6 +83,8 @@ class TerminalBenchmarkDashboard:
         self.resolver = "apd"
         self.preset = "optimized"
         self.prompt_profile = "optimized"
+        self.experimental_bundle = "baseline"
+        self.experimental_features: tuple[str, ...] = ()
         self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
         self.jobs = 1
         self.target = "benchmark"
@@ -113,6 +115,8 @@ class TerminalBenchmarkDashboard:
         preset: str,
         prompt_profile: str,
         model_summary: str,
+        experimental_bundle: str = "baseline",
+        experimental_features: tuple[str, ...] = (),
         jobs: int,
         target: str,
         artifacts_dir: Path,
@@ -126,6 +130,8 @@ class TerminalBenchmarkDashboard:
         self.resolver = resolver
         self.preset = preset
         self.prompt_profile = prompt_profile
+        self.experimental_bundle = experimental_bundle
+        self.experimental_features = tuple(experimental_features)
         self.model_summary = model_summary
         self.jobs = jobs
         self.target = target
@@ -238,6 +244,7 @@ class TerminalBenchmarkDashboard:
             ("class:label", "Target       "), ("class:value", f"{self.target}\n"),
             ("class:label", "Resolver     "), ("class:value", f"{self.resolver}\n"),
             ("class:label", "Preset       "), ("class:value", f"{self.preset}\n"),
+            ("class:label", "Exp bundle   "), ("class:value", f"{self.experimental_bundle}\n"),
             ("class:label", "Prompt       "), ("class:value", f"{self.prompt_profile}\n"),
             ("class:label", "Models       "), ("class:value", f"{getattr(self, 'model_summary', 'default')}\n"),
             ("class:label", "Jobs         "), ("class:value", f"{self.jobs}\n"),
@@ -252,6 +259,13 @@ class TerminalBenchmarkDashboard:
             ("", "    "),
             ("class:accent", f"Elapsed: {_format_elapsed(time.monotonic() - self.started_at)}\n"),
         ]
+        if self.experimental_features:
+            fragments.extend(
+                [
+                    ("class:label", "Exp feats    "),
+                    ("class:value", f"{', '.join(self.experimental_features)}\n"),
+                ]
+            )
         if self._cancel_requested:
             fragments.extend(
                 [
@@ -293,6 +307,7 @@ class TerminalBenchmarkDashboard:
             f"Target: {self.target}",
             f"Resolver: {self.resolver}",
             f"Preset: {self.preset}",
+            f"Experimental bundle: {self.experimental_bundle}",
             f"Prompt profile: {self.prompt_profile}",
             f"Models: {getattr(self, 'model_summary', 'default')}",
             f"Jobs: {self.jobs}",
@@ -301,6 +316,8 @@ class TerminalBenchmarkDashboard:
             f"Progress: {_format_progress_bar(self.completed, self.total)} {self.completed}/{self.total} ({percent:5.1f}%)",
             f"Successes: {self.successes}    Failures: {self.failures}    Elapsed: {_format_elapsed(time.monotonic() - self.started_at)}",
         ]
+        if self.experimental_features:
+            lines.append(f"Experimental features: {', '.join(self.experimental_features)}")
         if self._cancel_requested:
             lines.append("Stop requested: APD will stop after the current active cases finish.")
         if self.current_cases:
@@ -362,6 +379,7 @@ class TerminalUI:
                     ("Resolver", "v"),
                     ("Preset", "p"),
                     ("Models", "m"),
+                    ("Experimental", "x"),
                     ("Runtime", "r"),
                     ("Fresh run", "f"),
                     ("Trace", "t"),
@@ -416,6 +434,9 @@ class TerminalUI:
             return 0
         if choice == "m":
             self._choose_model_profile()
+            return 0
+        if choice == "x":
+            self._configure_experimental()
             return 0
         if choice == "r":
             self._configure_runtime()
@@ -482,6 +503,14 @@ class TerminalUI:
             self.settings.prompt_profile = preset_config.prompt_profile
             self.settings.max_attempts = preset_config.max_attempts
             self.settings.default_module_grouping = preset_config.reporting_grouping
+        saved_bundle = str(run_entry.get("experimental_bundle", "") or "")
+        if saved_bundle in EXPERIMENTAL_BUNDLE_DEFAULTS:
+            self.settings.experimental_bundle = saved_bundle
+        saved_features = run_entry.get("experimental_features", [])
+        if isinstance(saved_features, list):
+            self.settings.experimental_features = tuple(
+                feature for feature in saved_features if feature in EXPERIMENTAL_FEATURES
+            )
         if not self._validate_runtime_selection():
             return 1
         target = str(run_entry.get("target", "benchmark") or "benchmark")
@@ -627,7 +656,11 @@ class TerminalUI:
             jobs = int(state.get("jobs", 1) or 1)
             resolver = str(state.get("resolver", "apd") or "apd")
             preset = str(state.get("preset", "optimized") or "optimized")
-            label = f"{run_id} [{status}] {completed}/{total} target={target} jobs={jobs} resolver={resolver} preset={preset}"
+            experimental_bundle = str(state.get("experimental_bundle", "baseline") or "baseline")
+            label = (
+                f"{run_id} [{status}] {completed}/{total} target={target} jobs={jobs} "
+                f"resolver={resolver} preset={preset}/{experimental_bundle}"
+            )
             entries.append(
                 {
                     "run_id": run_id,
@@ -639,6 +672,8 @@ class TerminalUI:
                     "jobs": jobs,
                     "resolver": resolver,
                     "preset": preset,
+                    "experimental_bundle": experimental_bundle,
+                    "experimental_features": state.get("experimental_features", []),
                 }
             )
         return entries
@@ -738,6 +773,9 @@ class TerminalUI:
         self.settings.default_module_grouping = preset_config.reporting_grouping
         if selected == "experimental" and self.settings.resolver != "apd":
             self.settings.resolver = "apd"
+        if selected != "experimental":
+            self.settings.experimental_bundle = "baseline"
+            self.settings.experimental_features = ()
         self._show_status_dialog(f"Preset switched to {selected}.")
 
     def _choose_resolver(self) -> None:
@@ -772,7 +810,47 @@ class TerminalUI:
             self.settings.prompt_profile = preset_config.prompt_profile
             self.settings.max_attempts = preset_config.max_attempts
             self.settings.default_module_grouping = preset_config.reporting_grouping
+            self.settings.experimental_bundle = "baseline"
+            self.settings.experimental_features = ()
         self._show_status_dialog(f"Resolver switched to {selected}.")
+
+    def _configure_experimental(self) -> None:
+        if self.settings.preset != "experimental":
+            self._show_status_dialog("Experimental controls are only available when the preset is experimental.")
+            return
+        if self._use_prompt_toolkit:
+            bundle = radiolist_dialog(
+                title="Experimental bundle",
+                text="Choose the experimental bundle for the next runs.",
+                values=[(bundle_name, bundle_name) for bundle_name in EXPERIMENTAL_BUNDLE_DEFAULTS],
+                default=self.settings.experimental_bundle,
+                style=UI_STYLE,
+            ).run()
+            if bundle is None:
+                return
+            selected_features = checkboxlist_dialog(
+                title="Experimental features",
+                text="Enable or disable experimental feature flags.",
+                values=[(feature, feature) for feature in EXPERIMENTAL_FEATURES],
+                default_values=list(self.settings.experimental_features or EXPERIMENTAL_BUNDLE_DEFAULTS[bundle]),
+                style=UI_STYLE,
+            ).run()
+            if selected_features is None:
+                return
+        else:
+            bundle = self._prompt_choice("Experimental bundle", list(EXPERIMENTAL_BUNDLE_DEFAULTS), self.settings.experimental_bundle)
+            default_value = ",".join(self.settings.experimental_features or EXPERIMENTAL_BUNDLE_DEFAULTS[bundle])
+            raw_features = self._prompt_optional("Experimental features (comma-separated)", default_value)
+            selected_features = tuple(
+                feature.strip() for feature in raw_features.split(",") if feature.strip() in EXPERIMENTAL_FEATURES
+            )
+        self.settings.experimental_bundle = bundle
+        self.settings.experimental_features = tuple(
+            feature for feature in selected_features if feature in EXPERIMENTAL_FEATURES
+        )
+        self._show_status_dialog(
+            f"Experimental bundle set to {bundle} with {len(self.settings.experimental_features)} feature(s)."
+        )
 
     def _choose_model_profile(self) -> None:
         options = [(profile, profile) for profile in MODEL_PROFILE_DEFAULTS if profile != "custom"]
@@ -907,6 +985,8 @@ class TerminalUI:
             f"<b>Preset:</b> {self.settings.preset}\n"
             f"<b>Resolver:</b> {self.settings.resolver}\n"
             f"<b>Model bundle:</b> {self.settings.model_profile}\n"
+            f"<b>Experimental bundle:</b> {self.settings.experimental_bundle}\n"
+            f"<b>Experimental features:</b> {', '.join(self.settings.experimental_features) or 'none'}\n"
             f"<b>MoE:</b> {'on' if self.settings.use_moe else 'off'}\n"
             f"<b>RAG:</b> {'on' if self.settings.use_rag else 'off'}\n"
             f"<b>LangChain:</b> {'on' if self.settings.use_langchain else 'off'}\n"
@@ -983,6 +1063,8 @@ class TerminalUI:
         self.output(f"Preset: {self.settings.preset}")
         self.output(f"Resolver: {self.settings.resolver}")
         self.output(f"Model bundle: {self.settings.model_profile}")
+        self.output(f"Experimental bundle: {self.settings.experimental_bundle}")
+        self.output(f"Experimental features: {', '.join(self.settings.experimental_features) or 'none'}")
         self.output(f"MoE: {'on' if self.settings.use_moe else 'off'}")
         self.output(f"RAG: {'on' if self.settings.use_rag else 'off'}")
         self.output(f"LangChain: {'on' if self.settings.use_langchain else 'off'}")
@@ -1010,6 +1092,7 @@ class TerminalUI:
         self.output("  V. Change resolver")
         self.output("  P. Change preset")
         self.output("  M. Change model bundle")
+        self.output("  X. Configure experimental bundle/features")
         self.output("  R. Runtime controls")
         self.output("  F. Toggle fresh run / no LLM cache")
         self.output("  T. Toggle LLM tracing")

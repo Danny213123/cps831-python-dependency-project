@@ -46,6 +46,41 @@ def parse_experimental_package_payload(raw_output: str) -> list[dict[str, Any]]:
     return parsed
 
 
+def parse_cross_validation_payload(raw_output: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    payload = _load_json(raw_output)
+    accepted = payload.get("accepted_packages", [])
+    rejected = payload.get("rejected_packages", [])
+    if not isinstance(accepted, list) or not isinstance(rejected, list):
+        raise StructuredOutputError("'accepted_packages' and 'rejected_packages' must be lists")
+    parsed_accepted = []
+    for item in accepted:
+        if not isinstance(item, dict):
+            raise StructuredOutputError("Accepted package entries must be objects")
+        package = str(item.get("package", "")).strip()
+        if not package:
+            raise StructuredOutputError("Accepted package missing 'package'")
+        sources = item.get("sources", [])
+        if not isinstance(sources, list):
+            raise StructuredOutputError("'sources' must be a list")
+        parsed_accepted.append(
+            {
+                "package": package,
+                "confidence": float(item.get("confidence", 0.0) or 0.0),
+                "sources": [str(source) for source in sources if str(source).strip()],
+                "reason": str(item.get("reason", "")).strip(),
+            }
+        )
+    parsed_rejected = []
+    for item in rejected:
+        if not isinstance(item, dict):
+            raise StructuredOutputError("Rejected package entries must be objects")
+        package = str(item.get("package", "")).strip()
+        if not package:
+            raise StructuredOutputError("Rejected package missing 'package'")
+        parsed_rejected.append({"package": package, "reason": str(item.get("reason", "")).strip()})
+    return parsed_accepted, parsed_rejected
+
+
 def parse_candidate_plan_payload(
     raw_output: str,
     *,
@@ -103,3 +138,18 @@ def parse_repair_plan_payload(
         allowed_versions=allowed_versions,
     )
     return repair_applicable, plans
+
+
+def parse_version_negotiation_payload(
+    raw_output: str,
+    *,
+    allowed_packages: set[str],
+    allowed_versions: dict[str, set[str]],
+) -> list[CandidatePlan]:
+    payload = _load_json(raw_output)
+    bundles = payload.get("selected_bundles", [])
+    return parse_candidate_plan_payload(
+        json.dumps({"plans": bundles}),
+        allowed_packages=allowed_packages,
+        allowed_versions=allowed_versions,
+    )

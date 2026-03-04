@@ -4,7 +4,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-from agentic_python_dependency.presets import GroupingMode, PresetName, PromptProfile
+from agentic_python_dependency.presets import (
+    ExperimentalBundleName,
+    ExperimentalFeatureName,
+    GroupingMode,
+    PresetName,
+    PromptProfile,
+)
 from agentic_python_dependency.config import ResolverName
 
 
@@ -37,6 +43,15 @@ class PackageCandidate:
 
 
 @dataclass(slots=True)
+class InferenceCandidate:
+    package: str
+    confidence: float
+    sources: list[str] = field(default_factory=list)
+    reason: str = ""
+    accepted: bool = False
+
+
+@dataclass(slots=True)
 class CandidateDependency:
     name: str
     version: str
@@ -60,6 +75,55 @@ class PackageVersionOptions:
     upload_time: dict[str, str] = field(default_factory=dict)
     policy_notes: list[str] = field(default_factory=list)
     requires_dist: dict[str, list[str]] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class ConflictNote:
+    package: str
+    related_package: str
+    kind: str
+    reason: str
+    severity: str = "warning"
+
+
+@dataclass(slots=True)
+class ConstraintPack:
+    target_python: str
+    candidate_versions: dict[str, list[str]] = field(default_factory=dict)
+    requires_python: dict[str, dict[str, str]] = field(default_factory=dict)
+    requires_dist: dict[str, dict[str, list[str]]] = field(default_factory=dict)
+    conflict_notes: list[ConflictNote] = field(default_factory=list)
+    package_conflict_matrix: dict[str, list[str]] = field(default_factory=dict)
+    python_intersection: list[str] = field(default_factory=list)
+    python_intersection_valid: bool = True
+    conflict_precheck_failed: bool = False
+
+
+@dataclass(slots=True)
+class RepairStrategyRecord:
+    strategy_type: str
+    delta_from_previous: list[str] = field(default_factory=list)
+    failure_category: str = ""
+    failure_signature: str = ""
+    result: str = ""
+
+
+@dataclass(slots=True)
+class RepairMemorySummary:
+    recent_strategies: list[str] = field(default_factory=list)
+    blocked_strategy_families: list[str] = field(default_factory=list)
+    orthogonal_hints: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class RetryDecision:
+    category: str
+    severity: str
+    repair_allowed: bool
+    candidate_fallback_allowed: bool
+    repair_retry_budget: int
+    native_retry_budget: int
+    reason: str = ""
 
 
 @dataclass(slots=True)
@@ -100,6 +164,7 @@ class ExecutionOutcome:
     run_log: str = ""
     image_tag: str = ""
     dependency_retryable: bool = False
+    retry_severity: str = "terminal"
 
 
 @dataclass(slots=True)
@@ -136,6 +201,16 @@ class BenchmarkSummary:
     average_candidate_rank_selected: float = 0.0
     repair_cycle_count: int = 0
     structured_prompt_failures: int = 0
+    experimental_bundle: str = "baseline"
+    experimental_features: list[str] = field(default_factory=list)
+    conflict_precheck_failures: int = 0
+    python_constraint_blocked_cases: int = 0
+    dynamic_alias_hit_rate: float = 0.0
+    repair_memory_hit_rate: float = 0.0
+    repeated_strategy_avoidance_count: int = 0
+    version_negotiation_case_count: int = 0
+    dynamic_import_case_count: int = 0
+    feedback_memory_case_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -177,11 +252,24 @@ class ResolutionState(TypedDict, total=False):
     resolver: ResolverName
     preset: PresetName
     prompt_profile: PromptProfile
+    experimental_bundle: ExperimentalBundleName
+    experimental_features: tuple[ExperimentalFeatureName, ...]
     dependency_reason: str
     candidate_provenance: dict[str, str]
     repair_outcome: str
     applied_compatibility_policy: dict[str, list[str]]
     version_selection_source: str
+    inference_candidates: list[InferenceCandidate]
+    repo_alias_candidates: dict[str, list[str]]
+    dynamic_import_candidates: list[str]
+    constraint_pack: ConstraintPack | None
+    repair_memory_summary: RepairMemorySummary | None
+    retry_decision: RetryDecision | None
+    strategy_history: list[RepairStrategyRecord]
+    feedback_memory_hits: int
+    version_conflict_notes: list[ConflictNote]
+    python_constraint_intersection: list[str]
+    top_level_module_map: dict[str, list[str]]
     repo_evidence: dict[str, Any]
     pypi_evidence: dict[str, Any]
     rag_context: dict[str, Any]

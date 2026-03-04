@@ -9,6 +9,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+- Experimental v2 bundle/feature layer for the `experimental` preset, with `baseline`, `enhanced`, and `full` bundle modes plus per-feature overrides for dynamic aliases, transitive conflicts, smart repair routing, multipass inference, repair memory, Python constraint intersection, version negotiation, repair feedback, and dynamic imports.
+- Workspace-local experimental helpers for package metadata extraction, repo-derived alias discovery, dynamic import detection, retry-policy routing, constraint-pack generation, candidate-bundle generation, and repair feedback memory.
+- New experimental-rag prompt templates for package inference, package cross-validation, candidate plan generation, repair memory-aware repair planning, and version negotiation.
+- Additional experimental artifacts including repo alias maps, top-level module maps, constraint packs, conflict notes, Python constraints, package candidate cross-validation, repair-memory summaries, strategy histories, candidate bundles, version negotiation results, dynamic imports, and error-routing reports.
 - Experimental APD-only preset with a hybrid-RAG workflow that gathers repo evidence, builds structured retrieval context, generates ranked candidate dependency plans, tries those plans before repair, and records repo/PyPI/RAG/plan artifacts for each case.
 - Experimental prompt profile `experimental-rag` with strict JSON outputs for package inference, candidate-plan generation, and repair planning.
 - Repo-evidence, RAG-context, and structured-output helper modules to support evidence-driven experimental runs without hardcoded package-specific final answers.
@@ -37,6 +41,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Extended the experimental workflow so enhanced/full runs can perform repo-derived alias discovery, multipass package inference, version-specific metadata retrieval, constraint prechecks, feedback-memory loading, candidate-bundle generation, and version negotiation before execution.
+- Extended the interactive UI and CLI to configure experimental bundles/features explicitly and preserve that configuration in run state, dashboards, and resumed runs.
+- Extended reporting and result exports with experimental bundle, feature, retry-severity, strategy-type, conflict-precheck, and related experimental accuracy metrics.
 - Replaced the initial starter scaffold with a functional `agentic_python_dependency` package and benchmark-oriented project structure.
 - Improved benchmark Dockerfile patching to remove original Python package install lines and inject a controlled dependency installation sequence.
 - Added Python 2 compatibility heuristics for release selection, including stricter cutoff rules and stable-release preference.
@@ -73,6 +80,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+- Fixed experimental classification routing so legacy experimental-baseline behavior does not silently inherit the new smart-repair retry policy unless that feature is explicitly enabled.
 - Fixed host runtime defaults for Ollama and Docker so local execution works outside Compose.
 - Fixed SSL certificate handling for Gistable fetches and PyPI metadata downloads on macOS environments with incomplete trust stores.
 - Fixed PyPI 404 handling so unresolved package names do not abort a benchmark run.

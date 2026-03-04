@@ -29,8 +29,32 @@ def build_experimental_rag_context(
         )
     return {
         "target_python": state.get("target_python", ""),
+        "experimental_bundle": state.get("experimental_bundle", "baseline"),
+        "experimental_features": list(state.get("experimental_features", ())),
         "imports": state.get("extracted_imports", []),
+        "dynamic_imports": state.get("dynamic_import_candidates", []),
         "inferred_packages": state.get("inferred_packages", []),
+        "repo_alias_candidates": state.get("repo_alias_candidates", {}),
+        "python_constraint_intersection": state.get("python_constraint_intersection", []),
+        "version_conflict_notes": [
+            {
+                "package": note.package,
+                "related_package": note.related_package,
+                "kind": note.kind,
+                "reason": note.reason,
+                "severity": note.severity,
+            }
+            for note in state.get("version_conflict_notes", [])
+        ],
+        "repair_memory_summary": (
+            {
+                "recent_strategies": state["repair_memory_summary"].recent_strategies,
+                "blocked_strategy_families": state["repair_memory_summary"].blocked_strategy_families,
+                "orthogonal_hints": state["repair_memory_summary"].orthogonal_hints,
+            }
+            if state.get("repair_memory_summary") is not None
+            else {}
+        ),
         "repo_evidence": repo_evidence,
         "pypi_evidence": pypi_evidence,
         "version_summaries": version_summaries,

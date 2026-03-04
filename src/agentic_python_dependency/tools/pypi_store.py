@@ -145,6 +145,11 @@ class PyPIMetadataStore:
         self._index_payload(package, payload)
         return payload
 
+    def release_files(self, package: str, version: str) -> list[dict[str, Any]]:
+        payload = self.fetch_package_json(package)
+        files = payload.get("releases", {}).get(version, [])
+        return [item for item in files if isinstance(item, dict)]
+
     def _index_payload(self, package: str, payload: dict[str, Any]) -> None:
         if not self._db_enabled:
             return

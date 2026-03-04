@@ -79,6 +79,7 @@ class TerminalBenchmarkDashboard:
         self.completed = 0
         self.successes = 0
         self.failures = 0
+        self.resolver = "apd"
         self.preset = "optimized"
         self.prompt_profile = "optimized"
         self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
@@ -107,6 +108,7 @@ class TerminalBenchmarkDashboard:
         completed: int,
         successes: int,
         failures: int,
+        resolver: str,
         preset: str,
         prompt_profile: str,
         model_summary: str,
@@ -119,6 +121,7 @@ class TerminalBenchmarkDashboard:
         self.completed = completed
         self.successes = successes
         self.failures = failures
+        self.resolver = resolver
         self.preset = preset
         self.prompt_profile = prompt_profile
         self.model_summary = model_summary
@@ -230,6 +233,7 @@ class TerminalBenchmarkDashboard:
             ("class:muted", "Use Ctrl+C only if you intend to stop the benchmark process itself.\n\n"),
             ("class:label", "Run ID       "), ("class:value", f"{self.run_id}\n"),
             ("class:label", "Target       "), ("class:value", f"{self.target}\n"),
+            ("class:label", "Resolver     "), ("class:value", f"{self.resolver}\n"),
             ("class:label", "Preset       "), ("class:value", f"{self.preset}\n"),
             ("class:label", "Prompt       "), ("class:value", f"{self.prompt_profile}\n"),
             ("class:label", "Models       "), ("class:value", f"{getattr(self, 'model_summary', 'default')}\n"),
@@ -284,6 +288,7 @@ class TerminalBenchmarkDashboard:
             "=" * 80,
             f"Run ID: {self.run_id}",
             f"Target: {self.target}",
+            f"Resolver: {self.resolver}",
             f"Preset: {self.preset}",
             f"Prompt profile: {self.prompt_profile}",
             f"Models: {getattr(self, 'model_summary', 'default')}",
@@ -350,6 +355,7 @@ class TerminalUI:
                     ("Failure report", "6"),
                     ("Module report", "7"),
                     ("Timeline view", "l"),
+                    ("Resolver", "v"),
                     ("Preset", "p"),
                     ("Models", "m"),
                     ("Runtime", "r"),
@@ -376,7 +382,7 @@ class TerminalUI:
                 self.output("\nExiting APD UI.")
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice not in {"p", "m", "r", "f", "t"}:
+            if choice not in {"v", "p", "m", "r", "f", "t"}:
                 self._pause_after(exit_code)
 
     def _dispatch_choice(self, choice: str | None) -> int:
@@ -396,6 +402,9 @@ class TerminalUI:
             return self._run_modules()
         if choice == "l":
             return self._run_timeline()
+        if choice == "v":
+            self._choose_resolver()
+            return 0
         if choice == "p":
             self._choose_preset()
             return 0
@@ -607,6 +616,34 @@ class TerminalUI:
         self.settings.default_module_grouping = preset_config.reporting_grouping
         self._show_status_dialog(f"Preset switched to {selected}.")
 
+    def _choose_resolver(self) -> None:
+        options = [("apd", "apd"), ("pyego", "pyego"), ("readpye", "readpye")]
+        if self._use_prompt_toolkit:
+            selected = radiolist_dialog(
+                title="Select resolver",
+                text="Choose the dependency-resolution strategy for the next runs.",
+                values=options,
+                default=self.settings.resolver,
+                style=UI_STYLE,
+            ).run()
+            if selected is None:
+                return
+        else:
+            self.output("\nAvailable resolvers:")
+            visible_resolvers = [resolver for resolver, _ in options]
+            for index, resolver in enumerate(visible_resolvers, start=1):
+                marker = "*" if resolver == self.settings.resolver else " "
+                self.output(f"  {index}. [{marker}] {resolver}")
+            choice = self.input_fn("Choose resolver number: ").strip()
+            if not choice.isdigit():
+                return
+            index = int(choice) - 1
+            if index < 0 or index >= len(visible_resolvers):
+                return
+            selected = visible_resolvers[index]
+        self.settings.resolver = selected
+        self._show_status_dialog(f"Resolver switched to {selected}.")
+
     def _choose_model_profile(self) -> None:
         options = [(profile, profile) for profile in MODEL_PROFILE_DEFAULTS if profile != "custom"]
         if self._use_prompt_toolkit:
@@ -738,6 +775,7 @@ class TerminalUI:
             "<b><ansibrightyellow>APD Command Center</ansibrightyellow></b>\n"
             "<style fg='#98c1d9'>Run benchmarks, inspect reports, and solve local projects without memorizing subcommands.</style>\n\n"
             f"<b>Preset:</b> {self.settings.preset}\n"
+            f"<b>Resolver:</b> {self.settings.resolver}\n"
             f"<b>Model bundle:</b> {self.settings.model_profile}\n"
             f"<b>MoE:</b> {'on' if self.settings.use_moe else 'off'}\n"
             f"<b>RAG:</b> {'on' if self.settings.use_rag else 'off'}\n"
@@ -813,6 +851,7 @@ class TerminalUI:
         self.output(title.center(width))
         self.output("=" * width)
         self.output(f"Preset: {self.settings.preset}")
+        self.output(f"Resolver: {self.settings.resolver}")
         self.output(f"Model bundle: {self.settings.model_profile}")
         self.output(f"MoE: {'on' if self.settings.use_moe else 'off'}")
         self.output(f"RAG: {'on' if self.settings.use_rag else 'off'}")
@@ -837,6 +876,7 @@ class TerminalUI:
         self.output("  6. Failure report")
         self.output("  7. Module report")
         self.output("  L. Timeline view")
+        self.output("  V. Change resolver")
         self.output("  P. Change preset")
         self.output("  M. Change model bundle")
         self.output("  R. Runtime controls")

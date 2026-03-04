@@ -53,6 +53,7 @@ class BenchmarkObserver(Protocol):
         completed: int,
         successes: int,
         failures: int,
+        resolver: str,
         preset: str,
         prompt_profile: str,
         model_summary: str,
@@ -119,6 +120,7 @@ class BenchmarkProgress:
         self.current_case_id = ""
         self.last_case_id = ""
         self.last_status = ""
+        self.resolver = "apd"
         self.preset = "optimized"
         self.prompt_profile = "optimized"
         self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
@@ -145,7 +147,7 @@ class BenchmarkProgress:
         return (
             f"Benchmark {self.run_id} {bar} "
             f"{self.completed}/{self.total} {percent:5.1f}% "
-            f"{' '.join(status_bits)} "
+            f"resolver {self.resolver} {' '.join(status_bits)} "
             f"elapsed {format_elapsed(time.monotonic() - self.started_at)}"
         )
 
@@ -165,6 +167,7 @@ class BenchmarkProgress:
         completed: int,
         successes: int,
         failures: int,
+        resolver: str,
         preset: str,
         prompt_profile: str,
         model_summary: str,
@@ -177,6 +180,7 @@ class BenchmarkProgress:
         self.completed = completed
         self.successes = successes
         self.failures = failures
+        self.resolver = resolver
         self.preset = preset
         self.prompt_profile = prompt_profile
         self.model_summary = model_summary
@@ -272,6 +276,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-llm-cache",
         action="store_true",
         help="Disable reading and writing the on-disk LLM cache for this invocation.",
+    )
+    parser.add_argument(
+        "--resolver",
+        choices=["apd", "pyego", "readpye"],
+        default=None,
+        help="Select the resolver strategy: full APD loop, PyEGo-style baseline, or ReadPyE-style baseline.",
     )
     parser.add_argument(
         "--preset",
@@ -515,6 +525,7 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "overall_status": overall_status,
+        "resolver": settings.resolver,
         "preset": settings.preset,
         "prompt_profile": settings.prompt_profile,
         "model_profile": settings.model_profile,
@@ -531,6 +542,7 @@ def doctor_command(settings: Settings, ref: str | None) -> int:
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"[INFO] preset: {settings.preset}")
+    print(f"[INFO] resolver: {settings.resolver}")
     print(f"[INFO] prompt_profile: {settings.prompt_profile}")
     print(f"[INFO] model_profile: {settings.model_profile}")
     print(f"[INFO] moe: {'enabled' if settings.use_moe else 'disabled'}")
@@ -589,6 +601,7 @@ def run_benchmark(
         completed=len(completed_case_ids),
         successes=completed_successes,
         failures=completed_failures,
+        resolver=settings.resolver,
         preset=settings.preset,
         prompt_profile=settings.prompt_profile,
         model_summary=format_model_summary(settings),
@@ -757,6 +770,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     settings = Settings.from_env(
+        resolver_override=args.resolver,
         preset_override=args.preset,
         prompt_profile_override=args.prompt_profile,
         model_profile_override=args.model_profile,

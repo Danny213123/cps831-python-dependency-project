@@ -34,6 +34,8 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
                 "preset": "balanced",
                 "prompt_profile": "optimized-strict",
                 "dependency_reason": "deterministic_version_selector",
+                "candidate_provenance": {"PyYAML": "alias"},
+                "dependencies": ["PyYAML==6.0.2"],
             }
         ),
         encoding="utf-8",
@@ -44,6 +46,9 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
     assert summary.preset == "balanced"
     assert summary.prompt_profile == "optimized-strict"
     assert summary.dependency_reason_counts == {"deterministic_version_selector": 1}
+    assert (run_dir / "results.csv").exists()
+    assert (run_dir / "results.md").exists()
+    assert "PyYAML" in (run_dir / "results.md").read_text(encoding="utf-8")
     assert (run_dir / "timeline.json").exists()
     assert (run_dir / "timeline.csv").exists()
     assert (run_dir / "timeline.md").exists()

@@ -62,6 +62,31 @@ def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
     assert settings.max_attempts == 5
 
 
+def test_terminal_ui_can_switch_resolver(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["v", "2", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert settings.resolver == "pyego"
+
+
 def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
@@ -327,6 +352,7 @@ def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:
         completed=1,
         successes=1,
         failures=0,
+        resolver="apd",
         preset="balanced",
         prompt_profile="optimized-strict",
         model_summary="gemma-moe: gemma3:4b / gemma3:12b",

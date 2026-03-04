@@ -21,6 +21,8 @@ def test_benchmark_run_parser_accepts_jobs_flag() -> None:
         [
             "--preset",
             "thorough",
+            "--resolver",
+            "readpye",
             "--model-profile",
             "gpt-oss-20b",
             "--fresh-run",
@@ -37,6 +39,7 @@ def test_benchmark_run_parser_accepts_jobs_flag() -> None:
     assert args.benchmark_command == "run"
     assert args.jobs == 3
     assert args.preset == "thorough"
+    assert args.resolver == "readpye"
     assert args.model_profile == "gpt-oss-20b"
     assert args.fresh_run is True
 
@@ -202,6 +205,7 @@ def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, m
     report = collect_doctor_report(settings)
 
     assert report["overall_status"] == "warning"
+    assert report["resolver"] == "apd"
     names = {check["name"]: check for check in report["checks"]}
     assert names["docker_cli"]["status"] == "missing"
     assert names["ollama_server"]["status"] == "warning"
@@ -240,6 +244,7 @@ def test_benchmark_progress_refresh_thread_starts_and_stops(monkeypatch) -> None
         completed=0,
         successes=0,
         failures=0,
+        resolver="apd",
         preset="optimized",
         prompt_profile="optimized",
         model_summary="gemma-moe: gemma3:4b / gemma3:12b",
@@ -262,6 +267,7 @@ def test_benchmark_progress_tracks_case_results() -> None:
         completed=1,
         successes=1,
         failures=0,
+        resolver="apd",
         preset="optimized",
         prompt_profile="optimized",
         model_summary="gemma-moe: gemma3:4b / gemma3:12b",

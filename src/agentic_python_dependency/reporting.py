@@ -185,6 +185,7 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     total_wall_clock = total_elapsed_seconds if total_elapsed_seconds is not None else summed_wall_clock
     transitions: dict[str, int] = {}
     dependency_reason_counts: dict[str, int] = {}
+    resolver = results[0].get("resolver", "apd") if results else "apd"
     preset = results[0].get("preset", "optimized") if results else "optimized"
     prompt_profile = results[0].get("prompt_profile", "optimized") if results else "optimized"
     model_profile = results[0].get("model_profile", "gemma-moe") if results else "gemma-moe"
@@ -213,6 +214,7 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         final_import_errors=final_import_errors,
         mean_attempts_to_success=mean_attempts,
         mean_wall_clock_time=mean_wall_clock,
+        resolver=resolver,
         preset=preset,
         prompt_profile=prompt_profile,
         model_profile=model_profile,
@@ -270,6 +272,7 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         "# Benchmark Summary",
         "",
         f"- Run ID: `{summary.run_id}`",
+        f"- Resolver: `{summary.resolver}`",
         f"- Preset: `{summary.preset}`",
         f"- Prompt profile: `{summary.prompt_profile}`",
         f"- Model profile: `{summary.model_profile}`",
@@ -282,6 +285,96 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Time to finish: `{summary.total_wall_clock_human}`",
     ]
     (run_dir / "leaderboard.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_results_artifacts(run_dir, results)
+
+
+def _modules_from_result(row: dict[str, Any]) -> list[str]:
+    candidate_provenance = row.get("candidate_provenance", {})
+    if isinstance(candidate_provenance, dict) and candidate_provenance:
+        return sorted(str(module) for module in candidate_provenance.keys())
+
+    dependencies = row.get("dependencies", [])
+    modules: list[str] = []
+    if isinstance(dependencies, list):
+        for dependency in dependencies:
+            value = str(dependency).strip()
+            if not value:
+                continue
+            modules.append(value.split("==", 1)[0])
+    return sorted(set(modules))
+
+
+def write_results_artifacts(run_dir: Path, results: list[dict[str, Any]]) -> None:
+    rows: list[dict[str, Any]] = []
+    for index, row in enumerate(sorted(results, key=lambda item: str(item.get("case_id", ""))), start=1):
+        modules = _modules_from_result(row)
+        rows.append(
+            {
+                "case_number": index,
+                "case_id": row.get("case_id", ""),
+                "modules": ", ".join(modules),
+                "result": "success" if row.get("success", False) else "failure",
+                "attempts": row.get("attempts", 0),
+                "initial_eval": row.get("initial_eval", ""),
+                "final_error_category": row.get("final_error_category", ""),
+                "dependencies": ", ".join(str(item) for item in row.get("dependencies", [])),
+                "dependency_reason": row.get("dependency_reason", ""),
+                "wall_clock_seconds": row.get("wall_clock_seconds", 0.0),
+                "started_at": row.get("started_at", ""),
+                "finished_at": row.get("finished_at", ""),
+            }
+        )
+
+    (run_dir / "results.json").write_text(json.dumps({"run_id": run_dir.name, "rows": rows}, indent=2), encoding="utf-8")
+
+    with (run_dir / "results.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "case_number",
+                "case_id",
+                "modules",
+                "result",
+                "attempts",
+                "initial_eval",
+                "final_error_category",
+                "dependencies",
+                "dependency_reason",
+                "wall_clock_seconds",
+                "started_at",
+                "finished_at",
+            ],
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+    lines = [
+        "# Case Results",
+        "",
+        f"Run ID: `{run_dir.name}`",
+        "",
+        "| # | Case ID | Modules | Result | Attempts | Final Status | Dependencies | Time (s) |",
+        "| ---: | --- | --- | --- | ---: | --- | --- | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(row["case_number"]),
+                    str(row["case_id"]),
+                    str(row["modules"] or "-"),
+                    str(row["result"]),
+                    str(row["attempts"]),
+                    str(row["final_error_category"] or "-"),
+                    str(row["dependencies"] or "-"),
+                    f"{float(row['wall_clock_seconds']):.2f}",
+                ]
+            )
+            + " |"
+        )
+    (run_dir / "results.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def analyze_failures(run_dir: Path, limit: int = 10, category: str | None = None) -> dict[str, Any]:

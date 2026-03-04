@@ -14,6 +14,8 @@ from agentic_python_dependency.presets import (
     normalize_prompt_profile,
 )
 
+ResolverName = Literal["apd", "pyego", "readpye"]
+
 ModelProfileName = Literal[
     "gemma-moe",
     "gemma-moe-lite",
@@ -45,6 +47,15 @@ def normalize_model_profile(value: str | None) -> ModelProfileName:
     return normalized  # type: ignore[return-value]
 
 
+def normalize_resolver(value: str | None) -> ResolverName:
+    if not value:
+        return "apd"
+    normalized = value.strip().lower()
+    if normalized not in {"apd", "pyego", "readpye"}:
+        raise ValueError(f"Unsupported resolver: {value}")
+    return normalized  # type: ignore[return-value]
+
+
 def parse_optional_bool(value: str) -> bool | None:
     normalized = value.strip().lower()
     if not normalized:
@@ -67,6 +78,7 @@ class Settings:
     prompts_dir: Path
     ollama_base_url: str = "http://127.0.0.1:11434"
     docker_host: str = ""
+    resolver: ResolverName = "apd"
     model_profile: ModelProfileName = "gemma-moe"
     use_moe: bool = True
     use_rag: bool = True
@@ -96,6 +108,7 @@ class Settings:
         cls,
         project_root: Path | None = None,
         *,
+        resolver_override: str | None = None,
         preset_override: str | None = None,
         prompt_profile_override: str | None = None,
         model_profile_override: str | None = None,
@@ -117,6 +130,7 @@ class Settings:
         pypi_cache_dir = data_dir / "pypi_cache"
         llm_cache_dir = data_dir / "llm_cache"
         prompts_dir = root / "src" / "agentic_python_dependency" / "prompts"
+        resolver = normalize_resolver(resolver_override or os.getenv("APD_RESOLVER"))
         preset = normalize_preset(preset_override or os.getenv("APD_PRESET"))
         preset_config = get_preset_config(preset)
         prompt_profile = normalize_prompt_profile(prompt_profile_override or os.getenv("APD_PROMPT_PROFILE"))
@@ -165,6 +179,7 @@ class Settings:
             prompts_dir=prompts_dir,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
             docker_host=os.getenv("DOCKER_HOST", ""),
+            resolver=resolver,
             model_profile=effective_model_profile,
             use_moe=use_moe,
             use_rag=use_rag,

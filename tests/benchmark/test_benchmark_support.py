@@ -134,6 +134,8 @@ def test_summarize_run_writes_summary_files(tmp_path: Path) -> None:
     assert (run_dir / "summary.json").exists()
     assert (run_dir / "summary.csv").exists()
     assert (run_dir / "leaderboard.md").exists()
+    assert (run_dir / "results.csv").exists()
+    assert (run_dir / "results.md").exists()
 
 
 def test_format_duration_renders_hms() -> None:

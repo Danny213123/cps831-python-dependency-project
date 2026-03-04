@@ -410,6 +410,97 @@ def test_workflow_uses_deterministic_version_selector_for_performance_preset(tmp
     assert final_state["final_result"]["dependencies"] == ["requests==2.32.3"]
 
 
+def test_workflow_pyego_uses_static_imports_and_deterministic_pins(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.resolver = "pyego"
+    project_root = write_project(tmp_path, "import yaml\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner({"extract": [], "version": [], "repair": [], "adjudicate": []}),
+        pypi_store=FakePyPIStore({"PyYAML": ["6.0.2", "6.0.1"]}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["version_selection_source"] == "pyego_deterministic"
+    assert final_state["dependency_reason"] == "deterministic_version_selector"
+    assert final_state["final_result"]["resolver"] == "pyego"
+    assert final_state["final_result"]["dependencies"] == ["PyYAML==6.0.2"]
+
+
+def test_workflow_readpye_uses_static_imports_and_unpinned_packages(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.resolver = "readpye"
+    project_root = write_project(tmp_path, "import yaml\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner({"extract": [], "version": [], "repair": [], "adjudicate": []}),
+        pypi_store=FakePyPIStore({}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="success",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["version_selection_source"] == "readpye_unpinned"
+    assert final_state["dependency_reason"] == "readpye_unpinned"
+    assert final_state["final_result"]["resolver"] == "readpye"
+    assert final_state["final_result"]["dependencies"] == ["PyYAML"]
+
+
+def test_workflow_pyego_does_not_enter_repair_loop(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.resolver = "pyego"
+    project_root = write_project(tmp_path, "import yaml\nprint('ok')\n")
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner({"extract": [], "version": [], "repair": [], "adjudicate": []}),
+        pypi_store=FakePyPIStore({"PyYAML": ["6.0.2", "6.0.1"]}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=False,
+                    exit_code=1,
+                    build_log="",
+                    run_log="ModuleNotFoundError: No module named 'yaml'",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+    )
+
+    final_state = workflow.run(workflow.initial_state_for_project(project_root))
+
+    assert final_state["final_result"]["success"] is False
+    assert final_state["final_result"]["attempts"] == 1
+
+
 def test_workflow_stops_on_syntax_error(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     project_root = write_project(tmp_path, "print('hello')\n")

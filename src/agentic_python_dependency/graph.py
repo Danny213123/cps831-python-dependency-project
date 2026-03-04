@@ -379,6 +379,12 @@ class ResolutionWorkflow:
     def _candidate_provenance_from(self, packages: list[str], extracted_imports: list[str]) -> dict[str, str]:
         return normalize_candidate_packages_with_sources(packages, extracted_imports)
 
+    def _uses_full_apd(self) -> bool:
+        return self.settings.resolver == "apd"
+
+    def _resolver_uses_rag(self) -> bool:
+        return self.settings.use_rag and self.settings.resolver != "readpye"
+
     def initial_state_for_case(self, case: BenchmarkCase, run_id: str | None = None) -> ResolutionState:
         return ResolutionState(
             run_id=run_id or uuid4().hex[:12],
@@ -391,6 +397,7 @@ class ResolutionWorkflow:
             model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": []},
             current_attempt=0,
             repair_stall_count=0,
+            resolver=self.settings.resolver,
             preset=self.settings.preset,
             prompt_profile=self.settings.prompt_profile,
             dependency_reason="",
@@ -420,6 +427,7 @@ class ResolutionWorkflow:
             model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": []},
             current_attempt=0,
             repair_stall_count=0,
+            resolver=self.settings.resolver,
             preset=self.settings.preset,
             prompt_profile=self.settings.prompt_profile,
             dependency_reason="",
@@ -542,6 +550,21 @@ class ResolutionWorkflow:
 
     def infer_packages_prompt_a(self, state: ResolutionState) -> ResolutionState:
         extracted_imports = state.get("extracted_imports", [])
+        if not self._uses_full_apd():
+            provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
+            normalized = sorted(provenance, key=str.lower)
+            state["prompt_history"]["prompt_a"] = []
+            state["model_outputs"]["extract"] = [
+                {
+                    "file": next(iter(state["source_files"].keys()), "snippet.py"),
+                    "output": "\n".join(normalized),
+                    "source": f"{self.settings.resolver}_static_imports",
+                }
+            ]
+            state["inferred_packages"] = normalized
+            state["candidate_provenance"] = provenance
+            return state
+
         if extracted_imports and not self._should_use_extract_llm(state, extracted_imports):
             provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
             normalized = sorted(provenance, key=str.lower)
@@ -612,7 +635,7 @@ class ResolutionWorkflow:
             packages = [dependency.name for dependency in repaired]
         else:
             packages = allowed_packages
-        if not self.settings.use_rag:
+        if not self._resolver_uses_rag():
             state["version_options"] = []
             state["unresolved_packages"] = []
             state["applied_compatibility_policy"] = {}
@@ -661,6 +684,32 @@ class ResolutionWorkflow:
             state["version_selection_source"] = state.get("repair_outcome") or "repair"
             return state
 
+        if self.settings.resolver == "readpye":
+            if state.get("inferred_packages"):
+                selected = [ResolvedDependency(name=package, version="") for package in state.get("inferred_packages", [])]
+                state["prompt_history"]["prompt_b"] = (
+                    "# skipped: ReadPyE baseline uses static import extraction with unpinned package installs"
+                )
+                state["model_outputs"]["version"].append(
+                    {
+                        "attempt": state["current_attempt"],
+                        "output": "\n".join(dependency.pin() for dependency in selected),
+                        "source": "readpye_unpinned",
+                    }
+                )
+                state["selected_dependencies"] = sorted(selected, key=lambda dependency: dependency.name.lower())
+                state["dependency_reason"] = "readpye_unpinned"
+                state["version_selection_source"] = "readpye_unpinned"
+                return state
+            state["prompt_history"]["prompt_b"] = "# skipped: ReadPyE baseline inferred no third-party packages"
+            state["model_outputs"]["version"].append(
+                {"attempt": state["current_attempt"], "output": "", "source": "readpye_no_dependencies"}
+            )
+            state["selected_dependencies"] = []
+            state["dependency_reason"] = "stdlib_only"
+            state["version_selection_source"] = "readpye_no_dependencies"
+            return state
+
         if not state.get("version_options"):
             if not self.settings.use_rag and state.get("inferred_packages"):
                 selected = [ResolvedDependency(name=package, version="") for package in state.get("inferred_packages", [])]
@@ -683,6 +732,21 @@ class ResolutionWorkflow:
             state["selected_dependencies"] = []
             state["dependency_reason"] = "stdlib_only" if not state.get("inferred_packages") else "no_compatible_versions"
             state["version_selection_source"] = "no_version_options"
+            return state
+
+        if self.settings.resolver == "pyego":
+            selected = self._deterministic_dependencies(state["version_options"])
+            state["prompt_history"]["prompt_b"] = "# skipped: PyEGo baseline uses deterministic pinned version selection"
+            state["model_outputs"]["version"].append(
+                {
+                    "attempt": state["current_attempt"],
+                    "output": "\n".join(dependency.pin() for dependency in selected),
+                    "source": "pyego_deterministic",
+                }
+            )
+            state["selected_dependencies"] = sorted(selected, key=lambda dependency: dependency.name.lower())
+            state["dependency_reason"] = "deterministic_version_selector"
+            state["version_selection_source"] = "pyego_deterministic"
             return state
 
         if all(len(option.versions) == 1 for option in state.get("version_options", [])):
@@ -741,14 +805,10 @@ class ResolutionWorkflow:
 
     def normalize_dependency_plan(self, state: ResolutionState) -> ResolutionState:
         state.pop("stop_reason", None)
-        if not state.get("version_options") and not state.get("repaired_dependency_lines"):
-            state["selected_dependencies"] = []
-            state["generated_requirements"] = "# no inferred third-party dependencies\n"
-            return state
-
-        previous_dependencies = state.get("attempt_records", [])[-1].dependencies if state.get("attempt_records") else []
-
         if state.get("selected_dependencies"):
+            previous_dependencies = (
+                state.get("attempt_records", [])[-1].dependencies if state.get("attempt_records") else []
+            )
             dependencies = sorted(state["selected_dependencies"], key=lambda dep: dep.name.lower())
             state["selected_dependencies"] = dependencies
             state["generated_requirements"] = "\n".join(dep.pin() for dep in dependencies) + (
@@ -765,6 +825,13 @@ class ResolutionWorkflow:
             else:
                 state["repair_stall_count"] = 0
             return state
+
+        if not state.get("version_options") and not state.get("repaired_dependency_lines"):
+            state["selected_dependencies"] = []
+            state["generated_requirements"] = "# no inferred third-party dependencies\n"
+            return state
+
+        previous_dependencies = state.get("attempt_records", [])[-1].dependencies if state.get("attempt_records") else []
 
         last_output = state["model_outputs"]["version"][-1]["output"]
         cleanup_prompt = (
@@ -899,6 +966,8 @@ class ResolutionWorkflow:
     def classify_outcome(self, state: ResolutionState) -> ResolutionState:
         execution = state["last_execution"]
         classified = classify_error(execution.build_log, execution.run_log, execution.exit_code)
+        if not self._uses_full_apd():
+            classified.dependency_retryable = False
         classified.image_tag = execution.image_tag
         state["last_execution"] = classified
         state["last_error_category"] = classified.category
@@ -973,6 +1042,7 @@ class ResolutionWorkflow:
             "run_id": state["run_id"],
             "case_id": state["case_id"],
             "mode": state["mode"],
+            "resolver": state.get("resolver", self.settings.resolver),
             "preset": state.get("preset", self.settings.preset),
             "prompt_profile": state.get("prompt_profile", self.settings.prompt_profile),
             "model_profile": self.settings.model_profile,

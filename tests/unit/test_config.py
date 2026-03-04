@@ -9,6 +9,13 @@ def test_settings_from_env_uses_preset_defaults(tmp_path: Path) -> None:
     assert settings.preset == "performance"
     assert settings.prompt_profile == "optimized-lite"
     assert settings.max_attempts == 2
+    assert settings.resolver == "apd"
+
+
+def test_settings_from_env_supports_resolver_override(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, resolver_override="pyego")
+
+    assert settings.resolver == "pyego"
 
 
 def test_settings_from_env_supports_efficient_preset(tmp_path: Path) -> None:

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 from agentic_python_dependency.presets import GroupingMode, PresetName, PromptProfile
+from agentic_python_dependency.config import ResolverName
 
 
 Mode = Literal["gistable", "project"]
@@ -95,6 +96,7 @@ class BenchmarkSummary:
     final_import_errors: int
     mean_attempts_to_success: float
     mean_wall_clock_time: float
+    resolver: str = "apd"
     preset: str = "optimized"
     prompt_profile: str = "optimized"
     model_profile: str = "gemma-moe"
@@ -148,6 +150,7 @@ class ResolutionState(TypedDict, total=False):
     stop_reason: str
     final_result: dict[str, Any]
     target_python: str
+    resolver: ResolverName
     preset: PresetName
     prompt_profile: PromptProfile
     dependency_reason: str

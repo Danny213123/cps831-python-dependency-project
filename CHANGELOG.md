@@ -9,6 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+- Resolver selection support with `apd`, `pyego`, and `readpye` runtime modes, including UI selection and artifact metadata so baseline-style runs can be compared from the same interface.
+- Automatic per-run case results exports in `results.csv`, `results.md`, and `results.json`, including case number, modules, success/failure, attempts, dependencies, and timing fields.
 - PLLM-inspired Python dependency resolver with a LangGraph workflow for extraction, version inference, repair, execution, and result finalization.
 - Ollama-backed LangChain model routing using `gemma3:4b` for extraction and `gemma3:12b` for versioning, repair, and adjudication.
 - Six user-selectable execution presets spanning `performance` through `accuracy`, including `efficient` and `thorough` intermediate tradeoff levels.
@@ -50,6 +52,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added preset-aware routing for prompt usage, deterministic version selection, repair behavior, and compatibility handling.
 - Added fresh-run and no-LLM-cache execution options plus bundled model selection for `gemma-moe`, `qwen35-9b`, and `gpt-oss-20b`, with per-stage extraction/reasoning model overrides.
 - Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.
+- Added resolver metadata to doctor output, benchmark dashboards, result artifacts, and summary artifacts.
 - Added timeline artifacts (`timeline.json`, `timeline.csv`, `timeline.md`) and exposed timeline viewing in the interactive terminal UI.
 - Added a paper-compatible module report mode that builds top-module tables from the hard subset in `all-gists` so the reported module families line up more closely with the paper.
 - Made paper-compatible module success rates coverage-aware for preview and partial runs, so APD percentages reflect the cases actually executed while still preserving the full cohort sizes in the report.
@@ -72,6 +75,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed malformed model-output handling for fenced Markdown, prose responses, and placeholder versions such as `package==<version>`.
 - Fixed repair-loop stalls by early-stopping unusable retries and adjudicating malformed repair output instead of crashing.
 - Fixed repeated false-positive dependency additions such as stdlib modules, packaging tools, and unrelated repair suggestions.
+- Fixed `readpye` unpinned dependency plans being dropped during normalization by preserving already selected resolver-produced dependencies.
 - Fixed benchmark noise from upstream LangChain debug deprecation warnings by suppressing the warning in the CLI.
 - Fixed native package classification for missing system prerequisites such as SDL during `pygame` builds.
 - Fixed local-module/API mismatches such as `compress` being treated as generic runtime errors instead of non-PyPI dependency issues.

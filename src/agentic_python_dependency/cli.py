@@ -419,7 +419,7 @@ def build_parser() -> argparse.ArgumentParser:
     modules.add_argument(
         "--paper-compatible",
         action="store_true",
-        help="Build the module table from the paper-style hard subset in all-gists (final-eval=ImportError).",
+        help="Build the module table from the paper-style hard subset in all-gists (initial-eval=ImportError).",
     )
     trace = report_sub.add_parser("trace")
     trace.add_argument("--run-id", required=True)

@@ -257,8 +257,8 @@ def test_build_module_success_table_supports_paper_compatible_cohort(tmp_path: P
         writer.writerows(
             [
                 {"id": "case1", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
-                {"id": "case2", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
-                {"id": "case3", "url": "", "initial-eval": "Success", "final-eval": "", "error": ""},
+                {"id": "case2", "url": "", "initial-eval": "ImportError", "final-eval": "", "error": ""},
+                {"id": "case3", "url": "", "initial-eval": "Success", "final-eval": "ImportError", "error": ""},
             ]
         )
 
@@ -376,7 +376,7 @@ def test_build_module_success_table_skips_unreadable_paper_case(tmp_path: Path, 
         writer.writerows(
             [
                 {"id": "case1", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
-                {"id": "case2", "url": "", "initial-eval": "ImportError", "final-eval": "ImportError", "error": ""},
+                {"id": "case2", "url": "", "initial-eval": "ImportError", "final-eval": "", "error": ""},
             ]
         )
 

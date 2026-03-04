@@ -58,7 +58,7 @@ def paper_hard_subset_case_ids(dataset: GistableDataset, ref: str | None = None)
     hard_ids = {
         row["id"]
         for row in dataset.load_results_rows(ref)
-        if row.get("final-eval") == "ImportError"
+        if row.get("initial-eval") == "ImportError"
         and (dataset.dataset_root(ref) / "all-gists" / row["id"] / "snippet.py").exists()
     }
     return sorted(hard_ids)

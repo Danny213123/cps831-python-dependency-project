@@ -57,6 +57,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Updated the interactive module report flow so `apd ui` renders the generated markdown table instead of dumping raw captured command output.
 - Updated the interactive reporting flows so summary, failures, module report, and timeline views list existing run directories and let users select a run instead of manually typing a run ID.
 - Updated paper-compatible markdown tables to prefer modules covered by the current run when displaying the top rows for preview and partial runs.
+- Corrected the paper-compatible module-report cohort to use the repair benchmark set (`initial-eval = ImportError`) so APD overlap and success-rate calculations match the benchmark runs.
 - Switched documentation away from Compose sidecars to host Ollama plus host Docker usage for local GPU testing.
 
 ### Fixed

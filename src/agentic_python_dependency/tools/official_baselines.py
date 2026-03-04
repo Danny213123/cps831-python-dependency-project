@@ -16,6 +16,81 @@ class OfficialBaselineError(RuntimeError):
     pass
 
 
+def _probe_python_version(python_executable: str) -> tuple[int, int, int]:
+    completed = subprocess.run(
+        [
+            python_executable,
+            "-c",
+            "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]}')",
+        ],
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        details = (_decode_output(completed.stderr) or _decode_output(completed.stdout) or "version probe failed").strip()
+        raise OfficialBaselineError(
+            f"Failed to run APDR_PYEGO_PYTHON interpreter '{python_executable}' to probe version: {details}"
+        )
+    version_text = _decode_output(completed.stdout).strip()
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", version_text)
+    if not match:
+        raise OfficialBaselineError(
+            f"Unable to parse APDR_PYEGO_PYTHON version output from '{python_executable}': {version_text or '<empty>'}"
+        )
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def validate_pyego_runtime(settings: Settings) -> tuple[bool, str]:
+    script = settings.pyego_root / "PyEGo.py"
+    if not script.exists():
+        return False, f"PyEGo entrypoint not found at {script}"
+
+    try:
+        major, minor, patch = _probe_python_version(settings.pyego_python)
+    except OfficialBaselineError as exc:
+        return False, str(exc)
+
+    if (major, minor) > (3, 11):
+        return (
+            False,
+            (
+                "PyEGo requires APDR_PYEGO_PYTHON <= 3.11 because it depends on typed_ast.ast27; "
+                f"current interpreter is {settings.pyego_python} ({major}.{minor}.{patch}). "
+                "Create a Python 3.11 environment and point APDR_PYEGO_PYTHON to it."
+            ),
+        )
+
+    typed_ast_probe = subprocess.run(
+        [
+            settings.pyego_python,
+            "-c",
+            "import typed_ast; from typed_ast import ast27; print('ok')",
+        ],
+        capture_output=True,
+        check=False,
+    )
+    if typed_ast_probe.returncode != 0:
+        details = (_decode_output(typed_ast_probe.stderr) or _decode_output(typed_ast_probe.stdout) or "import failed").strip()
+        requirements_path = settings.pyego_root / "requirements.txt"
+        return (
+            False,
+            (
+                "PyEGo runtime is missing typed_ast.ast27. "
+                f"Interpreter: {settings.pyego_python} ({major}.{minor}.{patch}). "
+                f"Install dependencies with: {settings.pyego_python} -m pip install -r {requirements_path}. "
+                f"Original error: {details}"
+            ),
+        )
+
+    return True, f"ready ({settings.pyego_python} on Python {major}.{minor}.{patch})"
+
+
+def ensure_pyego_runtime(settings: Settings) -> None:
+    ok, detail = validate_pyego_runtime(settings)
+    if not ok:
+        raise OfficialBaselineError(detail)
+
+
 @dataclass(slots=True)
 class OfficialBaselinePlan:
     target_python: str | None
@@ -125,9 +200,8 @@ def _write_process_logs(artifact_dir: Path, stem: str, completed: subprocess.Com
 
 
 def run_pyego(settings: Settings, program_root: Path, artifact_dir: Path) -> OfficialBaselinePlan:
+    ensure_pyego_runtime(settings)
     script = settings.pyego_root / "PyEGo.py"
-    if not script.exists():
-        raise OfficialBaselineError(f"PyEGo entrypoint not found at {script}")
 
     output_path = artifact_dir / "pyego.dependency.json"
     command = [

@@ -27,6 +27,7 @@ from agentic_python_dependency.presets import (
 from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, build_timeline_view, summarize_run
 from agentic_python_dependency.terminal_ui import launch_terminal_ui
+from agentic_python_dependency.tools.official_baselines import validate_pyego_runtime
 
 
 def _notify_path(label: str, path: Path) -> None:
@@ -793,6 +794,11 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
         "ok" if pyego_entrypoint.exists() else "warning",
         str(pyego_entrypoint) if pyego_entrypoint.exists() else f"missing: {pyego_entrypoint}",
     )
+    if settings.resolver == "pyego":
+        pyego_runtime_ok, pyego_runtime_detail = validate_pyego_runtime(settings)
+        add_check("pyego_runtime", "ok" if pyego_runtime_ok else "warning", pyego_runtime_detail)
+    else:
+        add_check("pyego_runtime", "ok", f"resolver={settings.resolver}; not required")
 
     readpye_entrypoint = settings.readpye_root / "run.py"
     add_check(
@@ -935,6 +941,17 @@ def run_case_batch(
     if fresh_run and run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    if settings.resolver == "pyego":
+        pyego_runtime_ok, pyego_runtime_detail = validate_pyego_runtime(settings)
+        if not pyego_runtime_ok:
+            message = f"PyEGo preflight failed: {pyego_runtime_detail}"
+            warnings_path = run_dir / "warnings.log"
+            warnings_path.parent.mkdir(parents=True, exist_ok=True)
+            warnings_path.write_text(f"{message}\n", encoding="utf-8")
+            print(f"[ERROR] {message}", file=sys.stderr)
+            _notify_path("Warnings log written", warnings_path)
+            return 2
+
     restored_state = load_run_state(run_dir)
     started_at = time.monotonic()
     warnings_path = run_dir / "warnings.log"

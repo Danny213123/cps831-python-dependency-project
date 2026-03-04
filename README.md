@@ -29,6 +29,20 @@ pre-commit install
 pre-commit install --hook-type commit-msg
 ```
 
+## Official PyEGo resolver setup
+
+If you run with `--resolver pyego`, use a dedicated Python `3.11` environment for PyEGo:
+
+```bash
+python3.11 -m venv .venv-pyego
+source .venv-pyego/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r external/PyEGo/requirements.txt
+export APDR_PYEGO_PYTHON="$(pwd)/.venv-pyego/bin/python"
+```
+
+PyEGo depends on `typed_ast.ast27`, which is not supported on Python `3.12+`.
+
 ## Local runtime
 
 Run Ollama directly on the host machine:

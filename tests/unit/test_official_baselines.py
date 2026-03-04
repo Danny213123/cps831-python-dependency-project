@@ -3,10 +3,14 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from agentic_python_dependency.config import Settings
 from agentic_python_dependency.tools.official_baselines import (
     _write_process_logs,
     parse_dockerfile_plan,
     parse_pyego_dependency_json,
+    validate_pyego_runtime,
 )
 
 
@@ -59,3 +63,69 @@ def test_write_process_logs_decodes_non_utf8_bytes(tmp_path: Path) -> None:
 
     assert "out" in (tmp_path / "baseline.stdout.log").read_text(encoding="utf-8")
     assert "err" in (tmp_path / "baseline.stderr.log").read_text(encoding="utf-8")
+
+
+def _settings_with_pyego(tmp_path: Path) -> Settings:
+    settings = Settings.from_env(project_root=tmp_path)
+    pyego_root = tmp_path / "external" / "PyEGo"
+    pyego_root.mkdir(parents=True)
+    (pyego_root / "PyEGo.py").write_text("print('ok')\n", encoding="utf-8")
+    settings.pyego_root = pyego_root
+    settings.pyego_python = "python"
+    return settings
+
+
+def test_validate_pyego_runtime_rejects_python_above_311(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = _settings_with_pyego(tmp_path)
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args[0], 0, stdout=b"3.13.2\n", stderr=b"")
+
+    monkeypatch.setattr("agentic_python_dependency.tools.official_baselines.subprocess.run", fake_run)
+    ok, detail = validate_pyego_runtime(settings)
+
+    assert not ok
+    assert "APDR_PYEGO_PYTHON <= 3.11" in detail
+
+
+def test_validate_pyego_runtime_reports_missing_typed_ast(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = _settings_with_pyego(tmp_path)
+    calls: list[int] = []
+
+    def fake_run(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(args[0], 0, stdout=b"3.11.10\n", stderr=b"")
+        return subprocess.CompletedProcess(
+            args[0],
+            1,
+            stdout=b"",
+            stderr=b"ModuleNotFoundError: No module named 'typed_ast'\n",
+        )
+
+    monkeypatch.setattr("agentic_python_dependency.tools.official_baselines.subprocess.run", fake_run)
+    ok, detail = validate_pyego_runtime(settings)
+
+    assert not ok
+    assert "missing typed_ast.ast27" in detail
+    assert "pip install -r" in detail
+
+
+def test_validate_pyego_runtime_succeeds_when_requirements_are_available(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings_with_pyego(tmp_path)
+    calls: list[int] = []
+
+    def fake_run(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(args[0], 0, stdout=b"3.11.12\n", stderr=b"")
+        return subprocess.CompletedProcess(args[0], 0, stdout=b"ok\n", stderr=b"")
+
+    monkeypatch.setattr("agentic_python_dependency.tools.official_baselines.subprocess.run", fake_run)
+    ok, detail = validate_pyego_runtime(settings)
+
+    assert ok
+    assert "ready" in detail

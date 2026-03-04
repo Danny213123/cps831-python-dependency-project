@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 from agentic_python_dependency.config import Settings
 from agentic_python_dependency.terminal_ui import TerminalBenchmarkDashboard, TerminalUI
@@ -118,6 +119,38 @@ def test_terminal_ui_can_switch_resolver(tmp_path: Path, monkeypatch) -> None:
     assert settings.resolver == "pyego"
 
 
+def test_terminal_ui_switching_to_pyego_autodetects_python311(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["4", "1", "2", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr(
+        TerminalUI,
+        "_discover_python311_for_pyego",
+        lambda self: ("/tmp/pyego311/python", (3, 11, 9)),
+    )
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert settings.resolver == "pyego"
+    assert settings.pyego_python == "/tmp/pyego311/python"
+
+
 def test_terminal_ui_switching_resolver_from_experimental_restores_supported_preset(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     settings.preset = "experimental"
@@ -145,6 +178,39 @@ def test_terminal_ui_switching_resolver_from_experimental_restores_supported_pre
 
     assert settings.resolver == "pyego"
     assert settings.preset == "accuracy"
+
+
+def test_terminal_ui_blocks_pyego_run_when_runtime_is_invalid(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.resolver = "pyego"
+    outputs: list[str] = []
+    benchmark_calls: list[dict[str, object]] = []
+    inputs = iter(["2", "1", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr(
+        "agentic_python_dependency.terminal_ui.validate_pyego_runtime",
+        lambda _: (False, "typed_ast missing"),
+    )
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: benchmark_calls.append(kwargs) or 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert not benchmark_calls
+    assert any("PyEGo runtime check failed." in line for line in outputs)
 
 
 def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> None:
@@ -199,6 +265,166 @@ def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
     ui.run()
 
     assert ui._fresh_run is True
+
+
+def test_terminal_ui_can_save_and_load_loadout(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.preset = "accuracy"
+    settings.use_rag = False
+    outputs: list[str] = []
+    save_inputs = iter(["5", "1", "nightly", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    save_ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(save_inputs),
+    )
+    save_ui.run()
+
+    settings.preset = "optimized"
+    settings.use_rag = True
+
+    load_inputs = iter(["5", "2", "1", "", "8"])
+    load_ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(load_inputs),
+    )
+    load_ui.run()
+
+    assert settings.preset == "accuracy"
+    assert settings.use_rag is False
+    assert (settings.data_dir / "loadouts" / "nightly.json").exists()
+
+
+def test_terminal_ui_can_delete_loadout(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    loadouts_dir = settings.data_dir / "loadouts"
+    loadouts_dir.mkdir(parents=True, exist_ok=True)
+    (loadouts_dir / "temp.json").write_text("{}", encoding="utf-8")
+
+    outputs: list[str] = []
+    inputs = iter(["5", "3", "1", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert not (loadouts_dir / "temp.json").exists()
+
+
+def test_terminal_ui_bootstraps_pyego_requirements_once_on_python311(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.pyego_root = tmp_path / "external" / "PyEGo"
+    settings.pyego_root.mkdir(parents=True, exist_ok=True)
+    (settings.pyego_root / "requirements.txt").write_text("typed-ast>=1.4.1\n", encoding="utf-8")
+
+    outputs: list[str] = []
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: "",
+    )
+
+    monkeypatch.setattr(
+        TerminalUI,
+        "_ensure_python311_for_resolver",
+        lambda self, resolver: ("/tmp/python311", (3, 11, 8)),
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr("agentic_python_dependency.terminal_ui.subprocess.run", fake_run)
+
+    first_ok, first_detail = ui._maybe_auto_install_official_requirements("pyego")
+    second_ok, second_detail = ui._maybe_auto_install_official_requirements("pyego")
+
+    assert first_ok is True
+    assert "Auto-installed pyego requirements" in first_detail
+    assert second_ok is True
+    assert "already bootstrapped" in second_detail
+    assert len(calls) == 1
+    assert calls[0][:4] == ["/tmp/python311", "-m", "pip", "install"]
+
+
+def test_terminal_ui_skips_bootstrap_when_python_is_not_311(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.readpye_root = tmp_path / "external" / "ReadPyE"
+    settings.readpye_root.mkdir(parents=True, exist_ok=True)
+    (settings.readpye_root / "requirements.txt").write_text("neo4j==4.4.5\n", encoding="utf-8")
+
+    outputs: list[str] = []
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: "",
+    )
+
+    monkeypatch.setattr(
+        TerminalUI,
+        "_ensure_python311_for_resolver",
+        lambda self, resolver: ("/tmp/python313", (3, 13, 2)),
+    )
+    monkeypatch.setattr(
+        "agentic_python_dependency.terminal_ui.subprocess.run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("pip install should not run")),
+    )
+
+    ok, detail = ui._maybe_auto_install_official_requirements("readpye")
+
+    assert ok is True
+    assert "Skipped auto-install" in detail
 
 
 def test_terminal_ui_can_configure_runtime_controls(tmp_path: Path, monkeypatch) -> None:

@@ -7,6 +7,25 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-04
+
+### Added
+
+- APDR UI home-level `Loadouts` menu with save/load/delete support for reusable resolver, preset, model, runtime, and research settings.
+- Persistent loadout storage under `data/loadouts/*.json` with sanitized names and compatibility-safe restore behavior.
+- Automatic official resolver dependency bootstrap in UI runs: `pip install -r requirements.txt` for `pyego` and `readpye` when a Python 3.11 interpreter is available, with per-interpreter/per-requirements cache markers under `data/runtime_bootstrap`.
+
+### Changed
+
+- UI resolver switching now auto-detects and assigns a Python 3.11 interpreter for `pyego` (prefers `.venv-pyego`, then `python3.11`/`python311` on PATH).
+- UI runtime validation now blocks `pyego`/`readpye` runs earlier with actionable setup details when official baseline prerequisites are not satisfied.
+- Doctor and benchmark preflight now include stricter PyEGo runtime checks tied to interpreter compatibility and `typed_ast.ast27` availability.
+
+### Fixed
+
+- Prevented full-run `pyego` failure cascades caused by missing `typed_ast` by failing fast before scheduling benchmark cases.
+- Reduced repeated official-baseline setup failures by caching successful bootstrap installs and reusing them across UI sessions.
+
 ## [1.0.0] - 2026-03-04
 
 ### Added

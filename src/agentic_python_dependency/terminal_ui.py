@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
+import re
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -23,6 +26,7 @@ from prompt_toolkit.widgets import Box, Frame
 
 from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
 from agentic_python_dependency.presets import RESEARCH_BUNDLE_DEFAULTS, RESEARCH_FEATURES, PRESET_CONFIGS
+from agentic_python_dependency.tools.official_baselines import validate_pyego_runtime
 
 
 ActionCallback = Callable[..., int]
@@ -427,6 +431,7 @@ class TerminalUI:
                     ("Run", "run"),
                     ("Reports", "report"),
                     ("Configure", "config"),
+                    ("Loadouts", "loadouts"),
                     ("Doctor", "doctor"),
                     ("Quit", "quit"),
                 ],
@@ -449,7 +454,7 @@ class TerminalUI:
                 self.output("\nExiting APDR UI.")
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice in {"1", "2", "3", "4"} and exit_code >= 0:
+            if choice in {"1", "2", "3", "4", "5"} and exit_code >= 0:
                 self._pause_after(exit_code)
 
     def _dispatch_choice(self, choice: str | None) -> int:
@@ -461,7 +466,51 @@ class TerminalUI:
             return self._report_menu()
         if choice in {"config", "4"}:
             return self._configure_menu()
+        if choice in {"loadouts", "5"}:
+            return self._loadouts_menu()
         self._show_status_dialog("Invalid choice.")
+        return 0
+
+    def _loadouts_menu(self) -> int:
+        if self._use_prompt_toolkit:
+            return self._loadouts_menu_prompt_toolkit()
+        return self._loadouts_menu_basic()
+
+    def _loadouts_menu_prompt_toolkit(self) -> int:
+        while True:
+            choice = button_dialog(
+                title="Loadouts",
+                text="Save, load, or delete reusable APDR settings profiles.",
+                buttons=[
+                    ("Save current", "save"),
+                    ("Load", "load"),
+                    ("Delete", "delete"),
+                    ("Back", "back"),
+                ],
+                style=UI_STYLE,
+            ).run()
+            if choice in {None, "back"}:
+                return 0
+            if choice == "save":
+                self._save_current_loadout()
+            elif choice == "load":
+                self._load_saved_loadout()
+            elif choice == "delete":
+                self._delete_saved_loadout()
+
+    def _loadouts_menu_basic(self) -> int:
+        self.output("\nLoadouts")
+        self.output("  1. Save current settings")
+        self.output("  2. Load saved settings")
+        self.output("  3. Delete saved settings")
+        self.output("  4. Back")
+        choice = self.input_fn("Select loadout option: ").strip().lower()
+        if choice == "1":
+            self._save_current_loadout()
+        elif choice == "2":
+            self._load_saved_loadout()
+        elif choice == "3":
+            self._delete_saved_loadout()
         return 0
 
     def _run_menu(self) -> int:
@@ -913,10 +962,400 @@ class TerminalUI:
             entries.append(updated)
         return entries
 
+    def _loadouts_dir(self) -> Path:
+        return self.settings.data_dir / "loadouts"
+
+    def _sanitize_loadout_name(self, raw_name: str) -> str:
+        normalized = raw_name.strip()
+        normalized = re.sub(r"\s+", "-", normalized)
+        normalized = re.sub(r"[^A-Za-z0-9._-]", "", normalized)
+        return normalized.strip(".-_")
+
+    def _loadout_path(self, loadout_name: str) -> Path:
+        return self._loadouts_dir() / f"{loadout_name}.json"
+
+    def _list_loadout_names(self) -> list[str]:
+        loadouts_dir = self._loadouts_dir()
+        if not loadouts_dir.exists():
+            return []
+        names = [path.stem for path in loadouts_dir.glob("*.json") if path.is_file()]
+        return sorted(set(name for name in names if name))
+
+    def _serialize_current_loadout(self) -> dict[str, object]:
+        return {
+            "resolver": self.settings.resolver,
+            "preset": self.settings.preset,
+            "prompt_profile": self.settings.prompt_profile,
+            "benchmark_case_source": self.settings.benchmark_case_source,
+            "model_profile": self.settings.model_profile,
+            "use_moe": self.settings.use_moe,
+            "use_rag": self.settings.use_rag,
+            "use_langchain": self.settings.use_langchain,
+            "extraction_model": self.settings.extraction_model,
+            "reasoning_model": self.settings.reasoning_model,
+            "version_model": self.settings.version_model,
+            "repair_model": self.settings.repair_model,
+            "adjudication_model": self.settings.adjudication_model,
+            "trace_llm": self.settings.trace_llm,
+            "research_bundle": self.settings.research_bundle,
+            "research_features": list(self.settings.research_features),
+            "pyego_python": self.settings.pyego_python,
+            "fresh_run": self._fresh_run,
+        }
+
+    def _apply_loadout(self, payload: dict[str, object]) -> None:
+        resolver = str(payload.get("resolver", self.settings.resolver) or self.settings.resolver)
+        if resolver in {"apdr", "pyego", "readpye"}:
+            self.settings.resolver = resolver
+
+        preset = str(payload.get("preset", self.settings.preset) or self.settings.preset)
+        if preset in PRESET_CONFIGS:
+            preset_config = PRESET_CONFIGS[preset]
+            self.settings.preset = preset
+            self.settings.prompt_profile = str(payload.get("prompt_profile", preset_config.prompt_profile))
+            self.settings.max_attempts = preset_config.max_attempts
+            self.settings.default_module_grouping = preset_config.reporting_grouping
+
+        benchmark_source = str(
+            payload.get("benchmark_case_source", self.settings.benchmark_case_source)
+            or self.settings.benchmark_case_source
+        )
+        if benchmark_source in {"all-gists", "dockerized-gists", "competition-run"}:
+            self.settings.benchmark_case_source = benchmark_source
+
+        model_profile = str(payload.get("model_profile", self.settings.model_profile) or self.settings.model_profile)
+        if model_profile in MODEL_PROFILE_DEFAULTS:
+            self.settings.model_profile = model_profile
+
+        for key, attr in (
+            ("use_moe", "use_moe"),
+            ("use_rag", "use_rag"),
+            ("use_langchain", "use_langchain"),
+            ("trace_llm", "trace_llm"),
+            ("fresh_run", "_fresh_run"),
+        ):
+            value = payload.get(key, None)
+            if isinstance(value, bool):
+                if attr == "_fresh_run":
+                    self._fresh_run = value
+                else:
+                    setattr(self.settings, attr, value)
+
+        for key, attr in (
+            ("extraction_model", "extraction_model"),
+            ("reasoning_model", "reasoning_model"),
+            ("version_model", "version_model"),
+            ("repair_model", "repair_model"),
+            ("adjudication_model", "adjudication_model"),
+            ("pyego_python", "pyego_python"),
+        ):
+            value = str(payload.get(key, "")).strip()
+            if value:
+                setattr(self.settings, attr, value)
+
+        research_bundle = str(payload.get("research_bundle", self.settings.research_bundle) or self.settings.research_bundle)
+        if research_bundle in RESEARCH_BUNDLE_DEFAULTS:
+            self.settings.research_bundle = research_bundle
+
+        raw_features = payload.get("research_features", [])
+        if isinstance(raw_features, list):
+            self.settings.research_features = tuple(
+                feature for feature in raw_features if isinstance(feature, str) and feature in RESEARCH_FEATURES
+            )
+
+        if self.settings.preset in {"research", "experimental"} and self.settings.resolver != "apdr":
+            self.settings.resolver = "apdr"
+        if self.settings.preset != "research":
+            self.settings.research_bundle = "baseline"
+            self.settings.research_features = ()
+
+    def _prompt_loadout_name(self, label: str) -> str | None:
+        candidate = self._prompt_optional(label, "").strip()
+        if not candidate:
+            self._show_status_dialog("Loadout name is required.")
+            return None
+        normalized = self._sanitize_loadout_name(candidate)
+        if not normalized:
+            self._show_status_dialog("Loadout name contains only unsupported characters.")
+            return None
+        return normalized
+
+    def _prompt_existing_loadout(self, title: str, prompt: str) -> str | None:
+        names = self._list_loadout_names()
+        if not names:
+            self._show_status_dialog(f"No saved loadouts in {self._loadouts_dir()}.")
+            return None
+        if self._use_prompt_toolkit:
+            selected = radiolist_dialog(
+                title=title,
+                text=prompt,
+                values=[(name, name) for name in names],
+                default=names[0],
+                style=UI_STYLE,
+            ).run()
+            return selected
+        self.output("\nSaved loadouts:")
+        for index, name in enumerate(names, start=1):
+            self.output(f"  {index}. {name}")
+        choice = self.input_fn("Choose loadout number: ").strip()
+        if not choice.isdigit():
+            self._show_status_dialog("Invalid loadout selection.")
+            return None
+        index = int(choice) - 1
+        if index < 0 or index >= len(names):
+            self._show_status_dialog("Invalid loadout selection.")
+            return None
+        return names[index]
+
+    def _save_current_loadout(self) -> None:
+        loadout_name = self._prompt_loadout_name("Loadout name")
+        if not loadout_name:
+            return
+        loadouts_dir = self._loadouts_dir()
+        loadouts_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "name": loadout_name,
+            "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "settings": self._serialize_current_loadout(),
+        }
+        loadout_path = self._loadout_path(loadout_name)
+        loadout_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        self._show_status_dialog(f"Saved loadout '{loadout_name}' to {loadout_path}.")
+
+    def _load_saved_loadout(self) -> None:
+        loadout_name = self._prompt_existing_loadout("Load loadout", "Choose a saved loadout to apply.")
+        if not loadout_name:
+            return
+        loadout_path = self._loadout_path(loadout_name)
+        try:
+            payload = json.loads(loadout_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            self._show_status_dialog(f"Failed to read loadout '{loadout_name}'.")
+            return
+        if not isinstance(payload, dict):
+            self._show_status_dialog(f"Loadout '{loadout_name}' is invalid.")
+            return
+        settings_payload = payload.get("settings", payload)
+        if not isinstance(settings_payload, dict):
+            self._show_status_dialog(f"Loadout '{loadout_name}' is invalid.")
+            return
+        self._apply_loadout(settings_payload)
+        self._show_status_dialog(f"Loaded loadout '{loadout_name}'.")
+
+    def _delete_saved_loadout(self) -> None:
+        loadout_name = self._prompt_existing_loadout("Delete loadout", "Choose a saved loadout to delete.")
+        if not loadout_name:
+            return
+        loadout_path = self._loadout_path(loadout_name)
+        try:
+            loadout_path.unlink()
+        except OSError as exc:
+            self._show_status_dialog(f"Failed to delete loadout '{loadout_name}': {exc}")
+            return
+        self._show_status_dialog(f"Deleted loadout '{loadout_name}'.")
+
+    def _bootstrap_dir(self) -> Path:
+        return self.settings.data_dir / "runtime_bootstrap"
+
+    def _official_runtime_paths(self, resolver: str) -> tuple[str, Path] | None:
+        if resolver == "pyego":
+            return self.settings.pyego_python, self.settings.pyego_root / "requirements.txt"
+        if resolver == "readpye":
+            return self.settings.readpye_python, self.settings.readpye_root / "requirements.txt"
+        return None
+
+    def _ensure_python311_for_resolver(self, resolver: str) -> tuple[str, tuple[int, int, int] | None]:
+        if resolver == "pyego":
+            self._ensure_ui_pyego_python311()
+            python_exec = self.settings.pyego_python
+        elif resolver == "readpye":
+            version = self._probe_python_version(self.settings.readpye_python)
+            if version is None or version[:2] != (3, 11):
+                selected, _ = self._discover_python311_for_pyego()
+                if selected:
+                    self.settings.readpye_python = selected
+            python_exec = self.settings.readpye_python
+        else:
+            return "", None
+        return python_exec, self._probe_python_version(python_exec)
+
+    def _bootstrap_marker_path(self, resolver: str, python_exec: str, requirements_path: Path) -> Path:
+        digest = hashlib.sha1()
+        digest.update(resolver.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(Path(python_exec)).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(requirements_path.resolve()).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(requirements_path.read_bytes())
+        return self._bootstrap_dir() / f"{resolver}-{digest.hexdigest()[:16]}.json"
+
+    def _maybe_auto_install_official_requirements(self, resolver: str) -> tuple[bool, str]:
+        runtime = self._official_runtime_paths(resolver)
+        if runtime is None:
+            return True, f"{resolver} has no official requirements bootstrap."
+        _, requirements_path = runtime
+        if not requirements_path.exists():
+            return True, f"Skipped auto-install: requirements file not found at {requirements_path}."
+
+        python_exec, version = self._ensure_python311_for_resolver(resolver)
+        if version is None:
+            return True, f"Skipped auto-install: unable to probe interpreter '{python_exec}'."
+        if version[:2] != (3, 11):
+            return (
+                True,
+                f"Skipped auto-install: {python_exec} is Python {version[0]}.{version[1]}.{version[2]} (need 3.11).",
+            )
+
+        marker_path = self._bootstrap_marker_path(resolver, python_exec, requirements_path)
+        if marker_path.exists():
+            return True, f"{resolver} requirements already bootstrapped for {python_exec}."
+
+        install = subprocess.run(
+            [python_exec, "-m", "pip", "install", "-r", str(requirements_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if install.returncode != 0:
+            stderr = (install.stderr or "").strip()
+            stdout = (install.stdout or "").strip()
+            details = stderr or stdout or "pip install failed"
+            return False, f"Auto-install failed for {resolver}: {details}"
+
+        bootstrap_dir = self._bootstrap_dir()
+        bootstrap_dir.mkdir(parents=True, exist_ok=True)
+        marker_path.write_text(
+            json.dumps(
+                {
+                    "resolver": resolver,
+                    "python": python_exec,
+                    "requirements": str(requirements_path),
+                    "installed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return True, f"Auto-installed {resolver} requirements with {python_exec}."
+
+    def _default_pyego_venv_python(self) -> Path:
+        if sys.platform.startswith("win"):
+            return self.settings.project_root / ".venv-pyego" / "Scripts" / "python.exe"
+        return self.settings.project_root / ".venv-pyego" / "bin" / "python"
+
+    def _probe_python_version(self, executable: str) -> tuple[int, int, int] | None:
+        try:
+            completed = subprocess.run(
+                [
+                    executable,
+                    "-c",
+                    "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]}')",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+                timeout=5,
+            )
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return None
+        if completed.returncode != 0:
+            return None
+        version_text = (completed.stdout or "").strip()
+        parts = version_text.split(".")
+        if len(parts) < 2:
+            return None
+        try:
+            major = int(parts[0])
+            minor = int(parts[1])
+            patch = int(parts[2]) if len(parts) > 2 else 0
+        except ValueError:
+            return None
+        return major, minor, patch
+
+    def _discover_python311_for_pyego(self) -> tuple[str | None, tuple[int, int, int] | None]:
+        candidates: list[str] = []
+        default_venv = self._default_pyego_venv_python()
+        if default_venv.exists():
+            candidates.append(str(default_venv))
+        if self.settings.pyego_python:
+            candidates.append(self.settings.pyego_python)
+        for command in ("python3.11", "python311", "python3", "python"):
+            resolved = shutil.which(command)
+            if resolved:
+                candidates.append(resolved)
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            deduped.append(candidate)
+        for candidate in deduped:
+            version = self._probe_python_version(candidate)
+            if version and version[:2] == (3, 11):
+                return candidate, version
+        return None, None
+
+    def _ensure_ui_pyego_python311(self) -> str | None:
+        selected, version = self._discover_python311_for_pyego()
+        if selected is None:
+            return None
+        self.settings.pyego_python = selected
+        version_text = f"{version[0]}.{version[1]}.{version[2]}" if version else "3.11"
+        return version_text
+
+    def _pyego_setup_instructions(self) -> str:
+        if sys.platform.startswith("win"):
+            return (
+                "py -3.11 -m venv .venv-pyego\n"
+                ".venv-pyego\\Scripts\\python -m pip install --upgrade pip\n"
+                ".venv-pyego\\Scripts\\python -m pip install -r external\\PyEGo\\requirements.txt"
+            )
+        return (
+            "python3.11 -m venv .venv-pyego\n"
+            "source .venv-pyego/bin/activate\n"
+            "python -m pip install --upgrade pip\n"
+            "python -m pip install -r external/PyEGo/requirements.txt"
+        )
+
     def _validate_runtime_selection(self) -> bool:
         if self.settings.preset in {"research", "experimental"} and self.settings.resolver != "apdr":
             self._show_status_dialog("Research and experimental presets are only supported with the apdr resolver.")
             return False
+        if self.settings.resolver == "pyego":
+            install_ok, install_detail = self._maybe_auto_install_official_requirements("pyego")
+            if not install_ok:
+                self._show_status_dialog(install_detail)
+                return False
+            self._ensure_ui_pyego_python311()
+            pyego_ok, pyego_detail = validate_pyego_runtime(self.settings)
+            if not pyego_ok:
+                default_venv = self._default_pyego_venv_python()
+                self._show_status_dialog(
+                    "PyEGo runtime check failed.\n\n"
+                    f"{install_detail}\n\n"
+                    f"{pyego_detail}\n\n"
+                    "Set up a dedicated Python 3.11 env, then retry from the UI:\n"
+                    f"{self._pyego_setup_instructions()}\n\n"
+                    f"APDR auto-detects: {default_venv}"
+                )
+                return False
+        if self.settings.resolver == "readpye":
+            install_ok, install_detail = self._maybe_auto_install_official_requirements("readpye")
+            if not install_ok:
+                self._show_status_dialog(install_detail)
+                return False
+            if not (self.settings.readpye_root / "run.py").exists():
+                self._show_status_dialog(f"ReadPyE entrypoint missing at {self.settings.readpye_root / 'run.py'}.")
+                return False
+            if not self.settings.readpye_language_dir:
+                self._show_status_dialog("ReadPyE requires APDR_READPYE_LANGDIR to be configured.")
+                return False
         return True
 
     def _prompt_run_id(self) -> str | None:
@@ -1081,7 +1520,21 @@ class TerminalUI:
             self.settings.default_module_grouping = preset_config.reporting_grouping
             self.settings.research_bundle = "baseline"
             self.settings.research_features = ()
-        self._show_status_dialog(f"Resolver switched to {selected}.")
+        message = f"Resolver switched to {selected}."
+        if selected == "pyego":
+            version_text = self._ensure_ui_pyego_python311()
+            if version_text:
+                message += (
+                    "\n"
+                    f"PyEGo interpreter set to {self.settings.pyego_python} "
+                    f"(Python {version_text})."
+                )
+            else:
+                message += (
+                    "\nNo Python 3.11 interpreter was auto-detected yet. "
+                    "Runs will be blocked until PyEGo runtime preflight passes."
+                )
+        self._show_status_dialog(message)
 
     def _choose_benchmark_source(self) -> None:
         options = [
@@ -1292,6 +1745,8 @@ class TerminalUI:
             f"LangChain {'on' if self.settings.use_langchain else 'off'}\n"
             f"<b>Research:</b> {self.settings.research_bundle} "
             f"({len(self.settings.research_features)} feature(s))\n"
+            f"<b>PyEGo Python:</b> {self.settings.pyego_python}\n"
+            f"<b>Loadouts:</b> {len(self._list_loadout_names())}\n"
             f"<b>Fresh run:</b> {'on' if self._fresh_run else 'off'} | "
             f"<b>Trace LLM:</b> {'on' if self.settings.trace_llm else 'off'}\n"
             f"<b>Artifacts:</b> {self.settings.artifacts_dir}"
@@ -1364,6 +1819,8 @@ class TerminalUI:
         self.output(f"Model bundle: {self.settings.model_profile}")
         self.output(f"Research bundle: {self.settings.research_bundle}")
         self.output(f"Research features: {', '.join(self.settings.research_features) or 'none'}")
+        self.output(f"PyEGo Python: {self.settings.pyego_python}")
+        self.output(f"Loadouts: {len(self._list_loadout_names())}")
         self.output(f"MoE: {'on' if self.settings.use_moe else 'off'}")
         self.output(f"RAG: {'on' if self.settings.use_rag else 'off'}")
         self.output(f"LangChain: {'on' if self.settings.use_langchain else 'off'}")
@@ -1383,6 +1840,7 @@ class TerminalUI:
         self.output("  2. Run workflows")
         self.output("  3. Reports")
         self.output("  4. Configure")
+        self.output("  5. Loadouts")
         self.output("  8. Quit")
 
 

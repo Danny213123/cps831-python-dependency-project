@@ -13,6 +13,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Ollama-backed LangChain model routing using `gemma3:4b` for extraction and `gemma3:12b` for versioning, repair, and adjudication.
 - Six user-selectable execution presets spanning `performance` through `accuracy`, including `efficient` and `thorough` intermediate tradeoff levels.
 - Prompt-profile support with `paper`, `optimized-lite`, `optimized`, and `optimized-strict` prompt sets.
+- Runtime controls for toggling MoE routing, RAG, and LangChain independently, plus stage-specific model selection for extractor, runner, version, repair, and adjudication roles.
 - CLI entrypoint `apd` with benchmark, case, project, and reporting commands.
 - One-step benchmark wrapper commands for running the prepared segment and full benchmark without manually chaining setup steps.
 - Newcomer-friendly top-level commands `apd doctor`, `apd smoke`, `apd full`, and `apd solve`.
@@ -51,6 +52,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added dependency-reason, prompt-profile, preset, candidate-provenance, and compatibility-policy metadata to run artifacts and summaries.
 - Added timeline artifacts (`timeline.json`, `timeline.csv`, `timeline.md`) and exposed timeline viewing in the interactive terminal UI.
 - Added a paper-compatible module report mode that builds top-module tables from the hard subset in `all-gists` so the reported module families line up more closely with the paper.
+- Made paper-compatible module success rates coverage-aware for preview and partial runs, so APD percentages reflect the cases actually executed while still preserving the full cohort sizes in the report.
+- Parallelized module report generation across snippet reads and import extraction to improve throughput on large benchmark cohorts.
+- Updated the interactive module report flow so `apd ui` renders the generated markdown table instead of dumping raw captured command output.
 - Switched documentation away from Compose sidecars to host Ollama plus host Docker usage for local GPU testing.
 
 ### Fixed
@@ -72,6 +76,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed long PyPI cache filenames by truncating and hashing cache keys safely.
 - Fixed Windows Docker subprocess handling when `stdout` or `stderr` is `None`.
 - Fixed `apd ui` module reporting so paper-compatible reports no longer crash on unreadable `all-gists` snippets on Windows; unreadable cases are skipped and surfaced in the generated report instead.
+- Fixed paper-compatible preview reports showing `0.00` success rates across the board by using covered-case denominators instead of the entire paper cohort when the run only covers a subset of cases.
 - Fixed the terminal UI dependency path by declaring `prompt_toolkit` as a runtime dependency for `apd ui`.
+- Fixed module-report warning noise so `SyntaxWarning` output from benchmark snippets no longer floods the UI dialog when generating reports.
 - Added a trace-view CLI path so prompt/response logs written by `--trace-llm` can be inspected directly without manually opening artifact files.
 - Fixed `apd ui` benchmark shutdown so `Ctrl+C` requests a clean cooperative stop instead of being swallowed by the fullscreen dashboard.

@@ -65,7 +65,7 @@ def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
 def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["m", "2", "8"])
+    inputs = iter(["m", "3", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -112,6 +112,33 @@ def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
     ui.run()
 
     assert ui._fresh_run is True
+
+
+def test_terminal_ui_can_configure_runtime_controls(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["r", "1", "r", "6", "custom:version", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert settings.use_moe is False
+    assert settings.version_model == "custom:version"
+    assert settings.model_profile == "custom"
 
 
 def test_terminal_ui_smoke_run_uses_dashboard(tmp_path: Path, monkeypatch) -> None:
@@ -182,6 +209,10 @@ def test_terminal_ui_module_report_can_choose_paper_compatible(tmp_path: Path, m
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
+    run_dir = settings.artifacts_dir / "run123"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "module-success-paper.md").write_text("# Module Success Table\n", encoding="utf-8")
+
     ui = TerminalUI(
         settings=settings,
         doctor_command=lambda *args, **kwargs: 0,
@@ -200,6 +231,7 @@ def test_terminal_ui_module_report_can_choose_paper_compatible(tmp_path: Path, m
 
     assert module_calls
     assert module_calls[0][-1] is True
+    assert any("Module Success Table" in line for line in outputs)
 
 
 def test_terminal_ui_surfaces_captured_command_errors_without_crashing(tmp_path: Path, monkeypatch) -> None:

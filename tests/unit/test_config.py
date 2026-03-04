@@ -47,6 +47,22 @@ def test_settings_from_env_supports_model_profile_defaults(tmp_path: Path) -> No
     assert settings.reasoning_model == "qwen3.5:9b"
 
 
+def test_settings_from_env_supports_gemma_moe_lite_defaults(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, model_profile_override="gemma-moe-lite")
+
+    assert settings.model_profile == "gemma-moe-lite"
+    assert settings.extraction_model == "gemma3:1b"
+    assert settings.reasoning_model == "gemma3:4b"
+
+
+def test_settings_from_env_supports_qwen35_moe_lite_defaults(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, model_profile_override="qwen35-moe-lite")
+
+    assert settings.model_profile == "qwen35-moe-lite"
+    assert settings.extraction_model == "qwen3.5:0.8b"
+    assert settings.reasoning_model == "qwen3.5:4b"
+
+
 def test_settings_from_env_marks_custom_model_overrides(tmp_path: Path) -> None:
     settings = Settings.from_env(
         project_root=tmp_path,
@@ -57,6 +73,39 @@ def test_settings_from_env_marks_custom_model_overrides(tmp_path: Path) -> None:
     assert settings.model_profile == "custom"
     assert settings.extraction_model == "gemma3:4b"
     assert settings.reasoning_model == "gpt-oss:20b"
+
+
+def test_settings_from_env_supports_runtime_toggle_overrides(tmp_path: Path) -> None:
+    settings = Settings.from_env(
+        project_root=tmp_path,
+        use_moe_override=False,
+        use_rag_override=False,
+        use_langchain_override=False,
+        version_model_override="model:version",
+        repair_model_override="model:repair",
+        adjudication_model_override="model:adjudicate",
+    )
+
+    assert settings.use_moe is False
+    assert settings.use_rag is False
+    assert settings.use_langchain is False
+    assert settings.stage_model("extract") == settings.reasoning_model
+    assert settings.stage_model("version") == settings.reasoning_model
+    assert settings.version_model == "model:version"
+    assert settings.repair_model == "model:repair"
+    assert settings.adjudication_model == "model:adjudicate"
+
+
+def test_settings_from_env_supports_false_runtime_env_values(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("APD_USE_MOE", "false")
+    monkeypatch.setenv("APD_USE_RAG", "0")
+    monkeypatch.setenv("APD_USE_LANGCHAIN", "no")
+
+    settings = Settings.from_env(project_root=tmp_path)
+
+    assert settings.use_moe is False
+    assert settings.use_rag is False
+    assert settings.use_langchain is False
 
 
 def test_settings_from_env_allows_disabling_llm_cache(tmp_path: Path) -> None:

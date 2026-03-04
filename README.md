@@ -62,8 +62,20 @@ Model bundles are also selectable:
 
 ```bash
 apd --model-profile gemma-moe smoke --jobs 1
+apd --model-profile gemma-moe-lite smoke --jobs 1
 apd --model-profile qwen35-9b smoke --jobs 1
+apd --model-profile qwen35-moe-lite smoke --jobs 1
 apd --model-profile gpt-oss-20b smoke --jobs 1
+```
+
+Runtime behavior is selectable too:
+
+```bash
+apd --no-moe smoke --jobs 1
+apd --no-rag smoke --jobs 1
+apd --no-langchain smoke --jobs 1
+apd --model-profile custom --extraction-model gemma3:1b --runner-model qwen3.5:4b smoke --jobs 1
+apd --extraction-model gemma3:1b --runner-model gemma3:4b --version-model qwen3.5:9b --repair-model qwen3.5:9b --adjudication-model gpt-oss:20b smoke --jobs 1
 ```
 
 ## Quick start
@@ -162,6 +174,14 @@ To override individual model names instead of a bundle:
 
 ```bash
 apd --extraction-model gemma3:4b --reasoning-model qwen3.5:9b smoke --jobs 1
+```
+
+You can also disable or mix individual runtime features:
+
+```bash
+apd --no-moe --runner-model qwen3.5:9b benchmark run --subset smoke30
+apd --no-rag --no-langchain --extraction-model gemma3:1b --runner-model gemma3:4b smoke --jobs 1
+apd --extraction-model qwen3.5:0.8b --runner-model qwen3.5:4b --version-model qwen3.5:9b --repair-model gpt-oss:20b benchmark segment --jobs 2
 ```
 
 ## Module reporting

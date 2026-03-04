@@ -56,9 +56,9 @@ def test_write_module_success_artifacts_uses_raw_suffix(tmp_path: Path) -> None:
         "run_id": "run123",
         "grouping": "raw",
         "top_n": 1,
-        "rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_success_rate": 100.0}],
-        "top_rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_success_rate": 100.0}],
-        "all_rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_success_rate": 100.0}],
+        "rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_rate_denominator": 1, "apd_success_rate": 100.0}],
+        "top_rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_rate_denominator": 1, "apd_success_rate": 100.0}],
+        "all_rows": [{"module_name": "requests", "projects": 1, "successes": 1, "apd_rate_denominator": 1, "apd_success_rate": 100.0}],
     }
 
     write_module_success_artifacts(run_dir, report)

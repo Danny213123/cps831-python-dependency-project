@@ -41,6 +41,48 @@ def test_benchmark_run_parser_accepts_jobs_flag() -> None:
     assert args.fresh_run is True
 
 
+def test_benchmark_run_parser_accepts_new_moe_model_profiles() -> None:
+    parser = build_parser()
+
+    gemma_args = parser.parse_args(["--model-profile", "gemma-moe-lite", "smoke"])
+    qwen_args = parser.parse_args(["--model-profile", "qwen35-moe-lite", "smoke"])
+
+    assert gemma_args.model_profile == "gemma-moe-lite"
+    assert qwen_args.model_profile == "qwen35-moe-lite"
+
+
+def test_benchmark_run_parser_accepts_runtime_controls() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "--no-moe",
+            "--no-rag",
+            "--no-langchain",
+            "--extraction-model",
+            "extract:model",
+            "--runner-model",
+            "runner:model",
+            "--version-model",
+            "version:model",
+            "--repair-model",
+            "repair:model",
+            "--adjudication-model",
+            "adj:model",
+            "smoke",
+        ]
+    )
+
+    assert args.moe is False
+    assert args.rag is False
+    assert args.langchain is False
+    assert args.extraction_model == "extract:model"
+    assert args.runner_model == "runner:model"
+    assert args.version_model == "version:model"
+    assert args.repair_model == "repair:model"
+    assert args.adjudication_model == "adj:model"
+
+
 def test_benchmark_segment_parser_accepts_subset_and_jobs() -> None:
     parser = build_parser()
 

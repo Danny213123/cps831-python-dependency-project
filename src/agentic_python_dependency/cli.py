@@ -29,6 +29,21 @@ def _notify_path(label: str, path: Path) -> None:
     print(f"{label}: {path}", file=sys.stderr)
 
 
+def format_model_summary(settings: Settings) -> str:
+    stage_models = settings.active_stage_models()
+    routing = "moe" if settings.use_moe else "single"
+    backend = "langchain" if settings.use_langchain else "direct"
+    rag = "rag" if settings.use_rag else "no-rag"
+    return (
+        f"{settings.model_profile} [{routing}/{backend}/{rag}] "
+        f"extract={stage_models['extract']} "
+        f"runner={stage_models['runner']} "
+        f"version={stage_models['version']} "
+        f"repair={stage_models['repair']} "
+        f"adjudicate={stage_models['adjudicate']}"
+    )
+
+
 class BenchmarkObserver(Protocol):
     def start(
         self,
@@ -277,14 +292,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="Select the Ollama model bundle to use for extraction and reasoning.",
     )
     parser.add_argument(
+        "--moe",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable or disable stage-specific model routing.",
+    )
+    parser.add_argument(
+        "--rag",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable or disable retrieval-augmented version selection with PyPI metadata.",
+    )
+    parser.add_argument(
+        "--langchain",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable or disable the LangChain-backed Ollama client.",
+    )
+    parser.add_argument(
         "--extraction-model",
         default=None,
         help="Override the extraction-stage Ollama model name.",
     )
     parser.add_argument(
+        "--runner-model",
+        default=None,
+        help="Override the shared runner/reasoning model name.",
+    )
+    parser.add_argument(
         "--reasoning-model",
         default=None,
-        help="Override the version/repair/adjudication Ollama model name.",
+        help="Alias for --runner-model.",
+    )
+    parser.add_argument(
+        "--version-model",
+        default=None,
+        help="Override the version-selection model name.",
+    )
+    parser.add_argument(
+        "--repair-model",
+        default=None,
+        help="Override the repair-stage model name.",
+    )
+    parser.add_argument(
+        "--adjudication-model",
+        default=None,
+        help="Override the adjudication/cleanup model name.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -445,7 +498,11 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
         add_check("ollama_server", "warning", f"{settings.ollama_base_url} unavailable: {exc}")
 
-    for model_name in (settings.extraction_model, settings.reasoning_model):
+    seen_models: set[str] = set()
+    for model_name in settings.active_stage_models().values():
+        if model_name in seen_models:
+            continue
+        seen_models.add(model_name)
         status = "ok" if model_name in ollama_models else "missing"
         detail = "installed" if status == "ok" else "pull this model before running benchmarks"
         add_check(f"model:{model_name}", status, detail)
@@ -461,6 +518,9 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
         "preset": settings.preset,
         "prompt_profile": settings.prompt_profile,
         "model_profile": settings.model_profile,
+        "use_moe": settings.use_moe,
+        "use_rag": settings.use_rag,
+        "use_langchain": settings.use_langchain,
         "checks": checks,
     }
 
@@ -473,8 +533,14 @@ def doctor_command(settings: Settings, ref: str | None) -> int:
     print(f"[INFO] preset: {settings.preset}")
     print(f"[INFO] prompt_profile: {settings.prompt_profile}")
     print(f"[INFO] model_profile: {settings.model_profile}")
+    print(f"[INFO] moe: {'enabled' if settings.use_moe else 'disabled'}")
+    print(f"[INFO] rag: {'enabled' if settings.use_rag else 'disabled'}")
+    print(f"[INFO] langchain: {'enabled' if settings.use_langchain else 'disabled'}")
     print(f"[INFO] extraction_model: {settings.extraction_model}")
-    print(f"[INFO] reasoning_model: {settings.reasoning_model}")
+    print(f"[INFO] runner_model: {settings.reasoning_model}")
+    print(f"[INFO] version_model: {settings.version_model}")
+    print(f"[INFO] repair_model: {settings.repair_model}")
+    print(f"[INFO] adjudication_model: {settings.adjudication_model}")
     print(f"[INFO] llm_cache: {'disabled' if settings.disable_llm_cache else 'enabled'}")
     for check in report["checks"]:
         status = check["status"].upper()
@@ -525,7 +591,7 @@ def run_benchmark(
         failures=completed_failures,
         preset=settings.preset,
         prompt_profile=settings.prompt_profile,
-        model_summary=f"{settings.model_profile}: {settings.extraction_model} / {settings.reasoning_model}",
+        model_summary=format_model_summary(settings),
         jobs=jobs,
         target=subset or ("full" if full else "benchmark"),
         artifacts_dir=run_dir,
@@ -694,8 +760,15 @@ def main(argv: list[str] | None = None) -> int:
         preset_override=args.preset,
         prompt_profile_override=args.prompt_profile,
         model_profile_override=args.model_profile,
+        use_moe_override=args.moe,
+        use_rag_override=args.rag,
+        use_langchain_override=args.langchain,
         extraction_model_override=args.extraction_model,
+        runner_model_override=args.runner_model or args.reasoning_model,
         reasoning_model_override=args.reasoning_model,
+        version_model_override=args.version_model,
+        repair_model_override=args.repair_model,
+        adjudication_model_override=args.adjudication_model,
         disable_llm_cache_override=args.no_llm_cache or args.fresh_run,
     )
     if args.trace_llm:

@@ -5,6 +5,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+import urllib.error
+import urllib.request
 
 from agentic_python_dependency.config import Settings
 
@@ -17,7 +19,7 @@ class OllamaPromptRunner:
     _chains: dict[tuple[str, str], Any] = field(default_factory=dict, init=False)
 
     def stage_model(self, stage: str) -> str:
-        return self.settings.extraction_model if stage == "extract" else self.settings.reasoning_model
+        return self.settings.stage_model(stage)
 
     @staticmethod
     def _stringify_response(response: Any) -> str:
@@ -51,6 +53,30 @@ class OllamaPromptRunner:
         cache_path = self._cache_path(stage, prompt_text)
         cache_path.write_text(response_text, encoding="utf-8")
 
+    def _invoke_via_ollama_http(self, stage: str, prompt_text: str) -> str:
+        request = urllib.request.Request(
+            f"{self.settings.ollama_base_url}/api/generate",
+            data=json.dumps(
+                {
+                    "model": self.stage_model(stage),
+                    "prompt": prompt_text,
+                    "stream": False,
+                    "options": {
+                        "temperature": self.settings.temperature,
+                        "num_ctx": self.settings.num_ctx,
+                    },
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                payload = json.load(response)
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Ollama request failed for stage '{stage}': {exc}") from exc
+        return str(payload.get("response", "")).strip()
+
     def invoke_template(self, stage: str, template_name: str, variables: dict[str, Any]) -> str:
         if self.scripted_responses.get(stage):
             return self.scripted_responses[stage].pop(0)
@@ -60,6 +86,10 @@ class OllamaPromptRunner:
         cached = self._read_cache(stage, rendered_prompt)
         if cached is not None:
             return cached
+        if not self.settings.use_langchain:
+            rendered_response = self._invoke_via_ollama_http(stage, rendered_prompt)
+            self._write_cache(stage, rendered_prompt, rendered_response)
+            return rendered_response
         key = (stage, template_name)
         if key not in self._chains:
             try:
@@ -90,6 +120,10 @@ class OllamaPromptRunner:
         cached = self._read_cache(stage, prompt_text)
         if cached is not None:
             return cached
+        if not self.settings.use_langchain:
+            rendered_response = self._invoke_via_ollama_http(stage, prompt_text)
+            self._write_cache(stage, prompt_text, rendered_response)
+            return rendered_response
 
         try:
             from langchain_ollama import ChatOllama

@@ -352,6 +352,7 @@ class TerminalUI:
                     ("Timeline view", "l"),
                     ("Preset", "p"),
                     ("Models", "m"),
+                    ("Runtime", "r"),
                     ("Fresh run", "f"),
                     ("Trace", "t"),
                     ("Quit", "8"),
@@ -375,7 +376,7 @@ class TerminalUI:
                 self.output("\nExiting APD UI.")
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice not in {"p", "m", "f", "t"}:
+            if choice not in {"p", "m", "r", "f", "t"}:
                 self._pause_after(exit_code)
 
     def _dispatch_choice(self, choice: str | None) -> int:
@@ -400,6 +401,9 @@ class TerminalUI:
             return 0
         if choice == "m":
             self._choose_model_profile()
+            return 0
+        if choice == "r":
+            self._configure_runtime()
             return 0
         if choice == "f":
             self._fresh_run = not self._fresh_run
@@ -473,15 +477,28 @@ class TerminalUI:
         top = self._prompt_int("Top modules", 15)
         grouping = self._prompt_choice("Grouping", ["canonical", "raw"], self.settings.default_module_grouping)
         cohort = self._prompt_choice("Cohort", ["run", "paper-compatible"], "run")
-        return self._run_captured(
-            self.modules_command,
-            self.settings,
-            run_id,
-            top,
-            None,
-            grouping,
-            cohort == "paper-compatible",
-        )
+        report_path = self._module_report_path(run_id, grouping, cohort == "paper-compatible")
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                exit_code = self.modules_command(
+                    self.settings,
+                    run_id,
+                    top,
+                    None,
+                    grouping,
+                    cohort == "paper-compatible",
+                )
+        except Exception as exc:
+            payload = buffer.getvalue().strip()
+            message = f"{type(exc).__name__}: {exc}"
+            if payload:
+                message = f"{payload}\n\n{message}"
+            self._show_status_dialog(message)
+            return 1
+        rendered = report_path.read_text(encoding="utf-8") if report_path.exists() else buffer.getvalue().strip()
+        self._show_status_dialog(rendered or "Module report completed.")
+        return exit_code
 
     def _run_timeline(self) -> int:
         if self.timeline_command is None:
@@ -506,6 +523,15 @@ class TerminalUI:
         if payload:
             self._show_status_dialog(payload)
         return exit_code
+
+    def _module_report_path(self, run_id: str, grouping: str, paper_compatible: bool) -> Path:
+        suffix_parts: list[str] = []
+        if paper_compatible:
+            suffix_parts.append("paper")
+        if grouping == "raw":
+            suffix_parts.append("raw")
+        suffix = "" if not suffix_parts else "-" + "-".join(suffix_parts)
+        return self.settings.artifacts_dir / run_id / f"module-success{suffix}.md"
 
     def _choose_preset(self) -> None:
         options = [(preset, preset) for preset in PRESET_CONFIGS]
@@ -567,8 +593,101 @@ class TerminalUI:
         self.settings.model_profile = selected
         self.settings.extraction_model = extraction_model
         self.settings.reasoning_model = reasoning_model
+        self.settings.version_model = reasoning_model
+        self.settings.repair_model = reasoning_model
+        self.settings.adjudication_model = reasoning_model
         self._show_status_dialog(
             f"Model bundle switched to {selected} ({extraction_model} / {reasoning_model})."
+        )
+
+    def _configure_runtime(self) -> None:
+        if self._use_prompt_toolkit:
+            while True:
+                choice = button_dialog(
+                    title="Runtime controls",
+                    text=self._runtime_dialog_text(),
+                    buttons=[
+                        ("Toggle MoE", "moe"),
+                        ("Toggle RAG", "rag"),
+                        ("Toggle LangChain", "langchain"),
+                        ("Extractor", "extract"),
+                        ("Runner", "runner"),
+                        ("Version", "version"),
+                        ("Repair", "repair"),
+                        ("Adjudicate", "adjudicate"),
+                        ("Back", "back"),
+                    ],
+                    style=UI_STYLE,
+                ).run()
+                if choice in {None, "back"}:
+                    return
+                self._apply_runtime_choice(choice)
+        else:
+            self.output("\nRuntime controls")
+            self.output("  1. Toggle MoE")
+            self.output("  2. Toggle RAG")
+            self.output("  3. Toggle LangChain")
+            self.output("  4. Set extractor model")
+            self.output("  5. Set runner model")
+            self.output("  6. Set version model")
+            self.output("  7. Set repair model")
+            self.output("  8. Set adjudication model")
+            choice = self.input_fn("Select runtime option: ").strip()
+            mapping = {
+                "1": "moe",
+                "2": "rag",
+                "3": "langchain",
+                "4": "extract",
+                "5": "runner",
+                "6": "version",
+                "7": "repair",
+                "8": "adjudicate",
+            }
+            selected = mapping.get(choice)
+            if selected:
+                self._apply_runtime_choice(selected)
+
+    def _apply_runtime_choice(self, choice: str) -> None:
+        if choice == "moe":
+            self.settings.use_moe = not self.settings.use_moe
+            self._show_status_dialog(f"MoE is now {'on' if self.settings.use_moe else 'off'}.")
+            return
+        if choice == "rag":
+            self.settings.use_rag = not self.settings.use_rag
+            self._show_status_dialog(f"RAG is now {'on' if self.settings.use_rag else 'off'}.")
+            return
+        if choice == "langchain":
+            self.settings.use_langchain = not self.settings.use_langchain
+            self._show_status_dialog(f"LangChain is now {'on' if self.settings.use_langchain else 'off'}.")
+            return
+        if choice == "extract":
+            self.settings.extraction_model = self._prompt_optional("Extractor model", self.settings.extraction_model)
+        elif choice == "runner":
+            self.settings.reasoning_model = self._prompt_optional("Runner model", self.settings.reasoning_model)
+        elif choice == "version":
+            self.settings.version_model = self._prompt_optional("Version model", self.settings.version_model)
+        elif choice == "repair":
+            self.settings.repair_model = self._prompt_optional("Repair model", self.settings.repair_model)
+        elif choice == "adjudicate":
+            self.settings.adjudication_model = self._prompt_optional(
+                "Adjudication model",
+                self.settings.adjudication_model,
+            )
+        else:
+            return
+        self.settings.model_profile = "custom"
+        self._show_status_dialog(self._runtime_dialog_text().replace("\n", "\n"))
+
+    def _runtime_dialog_text(self) -> str:
+        return (
+            f"MoE: {'on' if self.settings.use_moe else 'off'}\n"
+            f"RAG: {'on' if self.settings.use_rag else 'off'}\n"
+            f"LangChain: {'on' if self.settings.use_langchain else 'off'}\n\n"
+            f"Extractor: {self.settings.extraction_model}\n"
+            f"Runner: {self.settings.reasoning_model}\n"
+            f"Version: {self.settings.version_model}\n"
+            f"Repair: {self.settings.repair_model}\n"
+            f"Adjudication: {self.settings.adjudication_model}"
         )
 
     def _menu_dialog_text(self) -> AnyFormattedText:
@@ -577,7 +696,11 @@ class TerminalUI:
             "<style fg='#98c1d9'>Run benchmarks, inspect reports, and solve local projects without memorizing subcommands.</style>\n\n"
             f"<b>Preset:</b> {self.settings.preset}\n"
             f"<b>Model bundle:</b> {self.settings.model_profile}\n"
+            f"<b>MoE:</b> {'on' if self.settings.use_moe else 'off'}\n"
+            f"<b>RAG:</b> {'on' if self.settings.use_rag else 'off'}\n"
+            f"<b>LangChain:</b> {'on' if self.settings.use_langchain else 'off'}\n"
             f"<b>Models:</b> {self.settings.extraction_model} / {self.settings.reasoning_model}\n"
+            f"<b>Version/Repair/Adj:</b> {self.settings.version_model} / {self.settings.repair_model} / {self.settings.adjudication_model}\n"
             f"<b>Prompt profile:</b> {self.settings.prompt_profile}\n"
             f"<b>Fresh run:</b> {'on' if self._fresh_run else 'off'}\n"
             f"<b>Trace LLM:</b> {'on' if self.settings.trace_llm else 'off'}\n"
@@ -648,7 +771,13 @@ class TerminalUI:
         self.output("=" * width)
         self.output(f"Preset: {self.settings.preset}")
         self.output(f"Model bundle: {self.settings.model_profile}")
+        self.output(f"MoE: {'on' if self.settings.use_moe else 'off'}")
+        self.output(f"RAG: {'on' if self.settings.use_rag else 'off'}")
+        self.output(f"LangChain: {'on' if self.settings.use_langchain else 'off'}")
         self.output(f"Models: {self.settings.extraction_model} / {self.settings.reasoning_model}")
+        self.output(
+            f"Version/Repair/Adjudication: {self.settings.version_model} / {self.settings.repair_model} / {self.settings.adjudication_model}"
+        )
         self.output(f"Prompt profile: {self.settings.prompt_profile}")
         self.output(f"Fresh run: {'on' if self._fresh_run else 'off'}")
         self.output(f"Trace LLM: {'on' if self.settings.trace_llm else 'off'}")
@@ -667,6 +796,7 @@ class TerminalUI:
         self.output("  L. Timeline view")
         self.output("  P. Change preset")
         self.output("  M. Change model bundle")
+        self.output("  R. Runtime controls")
         self.output("  F. Toggle fresh run / no LLM cache")
         self.output("  T. Toggle LLM tracing")
         self.output("  8. Quit")

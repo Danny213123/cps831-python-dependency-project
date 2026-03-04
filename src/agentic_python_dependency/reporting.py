@@ -3,7 +3,10 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
+import warnings
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -184,6 +187,15 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
     dependency_reason_counts: dict[str, int] = {}
     preset = results[0].get("preset", "optimized") if results else "optimized"
     prompt_profile = results[0].get("prompt_profile", "optimized") if results else "optimized"
+    model_profile = results[0].get("model_profile", "gemma-moe") if results else "gemma-moe"
+    use_moe = bool(results[0].get("use_moe", True)) if results else True
+    use_rag = bool(results[0].get("use_rag", True)) if results else True
+    use_langchain = bool(results[0].get("use_langchain", True)) if results else True
+    extraction_model = results[0].get("extraction_model", "gemma3:4b") if results else "gemma3:4b"
+    runner_model = results[0].get("runner_model", "gemma3:12b") if results else "gemma3:12b"
+    version_model = results[0].get("version_model", runner_model) if results else "gemma3:12b"
+    repair_model = results[0].get("repair_model", runner_model) if results else "gemma3:12b"
+    adjudication_model = results[0].get("adjudication_model", runner_model) if results else "gemma3:12b"
     for item in results:
         key = f'{item.get("initial_eval", "")}->{item.get("final_error_category", "Success" if item["success"] else "UnknownError")}'
         transitions[key] = transitions.get(key, 0) + 1
@@ -203,6 +215,15 @@ def summarize_run(run_dir: Path, total_elapsed_seconds: float | None = None) -> 
         mean_wall_clock_time=mean_wall_clock,
         preset=preset,
         prompt_profile=prompt_profile,
+        model_profile=model_profile,
+        use_moe=use_moe,
+        use_rag=use_rag,
+        use_langchain=use_langchain,
+        extraction_model=extraction_model,
+        runner_model=runner_model,
+        version_model=version_model,
+        repair_model=repair_model,
+        adjudication_model=adjudication_model,
         total_wall_clock_time=total_wall_clock,
         total_wall_clock_human=format_duration(total_wall_clock),
         transitions=transitions,
@@ -251,6 +272,9 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Run ID: `{summary.run_id}`",
         f"- Preset: `{summary.preset}`",
         f"- Prompt profile: `{summary.prompt_profile}`",
+        f"- Model profile: `{summary.model_profile}`",
+        f"- Runtime: `{'moe' if summary.use_moe else 'single'}` / `{'rag' if summary.use_rag else 'no-rag'}` / `{'langchain' if summary.use_langchain else 'direct'}`",
+        f"- Models: `{summary.extraction_model}` / `{summary.runner_model}` / `{summary.version_model}` / `{summary.repair_model}` / `{summary.adjudication_model}`",
         f"- Total cases: `{summary.total_cases}`",
         f"- Success rate: `{summary.success_rate:.2%}`",
         f"- Initial ImportErrors: `{summary.initial_import_errors}`",
@@ -399,6 +423,7 @@ def build_module_success_table(
     successes: dict[str, int] = defaultdict(int)
     covered: dict[str, int] = defaultdict(int)
     skipped_case_ids: list[str] = []
+    all_rows: list[dict[str, Any]] = []
 
     if paper_compatible:
         cohort = "paper-compatible"
@@ -407,31 +432,40 @@ def build_module_success_table(
         cohort = "run"
         case_ids = [item["case_id"] for item in results if item.get("case_id")]
 
-    for case_id in case_ids:
+    def process_case(case_id: str) -> tuple[str, list[str] | None]:
         if paper_compatible:
             snippet_path = dataset.dataset_root(ref) / "all-gists" / case_id / "snippet.py"
         else:
             snippet_path = dataset.load_case(case_id, ref).snippet_path
         source_code = safe_read_text(snippet_path)
         if source_code is None:
-            skipped_case_ids.append(case_id)
-            continue
-        import_roots = filter_third_party_imports(extract_import_roots_from_code(source_code))
-        modules = normalize_candidate_packages(import_roots, import_roots)
-        item = result_map.get(case_id)
-        for module in set(modules):
-            module_name = canonical_module_name(module, grouping)
-            counts[module_name] += 1
-            if item is not None:
-                covered[module_name] += 1
-            if item is not None and item.get("success", False):
-                successes[module_name] += 1
+            return case_id, None
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            import_roots = filter_third_party_imports(extract_import_roots_from_code(source_code))
+            modules = normalize_candidate_packages(import_roots, import_roots)
+        return case_id, sorted(set(modules))
 
-    all_rows = []
+    worker_count = min(32, max(1, (os.cpu_count() or 1) * 2))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        for case_id, modules in executor.map(process_case, case_ids):
+            if modules is None:
+                skipped_case_ids.append(case_id)
+                continue
+            item = result_map.get(case_id)
+            for module in modules:
+                module_name = canonical_module_name(module, grouping)
+                counts[module_name] += 1
+                if item is not None:
+                    covered[module_name] += 1
+                if item is not None and item.get("success", False):
+                    successes[module_name] += 1
+
     for module_name, project_count in sorted(counts.items(), key=lambda entry: (-entry[1], entry[0])):
         success_count = successes.get(module_name, 0)
         covered_count = covered.get(module_name, 0)
-        success_rate = (success_count / project_count * 100.0) if project_count else 0.0
+        denominator = covered_count if paper_compatible and covered_count else project_count
+        success_rate = (success_count / denominator * 100.0) if denominator else 0.0
         all_rows.append(
             {
                 "module_name": module_name,
@@ -440,6 +474,7 @@ def build_module_success_table(
                 "successes": success_count,
                 "coverage_rate": round((covered_count / project_count * 100.0), 2) if project_count else 0.0,
                 "apd_success_rate": round(success_rate, 2),
+                "apd_rate_denominator": denominator,
             }
         )
     top_rows = all_rows[:top_n]
@@ -486,6 +521,7 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
                 "covered_projects",
                 "successes",
                 "coverage_rate",
+                "apd_rate_denominator",
                 "apd_success_rate",
             ],
         )
@@ -499,6 +535,7 @@ def write_module_success_artifacts(run_dir: Path, report: dict[str, Any]) -> Non
             f"Cohort: `{cohort}`",
             f"Covered cases: `{covered_case_count}/{total_cohort_cases}`",
             f"Skipped unreadable cases: `{skipped_case_count}`",
+            f"APD rate denominator: `covered projects`{' within the paper cohort' if report.get('paper_compatible') else ''}",
             "",
             "| Module Name | # Projects | APD |",
             "| --- | ---: | ---: |",

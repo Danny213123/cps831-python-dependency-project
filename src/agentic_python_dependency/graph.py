@@ -612,6 +612,11 @@ class ResolutionWorkflow:
             packages = [dependency.name for dependency in repaired]
         else:
             packages = allowed_packages
+        if not self.settings.use_rag:
+            state["version_options"] = []
+            state["unresolved_packages"] = []
+            state["applied_compatibility_policy"] = {}
+            return state
         options = []
         unresolved: list[str] = []
         for package in packages:
@@ -657,6 +662,20 @@ class ResolutionWorkflow:
             return state
 
         if not state.get("version_options"):
+            if not self.settings.use_rag and state.get("inferred_packages"):
+                selected = [ResolvedDependency(name=package, version="") for package in state.get("inferred_packages", [])]
+                state["prompt_history"]["prompt_b"] = "# skipped: RAG disabled; using unpinned package install plan"
+                state["model_outputs"]["version"].append(
+                    {
+                        "attempt": state["current_attempt"],
+                        "output": "\n".join(dependency.pin() for dependency in selected),
+                        "source": "rag_disabled",
+                    }
+                )
+                state["selected_dependencies"] = sorted(selected, key=lambda dependency: dependency.name.lower())
+                state["dependency_reason"] = "rag_disabled"
+                state["version_selection_source"] = "rag_disabled"
+                return state
             state["prompt_history"]["prompt_b"] = "# skipped: no compatible PyPI version options were inferred"
             state["model_outputs"]["version"].append(
                 {"attempt": state["current_attempt"], "output": "", "source": "no_version_options"}
@@ -956,6 +975,15 @@ class ResolutionWorkflow:
             "mode": state["mode"],
             "preset": state.get("preset", self.settings.preset),
             "prompt_profile": state.get("prompt_profile", self.settings.prompt_profile),
+            "model_profile": self.settings.model_profile,
+            "use_moe": self.settings.use_moe,
+            "use_rag": self.settings.use_rag,
+            "use_langchain": self.settings.use_langchain,
+            "extraction_model": self.settings.stage_model("extract"),
+            "runner_model": self.settings.reasoning_model,
+            "version_model": self.settings.stage_model("version"),
+            "repair_model": self.settings.stage_model("repair"),
+            "adjudication_model": self.settings.stage_model("adjudicate"),
             "success": execution.success,
             "attempts": state["current_attempt"],
             "final_error_category": execution.category,

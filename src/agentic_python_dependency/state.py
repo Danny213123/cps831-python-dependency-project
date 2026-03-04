@@ -50,7 +50,7 @@ class ResolvedDependency:
     version: str
 
     def pin(self) -> str:
-        return f"{self.name}=={self.version}"
+        return f"{self.name}=={self.version}" if self.version else self.name
 
 
 @dataclass(slots=True)
@@ -97,6 +97,15 @@ class BenchmarkSummary:
     mean_wall_clock_time: float
     preset: str = "optimized"
     prompt_profile: str = "optimized"
+    model_profile: str = "gemma-moe"
+    use_moe: bool = True
+    use_rag: bool = True
+    use_langchain: bool = True
+    extraction_model: str = "gemma3:4b"
+    runner_model: str = "gemma3:12b"
+    version_model: str = "gemma3:12b"
+    repair_model: str = "gemma3:12b"
+    adjudication_model: str = "gemma3:12b"
     total_wall_clock_time: float = 0.0
     total_wall_clock_human: str = "00:00:00"
     transitions: dict[str, int] = field(default_factory=dict)

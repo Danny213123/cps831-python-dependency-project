@@ -177,9 +177,10 @@ def test_terminal_ui_can_run_timeline_view(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     timeline_calls: list[tuple[object, ...]] = []
-    inputs = iter(["l", "run123", "", "8"])
+    inputs = iter(["l", "1", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    (settings.artifacts_dir / "run123").mkdir(parents=True, exist_ok=True)
 
     ui = TerminalUI(
         settings=settings,
@@ -205,7 +206,7 @@ def test_terminal_ui_module_report_can_choose_paper_compatible(tmp_path: Path, m
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     module_calls: list[tuple[object, ...]] = []
-    inputs = iter(["7", "run123", "15", "canonical", "paper-compatible", "", "8"])
+    inputs = iter(["7", "1", "15", "canonical", "paper-compatible", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -237,9 +238,10 @@ def test_terminal_ui_module_report_can_choose_paper_compatible(tmp_path: Path, m
 def test_terminal_ui_surfaces_captured_command_errors_without_crashing(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["7", "run123", "15", "canonical", "paper-compatible", "", "8"])
+    inputs = iter(["7", "1", "15", "canonical", "paper-compatible", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    (settings.artifacts_dir / "run123").mkdir(parents=True, exist_ok=True)
 
     ui = TerminalUI(
         settings=settings,
@@ -259,6 +261,60 @@ def test_terminal_ui_surfaces_captured_command_errors_without_crashing(tmp_path:
 
     assert exit_code == 0
     assert any("RuntimeError: boom" in line for line in outputs)
+
+
+def test_terminal_ui_can_select_run_for_summary(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    summary_calls: list[tuple[object, ...]] = []
+    inputs = iter(["5", "1", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    (settings.artifacts_dir / "run123").mkdir(parents=True, exist_ok=True)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: summary_calls.append(args) or 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert summary_calls
+    assert summary_calls[0][1] == "run123"
+
+
+def test_terminal_ui_reports_when_no_runs_exist(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["5", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    exit_code = ui.run()
+
+    assert exit_code == 0
+    assert any("No run directories found" in line for line in outputs)
 
 
 def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:

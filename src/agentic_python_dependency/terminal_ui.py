@@ -463,17 +463,23 @@ class TerminalUI:
         )
 
     def _run_summary(self) -> int:
-        run_id = self._prompt_required("Run ID")
+        run_id = self._prompt_run_id()
+        if not run_id:
+            return 1
         return self._run_captured(self.summarize_command, self.settings, run_id)
 
     def _run_failures(self) -> int:
-        run_id = self._prompt_required("Run ID")
+        run_id = self._prompt_run_id()
+        if not run_id:
+            return 1
         category = self._prompt_optional("Failure category filter", "")
         limit = self._prompt_int("Limit", 10)
         return self._run_captured(self.failures_command, self.settings, run_id, category or None, limit)
 
     def _run_modules(self) -> int:
-        run_id = self._prompt_required("Run ID")
+        run_id = self._prompt_run_id()
+        if not run_id:
+            return 1
         top = self._prompt_int("Top modules", 15)
         grouping = self._prompt_choice("Grouping", ["canonical", "raw"], self.settings.default_module_grouping)
         cohort = self._prompt_choice("Cohort", ["run", "paper-compatible"], "run")
@@ -504,7 +510,9 @@ class TerminalUI:
         if self.timeline_command is None:
             self._show_status_dialog("Timeline command is unavailable.")
             return 1
-        run_id = self._prompt_required("Run ID")
+        run_id = self._prompt_run_id()
+        if not run_id:
+            return 1
         return self._run_captured(self.timeline_command, self.settings, run_id)
 
     def _run_captured(self, action: ActionCallback, *args) -> int:
@@ -532,6 +540,41 @@ class TerminalUI:
             suffix_parts.append("raw")
         suffix = "" if not suffix_parts else "-" + "-".join(suffix_parts)
         return self.settings.artifacts_dir / run_id / f"module-success{suffix}.md"
+
+    def _available_run_ids(self) -> list[str]:
+        if not self.settings.artifacts_dir.exists():
+            return []
+        run_dirs = [path for path in self.settings.artifacts_dir.iterdir() if path.is_dir()]
+        run_dirs.sort(key=lambda path: (-path.stat().st_mtime, path.name))
+        return [path.name for path in run_dirs]
+
+    def _prompt_run_id(self) -> str | None:
+        run_ids = self._available_run_ids()
+        if not run_ids:
+            self._show_status_dialog(f"No run directories found in {self.settings.artifacts_dir}.")
+            return None
+        if self._use_prompt_toolkit:
+            selected = radiolist_dialog(
+                title="Select run",
+                text="Choose a run directory from artifacts/runs.",
+                values=[(run_id, run_id) for run_id in run_ids],
+                default=run_ids[0],
+                style=UI_STYLE,
+            ).run()
+            return selected
+
+        self.output("\nAvailable runs:")
+        for index, run_id in enumerate(run_ids, start=1):
+            self.output(f"  {index}. {run_id}")
+        choice = self.input_fn("Choose run number: ").strip()
+        if not choice.isdigit():
+            self._show_status_dialog("Invalid run selection.")
+            return None
+        index = int(choice) - 1
+        if index < 0 or index >= len(run_ids):
+            self._show_status_dialog("Invalid run selection.")
+            return None
+        return run_ids[index]
 
     def _choose_preset(self) -> None:
         options = [(preset, preset) for preset in PRESET_CONFIGS]

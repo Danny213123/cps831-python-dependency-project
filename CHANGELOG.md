@@ -55,6 +55,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Made paper-compatible module success rates coverage-aware for preview and partial runs, so APD percentages reflect the cases actually executed while still preserving the full cohort sizes in the report.
 - Parallelized module report generation across snippet reads and import extraction to improve throughput on large benchmark cohorts.
 - Updated the interactive module report flow so `apd ui` renders the generated markdown table instead of dumping raw captured command output.
+- Updated the interactive reporting flows so summary, failures, module report, and timeline views list existing run directories and let users select a run instead of manually typing a run ID.
 - Switched documentation away from Compose sidecars to host Ollama plus host Docker usage for local GPU testing.
 
 ### Fixed

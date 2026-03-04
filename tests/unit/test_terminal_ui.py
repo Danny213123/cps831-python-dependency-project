@@ -599,6 +599,37 @@ def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:
     assert dashboard.current_cases == []
 
 
+def test_terminal_benchmark_dashboard_reports_rate_speed_and_eta(monkeypatch) -> None:
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
+
+    dashboard.start(
+        run_id="run123",
+        total=10,
+        completed=4,
+        successes=3,
+        failures=1,
+        resolver="apd",
+        preset="optimized",
+        prompt_profile="optimized",
+        model_summary="gemma-moe-lite",
+        jobs=1,
+        target="smoke30",
+        artifacts_dir=Path("/tmp/run123"),
+        elapsed_seconds=40.0,
+    )
+    dashboard._stop_event.set()
+    if dashboard._thread is not None:
+        dashboard._thread.join(timeout=0.2)
+
+    assert dashboard._seconds_per_completed_case(40.0) == 10.0
+    assert dashboard._eta_seconds(40.0) == 60.0
+    rendered = "".join(fragment for _, fragment in dashboard._formatted_text())
+    assert "Success rate: 75.0%" in rendered
+    assert "Speed: 10.0s/case" in rendered
+    assert "ETA: 00:01:00" in rendered
+
+
 def test_terminal_benchmark_dashboard_can_request_stop(monkeypatch) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)

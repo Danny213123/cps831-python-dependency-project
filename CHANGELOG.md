@@ -60,6 +60,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added a newcomer-oriented health check flow with `apd doctor` and beginner-friendly top-level commands.
 - Added a live stdout benchmark progress bar with completed-case counts, percent complete, and elapsed time for serial and parallel runs.
 - Integrated the benchmark runner with the terminal UI so smoke/full runs can render a live dashboard with preset, prompt profile, active cases, success/failure counts, elapsed time, and final artifact paths.
+- Extended the benchmark dashboard in `apd ui` to show live success rate, seconds-per-case throughput, and estimated time to completion during active runs.
 - Restored benchmark dashboards from saved run state when resuming with the same run ID, including previously accumulated elapsed time.
 - Replaced the dry hand-rolled terminal UI with a prompt-toolkit powered command center that uses styled dialogs and a fullscreen benchmark dashboard.
 - Added canonical module-family reporting with raw fallback mode for paper-style comparison tables.

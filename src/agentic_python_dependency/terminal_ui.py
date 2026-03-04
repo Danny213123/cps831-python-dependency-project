@@ -70,6 +70,24 @@ def _format_elapsed(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
+def _format_seconds_per_case(seconds_per_case: float | None) -> str:
+    if seconds_per_case is None:
+        return "n/a"
+    return f"{seconds_per_case:.1f}s/case"
+
+
+def _format_success_rate(successes: int, completed: int) -> str:
+    if completed <= 0:
+        return "n/a"
+    return f"{(successes / completed) * 100.0:.1f}%"
+
+
+def _format_eta(seconds: float | None) -> str:
+    if seconds is None:
+        return "n/a"
+    return _format_elapsed(seconds)
+
+
 @dataclass
 class TerminalBenchmarkDashboard:
     refresh_interval: float = 0.2
@@ -236,6 +254,10 @@ class TerminalBenchmarkDashboard:
     def _formatted_text(self) -> AnyFormattedText:
         width = max(72, min(shutil.get_terminal_size((100, 24)).columns - 4, 116))
         percent = (self.completed / self.total * 100.0) if self.total else 100.0
+        elapsed_seconds = time.monotonic() - self.started_at
+        success_rate = _format_success_rate(self.successes, self.completed)
+        seconds_per_case = _format_seconds_per_case(self._seconds_per_completed_case(elapsed_seconds))
+        eta = _format_eta(self._eta_seconds(elapsed_seconds))
         bar = _format_progress_bar(self.completed, self.total)
         fragments: list[tuple[str, str]] = [
             ("class:headline", "APD benchmark in progress\n"),
@@ -257,7 +279,13 @@ class TerminalBenchmarkDashboard:
             ("", "    "),
             ("class:bad", f"Failures: {self.failures}"),
             ("", "    "),
-            ("class:accent", f"Elapsed: {_format_elapsed(time.monotonic() - self.started_at)}\n"),
+            ("class:accent", f"Elapsed: {_format_elapsed(elapsed_seconds)}"),
+            ("", "    "),
+            ("class:accent", f"Success rate: {success_rate}"),
+            ("", "    "),
+            ("class:accent", f"Speed: {seconds_per_case}"),
+            ("", "    "),
+            ("class:accent", f"ETA: {eta}\n"),
         ]
         if self.experimental_features:
             fragments.extend(
@@ -299,6 +327,10 @@ class TerminalBenchmarkDashboard:
 
     def _render_text(self, final: bool = False) -> None:
         percent = (self.completed / self.total * 100.0) if self.total else 100.0
+        elapsed_seconds = time.monotonic() - self.started_at
+        success_rate = _format_success_rate(self.successes, self.completed)
+        seconds_per_case = _format_seconds_per_case(self._seconds_per_completed_case(elapsed_seconds))
+        eta = _format_eta(self._eta_seconds(elapsed_seconds))
         lines = [
             "=" * 80,
             "APD Benchmark Dashboard",
@@ -314,7 +346,11 @@ class TerminalBenchmarkDashboard:
             f"Artifacts: {self.artifacts_dir}",
             "",
             f"Progress: {_format_progress_bar(self.completed, self.total)} {self.completed}/{self.total} ({percent:5.1f}%)",
-            f"Successes: {self.successes}    Failures: {self.failures}    Elapsed: {_format_elapsed(time.monotonic() - self.started_at)}",
+            (
+                f"Successes: {self.successes}    Failures: {self.failures}    "
+                f"Success rate: {success_rate}    Elapsed: {_format_elapsed(elapsed_seconds)}"
+            ),
+            f"Speed: {seconds_per_case}    ETA: {eta}",
         ]
         if self.experimental_features:
             lines.append(f"Experimental features: {', '.join(self.experimental_features)}")
@@ -334,6 +370,21 @@ class TerminalBenchmarkDashboard:
                 ]
             )
         print("\n".join(lines), file=sys.stdout, flush=True)
+
+    def _seconds_per_completed_case(self, elapsed_seconds: float | None = None) -> float | None:
+        if self.completed <= 0:
+            return None
+        current_elapsed = elapsed_seconds if elapsed_seconds is not None else (time.monotonic() - self.started_at)
+        return current_elapsed / self.completed
+
+    def _eta_seconds(self, elapsed_seconds: float | None = None) -> float | None:
+        if self.total <= 0 or self.completed <= 0 or self.completed >= self.total:
+            return 0.0 if self.total > 0 and self.completed >= self.total else None
+        current_elapsed = elapsed_seconds if elapsed_seconds is not None else (time.monotonic() - self.started_at)
+        seconds_per_case = self._seconds_per_completed_case(current_elapsed)
+        if seconds_per_case is None:
+            return None
+        return max(0.0, seconds_per_case * (self.total - self.completed))
 
 
 @dataclass

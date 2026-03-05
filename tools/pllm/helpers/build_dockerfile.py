@@ -40,6 +40,8 @@ class DockerHelper:
             ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         if completed.returncode != 0:
@@ -136,7 +138,7 @@ class DockerHelper:
         if self._use_sdk and self.client is not None:
             error_lines = ""
             for line in self.client.api.build(path=project_dir, dockerfile=dockerfile, forcerm=True, tag=self.image_name):
-                decoded_line = line.decode("utf-8")
+                decoded_line = line.decode("utf-8", errors="replace")
                 if "ERROR" in decoded_line or "Could not fetch URL" in decoded_line or "errorDetail" in decoded_line:
                     error_lines += decoded_line
                 if self.logging:
@@ -147,7 +149,14 @@ class DockerHelper:
 
         dockerfile_path = dockerfile if os.path.isabs(dockerfile) else os.path.join(project_dir, dockerfile)
         command = ["docker", "build", "-f", dockerfile_path, "-t", self.image_name, project_dir]
-        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
         output = f"{completed.stdout or ''}\n{completed.stderr or ''}".strip()
         if self.logging and output:
             print(output)
@@ -167,6 +176,8 @@ class DockerHelper:
             ["docker", "rm", "-f", self.container_name],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
 
@@ -182,6 +193,8 @@ class DockerHelper:
             ["docker", "image", "rm", "-f", self.image_name],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
 
@@ -218,11 +231,18 @@ class DockerHelper:
                     container.remove(v=True, force=True)
                     container = None
 
-            output = logs.decode("utf-8") if isinstance(logs, (bytes, bytearray)) else str(logs)
+            output = logs.decode("utf-8", errors="replace") if isinstance(logs, (bytes, bytearray)) else str(logs)
             return status_code == 0, output
 
         command = ["docker", "run", "--name", self.container_name, self.image_name]
-        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
         output = f"{completed.stdout or ''}\n{completed.stderr or ''}".strip()
         self.delete_container()
         return completed.returncode == 0, output

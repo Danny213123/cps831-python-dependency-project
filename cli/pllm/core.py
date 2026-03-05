@@ -97,6 +97,8 @@ def stream_executor(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         bufsize=1,
         env={**os.environ, **(env or {})},
     )
@@ -325,6 +327,8 @@ def _run_command(command: list[str], timeout: int = 8) -> tuple[bool, str]:
             command,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
         )

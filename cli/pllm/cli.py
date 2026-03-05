@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from typing import Sequence
 
 from cli.pllm.benchmark_data import (
@@ -24,6 +25,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "benchmark":
         if args.benchmark_command == "run":
+            observer = None
+            if args.dashboard and not args.show_case_output and sys.stdin.isatty() and sys.stdout.isatty():
+                from cli.pllm.terminal_ui import TerminalBenchmarkDashboard
+
+                observer = TerminalBenchmarkDashboard()
             return_code, summary = run_benchmark(
                 source=args.source,
                 model=args.model,
@@ -37,6 +43,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 offset=args.offset,
                 fail_fast=args.fail_fast,
                 show_case_output=args.show_case_output,
+                observer=observer,
             )
             print(
                 f"Benchmark source={summary.source} "
@@ -168,6 +175,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--show-case-output",
         action="store_true",
         help="Stream full output for each case (can be very verbose)",
+    )
+    run_benchmark_parser.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="Show active benchmark dashboard (TTY)",
     )
     _add_runtime_args_no_file(run_benchmark_parser)
 

@@ -135,6 +135,12 @@ Launch the interactive command center (prompt-toolkit UI):
 ```bash
 python3 cli/pllm_cli.py ui
 ```
+The UI now includes APDR-style grouped menus:
+- `Run` (snippet, case-id, benchmark)
+- `Report` (breakdowns and filter status)
+- `Config` (runtime/source/benchmark defaults)
+- `Loadout` (save/load/delete named profiles)
+- `Doctor`
 
 Run a snippet directly from CLI:
 ```bash
@@ -159,6 +165,11 @@ python3 cli/pllm_cli.py benchmark rebuild-filter
 Run benchmark cases from the competition-filtered source:
 ```bash
 python3 cli/pllm_cli.py benchmark run --source competition-run --limit 100
+```
+
+Run benchmark with the active dashboard screen (TTY):
+```bash
+python3 cli/pllm_cli.py benchmark run --source competition-run --limit 100 --dashboard
 ```
 
 Run with live dashboard:

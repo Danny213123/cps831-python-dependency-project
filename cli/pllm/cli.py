@@ -9,6 +9,7 @@ from cli.pllm.benchmark_data import (
     rebuild_competition_filter,
     resolve_snippet_path,
 )
+from cli.pllm.benchmark_runner import run_benchmark
 from cli.pllm.core import RunConfig, doctor_passed, format_doctor_report, run_doctor, stream_executor
 
 
@@ -22,6 +23,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if doctor_passed(checks) else 1
 
     if args.command == "benchmark":
+        if args.benchmark_command == "run":
+            return_code, summary = run_benchmark(
+                source=args.source,
+                model=args.model,
+                base=args.base,
+                temp=args.temp,
+                loop=args.loop,
+                search_range=args.range,
+                rag=args.rag,
+                verbose=args.verbose,
+                limit=args.limit,
+                offset=args.offset,
+                fail_fast=args.fail_fast,
+                show_case_output=args.show_case_output,
+            )
+            print(
+                f"Benchmark source={summary.source} "
+                f"selected={summary.total_selected} attempted={summary.attempted} "
+                f"succeeded={summary.succeeded} failed={summary.failed} skipped={summary.skipped} "
+                f"elapsed={summary.elapsed_seconds:.1f}s"
+            )
+            return return_code
         if args.benchmark_command == "breakdown":
             print(breakdown_summary(active_source=args.source))
             return 0
@@ -131,6 +154,23 @@ def _build_parser() -> argparse.ArgumentParser:
 
     benchmark_parser = subparsers.add_parser("benchmark", help="Benchmark data helpers")
     benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
+    run_benchmark_parser = benchmark_subparsers.add_parser("run", help="Run benchmark cases from a source")
+    run_benchmark_parser.add_argument(
+        "--source",
+        choices=_benchmark_source_choices(),
+        default="competition-run",
+        help="Benchmark source to execute",
+    )
+    run_benchmark_parser.add_argument("--limit", type=int, default=0, help="Maximum number of cases (0 means all)")
+    run_benchmark_parser.add_argument("--offset", type=int, default=0, help="Case offset into sorted source ids")
+    run_benchmark_parser.add_argument("--fail-fast", action="store_true", help="Stop on first failure")
+    run_benchmark_parser.add_argument(
+        "--show-case-output",
+        action="store_true",
+        help="Stream full output for each case (can be very verbose)",
+    )
+    _add_runtime_args_no_file(run_benchmark_parser)
+
     breakdown_parser = benchmark_subparsers.add_parser("breakdown", help="Show dataset and filter breakdowns")
     breakdown_parser.add_argument(
         "--source",
@@ -157,6 +197,10 @@ def _add_shared_runtime_args(parser: argparse.ArgumentParser, *, require_file: b
             help="Optional default snippet path for UI",
         )
 
+    _add_runtime_args_no_file(parser)
+
+
+def _add_runtime_args_no_file(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default="gemma2", help="Ollama model name")
     parser.add_argument("--base", default="http://localhost:11434", help="Ollama base URL")
     parser.add_argument("--temp", type=float, default=0.7, help="Model temperature")

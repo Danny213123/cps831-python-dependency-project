@@ -11,6 +11,7 @@ from cli.pllm.benchmark_data import (
     rebuild_competition_filter,
     resolve_snippet_path,
 )
+from cli.pllm.benchmark_runner import run_benchmark
 from cli.pllm.core import RunConfig, RunStats, format_doctor_report, run_doctor, stream_executor
 
 PROMPT_TOOLKIT_AVAILABLE = True
@@ -82,11 +83,10 @@ def launch_terminal_ui(
             title="PLLM Control Center",
             text="Select an action",
             buttons=[
-                ("Run snippet", "run"),
-                ("Run benchmark case", "case"),
-                ("Benchmark setup", "bench"),
-                ("Doctor checks", "doctor"),
-                ("Quick help", "help"),
+                ("Run", "run"),
+                ("Bench", "bench"),
+                ("Doctor", "doctor"),
+                ("Help", "help"),
                 ("Quit", "quit"),
             ],
             style=UI_STYLE,
@@ -100,57 +100,81 @@ def launch_terminal_ui(
         if action == "bench":
             active_source = _benchmark_menu(active_source)
             continue
+        if action == "run":
+            run_action = button_dialog(
+                title="Run",
+                text="Choose run type",
+                buttons=[
+                    ("Snippet", "snippet"),
+                    ("Case", "case"),
+                    ("Benchmark", "benchmark"),
+                    ("Back", "back"),
+                ],
+                style=UI_STYLE,
+            ).run()
+            if run_action in {None, "back"}:
+                continue
+            if run_action == "benchmark":
+                _run_benchmark_dialog(
+                    active_source=active_source,
+                    default_model=default_model,
+                    default_base=default_base,
+                    default_loop=default_loop,
+                    default_range=default_range,
+                )
+                continue
+            if run_action == "case":
+                config = _collect_case_run_config(
+                    default_model=default_model,
+                    default_base=default_base,
+                    default_loop=default_loop,
+                    default_range=default_range,
+                    active_source=active_source,
+                )
+            else:
+                config = _collect_run_config(
+                    default_model,
+                    default_base,
+                    default_loop,
+                    default_range,
+                    default_file,
+                )
+            if config is None:
+                continue
+
+            return_code, stats = run_config_with_dashboard(config)
+            message_dialog(
+                title="Run finished",
+                text=(
+                    f"Exit code: {return_code}\n"
+                    f"Elapsed: {stats.elapsed_seconds:.1f}s\n"
+                    f"Lines: {stats.lines}\n"
+                    f"Build successes: {stats.build_successes}\n"
+                    f"Build failures: {stats.build_failures}\n"
+                ),
+                style=UI_STYLE,
+            ).run()
+            continue
+
         if action == "help":
             message_dialog(
                 title="PLLM UI Help",
                 text=(
                     "Run snippet: launches tools/pllm/test_executor.py with a live dashboard.\n\n"
                     "Run benchmark case: pick source + case id from copied gistable assets.\n\n"
+                    "Run benchmark: execute many cases, including competition-run filtered ids.\n\n"
                     "Benchmark setup: source selection, competition filter rebuild, and breakdown views.\n\n"
                     "Doctor checks: verifies Docker, Ollama API, and local executor files.\n\n"
                     "CLI equivalents:\n"
                     "  python3 cli/pllm_cli.py run --file /abs/path/snippet.py\n"
                     "  python3 cli/pllm_cli.py run --case-id <id> --benchmark-source all-gists\n"
+                    "  python3 cli/pllm_cli.py benchmark run --source competition-run --limit 100\n"
                     "  python3 cli/pllm_cli.py benchmark breakdown\n"
                     "  python3 cli/pllm_cli.py doctor\n"
                 ),
                 style=UI_STYLE,
             ).run()
             continue
-
-        if action == "case":
-            config = _collect_case_run_config(
-                default_model=default_model,
-                default_base=default_base,
-                default_loop=default_loop,
-                default_range=default_range,
-                active_source=active_source,
-            )
-            if config is None:
-                continue
-        else:
-            config = _collect_run_config(
-                default_model,
-                default_base,
-                default_loop,
-                default_range,
-                default_file,
-            )
-        if config is None:
-            continue
-
-        return_code, stats = run_config_with_dashboard(config)
-        message_dialog(
-            title="Run finished",
-            text=(
-                f"Exit code: {return_code}\n"
-                f"Elapsed: {stats.elapsed_seconds:.1f}s\n"
-                f"Lines: {stats.lines}\n"
-                f"Build successes: {stats.build_successes}\n"
-                f"Build failures: {stats.build_failures}\n"
-            ),
-            style=UI_STYLE,
-        ).run()
 
 
 def run_config_with_dashboard(config: RunConfig) -> tuple[int, RunStats]:
@@ -425,6 +449,97 @@ def _benchmark_menu(active_source: BenchmarkSource) -> BenchmarkSource:
             ).run()
 
 
+def _run_benchmark_dialog(
+    *,
+    active_source: BenchmarkSource,
+    default_model: str,
+    default_base: str,
+    default_loop: int,
+    default_range: int,
+) -> None:
+    assert PROMPT_TOOLKIT_AVAILABLE
+    selected = _choose_benchmark_source_dialog(active_source)
+    if selected is None:
+        return
+
+    limit_raw = input_dialog(
+        title="Benchmark limit",
+        text="How many cases to run (0 = all in source)",
+        default="30" if selected == "competition-run" else "10",
+        style=UI_STYLE,
+    ).run()
+    if limit_raw is None:
+        return
+    offset_raw = input_dialog(
+        title="Benchmark offset",
+        text="Start offset in sorted case ids",
+        default="0",
+        style=UI_STYLE,
+    ).run()
+    if offset_raw is None:
+        return
+
+    flags = checkboxlist_dialog(
+        title="Benchmark options",
+        text="Toggle benchmark options",
+        values=[
+            ("fail_fast", "Stop on first failure"),
+            ("show_output", "Show full per-case output"),
+            ("rag", "Enable RAG"),
+            ("verbose", "Verbose test_executor mode"),
+        ],
+        default_values=["rag"],
+        style=UI_STYLE,
+    ).run()
+    if flags is None:
+        return
+
+    limit = max(0, _parse_int(limit_raw, 0))
+    offset = max(0, _parse_int(offset_raw, 0))
+    fail_fast = "fail_fast" in flags
+    show_output = "show_output" in flags
+    rag = "rag" in flags
+    verbose = "verbose" in flags
+
+    if show_output:
+        def handler(line: str) -> None:
+            print(line)
+    else:
+        def handler(_line: str) -> None:
+            return
+
+    return_code, summary = run_benchmark(
+        source=selected,
+        model=default_model,
+        base=default_base,
+        temp=0.7,
+        loop=max(1, default_loop),
+        search_range=max(0, default_range),
+        rag=rag,
+        verbose=verbose,
+        limit=limit,
+        offset=offset,
+        fail_fast=fail_fast,
+        show_case_output=show_output,
+        line_handler=handler,
+    )
+
+    message_dialog(
+        title="Benchmark finished",
+        text=(
+            f"Source: {summary.source}\n"
+            f"Selected: {summary.total_selected}\n"
+            f"Attempted: {summary.attempted}\n"
+            f"Succeeded: {summary.succeeded}\n"
+            f"Failed: {summary.failed}\n"
+            f"Skipped: {summary.skipped}\n"
+            f"Elapsed: {summary.elapsed_seconds:.1f}s\n"
+            f"Exit code: {return_code}"
+        ),
+        style=UI_STYLE,
+    ).run()
+
+
 def _choose_benchmark_source_dialog(current: BenchmarkSource) -> BenchmarkSource | None:
     assert PROMPT_TOOLKIT_AVAILABLE
     return radiolist_dialog(
@@ -587,16 +702,17 @@ def _launch_plain_text_ui(
         print("\nPLLM Control Center")
         print("1) Run snippet")
         print("2) Run benchmark case")
-        print("3) Benchmark setup")
-        print("4) Doctor checks")
-        print("5) Quit")
+        print("3) Run benchmark")
+        print("4) Benchmark setup")
+        print("5) Doctor checks")
+        print("6) Quit")
         choice = input("Select option: ").strip()
-        if choice == "5":
+        if choice == "6":
             return 0
-        if choice == "4":
+        if choice == "5":
             print(format_doctor_report(run_doctor(default_base)))
             continue
-        if choice == "3":
+        if choice == "4":
             print("\nBenchmark setup")
             print(f"Current source: {active_source}")
             print("1) Change source")
@@ -622,6 +738,34 @@ def _launch_plain_text_ui(
                 print(f"Filter file: {path}")
                 print(f"CSV ids parsed: {csv_total}")
                 print(f"Matched all-gists ids: {matched}")
+            continue
+        if choice == "3":
+            limit = max(0, _parse_int(input("Limit (0=all) [30]: ").strip() or "30", 30))
+            offset = max(0, _parse_int(input("Offset [0]: ").strip() or "0", 0))
+            fail_fast = (input("Fail fast? [y/N]: ").strip().lower() or "n") in {"y", "yes"}
+            show_output = (input("Show full case output? [y/N]: ").strip().lower() or "n") in {"y", "yes"}
+            rag = (input("Enable RAG? [Y/n]: ").strip().lower() or "y") in {"y", "yes"}
+            verbose = (input("Verbose executor mode? [y/N]: ").strip().lower() or "n") in {"y", "yes"}
+            return_code, summary = run_benchmark(
+                source=active_source,
+                model=default_model,
+                base=default_base,
+                temp=0.7,
+                loop=max(1, default_loop),
+                search_range=max(0, default_range),
+                rag=rag,
+                verbose=verbose,
+                limit=limit,
+                offset=offset,
+                fail_fast=fail_fast,
+                show_case_output=show_output,
+            )
+            print(
+                f"Benchmark source={summary.source} selected={summary.total_selected} "
+                f"attempted={summary.attempted} succeeded={summary.succeeded} "
+                f"failed={summary.failed} skipped={summary.skipped} "
+                f"elapsed={summary.elapsed_seconds:.1f}s rc={return_code}"
+            )
             continue
         if choice == "2":
             case_id = input(f"Case id from {active_source}: ").strip()

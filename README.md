@@ -156,6 +156,11 @@ Rebuild the competition gist-id filter from project CSVs:
 python3 cli/pllm_cli.py benchmark rebuild-filter
 ```
 
+Run benchmark cases from the competition-filtered source:
+```bash
+python3 cli/pllm_cli.py benchmark run --source competition-run --limit 100
+```
+
 Run with live dashboard:
 ```bash
 python3 cli/pllm_cli.py run --file /absolute/path/to/snippet.py --dashboard

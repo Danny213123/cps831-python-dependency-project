@@ -33,6 +33,10 @@ class BenchmarkObserver(Protocol):
         rag: bool,
         verbose: bool,
         artifacts_dir: Path,
+        completed: int = 0,
+        succeeded: int = 0,
+        failed: int = 0,
+        elapsed_seconds: float = 0.0,
     ) -> None: ...
 
     def case_started(self, case_id: str) -> None: ...
@@ -86,36 +90,71 @@ def run_benchmark(
     show_case_output: bool = False,
     line_handler: LineHandler | None = None,
     observer: BenchmarkObserver | None = None,
+    run_id: str | None = None,
+    resume: bool = False,
 ) -> tuple[int, BenchmarkSummary]:
-    run_id = f"pllm-bench-{int(time.time())}"
-    run_dir = _prepare_run_dir(run_id)
-    case_ids = list_case_ids(source)
-    if offset > 0:
-        case_ids = case_ids[offset:]
-    if limit > 0:
-        case_ids = case_ids[:limit]
-    rows: list[dict[str, object]] = []
-    run_started_at = _utc_now_iso()
+    if resume:
+        if not run_id:
+            raise ValueError("resume=True requires run_id.")
+        run_dir = ROOT_DIR / "artifacts" / "runs" / run_id
+        if not run_dir.exists() or not run_dir.is_dir():
+            raise FileNotFoundError(f"Run id '{run_id}' was not found under {ROOT_DIR / 'artifacts' / 'runs'}.")
+    else:
+        run_id = run_id or f"pllm-bench-{int(time.time())}"
+        run_dir = _prepare_run_dir(run_id)
+
+    assert run_id is not None
+    restored_state = _load_run_state(run_dir) if resume else {}
+    selected_case_ids = _read_selected_case_ids(run_dir) if resume else []
+    if selected_case_ids:
+        case_ids = selected_case_ids
+    else:
+        case_ids = list_case_ids(source)
+        if offset > 0:
+            case_ids = case_ids[offset:]
+        if limit > 0:
+            case_ids = case_ids[:limit]
+        _write_selected_case_ids(run_dir, case_ids)
+    rows: list[dict[str, object]] = _load_existing_case_rows(run_dir, case_ids) if resume else []
+    completed_case_id_set = {str(row.get("case_id", "")) for row in rows if str(row.get("case_id", ""))}
+
+    attempted = sum(1 for row in rows if str(row.get("status", "")).lower() != "skipped")
+    succeeded = sum(1 for row in rows if bool(row.get("success", False)))
+    failed = sum(1 for row in rows if not bool(row.get("success", False)) and str(row.get("status", "")).lower() != "skipped")
+    skipped = sum(1 for row in rows if str(row.get("status", "")).lower() == "skipped")
+    restored_elapsed_seconds = _as_float(restored_state.get("elapsed_seconds"), default=0.0) if resume else 0.0
+    row_elapsed_seconds = sum(_as_float(row.get("elapsed_seconds"), default=0.0) for row in rows)
+    elapsed_seconds = max(restored_elapsed_seconds, row_elapsed_seconds)
+
+    run_started_at = str(restored_state.get("started_at", "") or _utc_now_iso())
     run_trace_path = run_dir / "llm-trace.log"
     warnings_path = run_dir / "warnings.log"
-    warnings_written = False
-    _initialize_trace_log(
-        trace_path=run_trace_path,
-        run_id=run_id,
-        source=source,
-        model=model,
-        base=base,
-        loop=loop,
-        search_range=search_range,
-        rag=rag,
-        verbose=verbose,
-    )
+    warnings_written = warnings_path.exists() and warnings_path.stat().st_size > 0
+    if resume and run_trace_path.exists():
+        _append_log_line(
+            run_trace_path,
+            f"[{_utc_now_iso()}] RUN RESUME {run_id} completed={len(rows)} total={len(case_ids)}",
+        )
+    else:
+        _initialize_trace_log(
+            trace_path=run_trace_path,
+            run_id=run_id,
+            source=source,
+            model=model,
+            base=base,
+            loop=loop,
+            search_range=search_range,
+            rag=rag,
+            verbose=verbose,
+        )
     current_cases: list[str] = []
-    last_case_id = ""
-    last_status = "starting"
+    last_case_id = str(restored_state.get("last_case_id", "") or (rows[-1]["case_id"] if rows else ""))
+    last_status = str(restored_state.get("last_status", "") or (rows[-1]["status"] if rows else "starting"))
     stop_requested = False
 
     total_selected = len(case_ids)
+    if resume and rows:
+        _emit(line_handler, f"Resuming run {run_id}: {len(rows)}/{total_selected} case(s) already completed.")
 
     _refresh_runtime_artifacts(
         run_dir=run_dir,
@@ -129,11 +168,11 @@ def run_benchmark(
         rag=rag,
         verbose=verbose,
         total_selected=total_selected,
-        attempted=0,
-        succeeded=0,
-        failed=0,
-        skipped=0,
-        elapsed_seconds=0.0,
+        attempted=attempted,
+        succeeded=succeeded,
+        failed=failed,
+        skipped=skipped,
+        elapsed_seconds=elapsed_seconds,
         rows=rows,
         started_at=run_started_at,
         current_cases=current_cases,
@@ -156,16 +195,20 @@ def run_benchmark(
             rag=rag,
             verbose=verbose,
             artifacts_dir=run_dir,
+            completed=len(rows),
+            succeeded=succeeded,
+            failed=failed,
+            elapsed_seconds=elapsed_seconds,
         )
     if total_selected == 0:
         summary = BenchmarkSummary(
             source=source,
             total_selected=0,
-            attempted=0,
-            succeeded=0,
-            failed=0,
-            skipped=0,
-            elapsed_seconds=0.0,
+            attempted=attempted,
+            succeeded=succeeded,
+            failed=failed,
+            skipped=skipped,
+            elapsed_seconds=elapsed_seconds,
             run_id=run_id,
         )
         _refresh_runtime_artifacts(
@@ -180,11 +223,11 @@ def run_benchmark(
             rag=rag,
             verbose=verbose,
             total_selected=0,
-            attempted=0,
-            succeeded=0,
-            failed=0,
-            skipped=0,
-            elapsed_seconds=0.0,
+            attempted=attempted,
+            succeeded=succeeded,
+            failed=failed,
+            skipped=skipped,
+            elapsed_seconds=elapsed_seconds,
             rows=rows,
             started_at=run_started_at,
             current_cases=[],
@@ -213,17 +256,13 @@ def run_benchmark(
             observer.finish(summary=summary, status="empty")
         return 1, summary
 
-    attempted = 0
-    succeeded = 0
-    failed = 0
-    skipped = 0
-    elapsed_seconds = 0.0
-
     for index, case_id in enumerate(case_ids, start=1):
         if observer is not None and observer.stop_requested():
             _emit(line_handler, "Stop requested, ending benchmark loop.")
             stop_requested = True
             break
+        if case_id in completed_case_id_set:
+            continue
         current_cases = [case_id]
         _refresh_runtime_artifacts(
             run_dir=run_dir,
@@ -275,6 +314,7 @@ def run_benchmark(
             warnings_written = True
             rows.append(row)
             _write_case_result(run_dir=run_dir, run_id=run_id, source=source, row=row)
+            completed_case_id_set.add(case_id)
             last_case_id = case_id
             last_status = "skipped"
             current_cases = []
@@ -393,6 +433,7 @@ def run_benchmark(
         _append_log_line(case_trace_path, f"[{_utc_now_iso()}] case end rc={return_code}")
         rows.append(row)
         _write_case_result(run_dir=run_dir, run_id=run_id, source=source, row=row)
+        completed_case_id_set.add(case_id)
         last_case_id = case_id
         last_status = status
         current_cases = []
@@ -533,6 +574,64 @@ def _prepare_run_dir(run_id: str) -> Path:
     run_dir = ROOT_DIR / "artifacts" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir
+
+
+def _selected_case_ids_path(run_dir: Path) -> Path:
+    return run_dir / "selected-case-ids.txt"
+
+
+def _write_selected_case_ids(run_dir: Path, case_ids: list[str]) -> None:
+    path = _selected_case_ids_path(run_dir)
+    payload = "\n".join(case_id.strip() for case_id in case_ids if str(case_id).strip()) + "\n"
+    path.write_text(payload, encoding="utf-8")
+
+
+def _read_selected_case_ids(run_dir: Path) -> list[str]:
+    path = _selected_case_ids_path(run_dir)
+    if not path.exists():
+        return []
+    try:
+        payload = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    case_ids: list[str] = []
+    seen: set[str] = set()
+    for line in payload.splitlines():
+        case_id = line.strip()
+        if not case_id or case_id in seen:
+            continue
+        seen.add(case_id)
+        case_ids.append(case_id)
+    return case_ids
+
+
+def _load_run_state(run_dir: Path) -> dict[str, object]:
+    path = run_dir / "run-state.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _load_existing_case_rows(run_dir: Path, case_ids: list[str]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for index, case_id in enumerate(case_ids, start=1):
+        payload_path = run_dir / case_id / "result.json"
+        if not payload_path.exists():
+            continue
+        try:
+            payload = json.loads(payload_path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        normalized = _normalize_result_row({**payload, "index": payload.get("index", index), "case_id": case_id})
+        rows.append(normalized)
+    rows.sort(key=lambda row: (_as_int(row.get("index"), default=0), str(row.get("case_id", ""))))
+    return rows
 
 
 def _utc_now_iso() -> str:

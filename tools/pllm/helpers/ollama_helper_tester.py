@@ -263,6 +263,29 @@ class OllamaHelper(OllamaHelperBase):
         # Check if the version matches the pattern
         return bool(re.match(pattern, version))
 
+    def _normalize_module_version_output(self, out):
+        if not isinstance(out, dict):
+            return None
+        # Some models occasionally return parser schema metadata instead of values.
+        if 'version' not in out:
+            return None
+
+        module = out.get('module')
+        if module is not None:
+            module = str(module).strip()
+            if module == '':
+                module = None
+
+        version = out.get('version')
+        if version is None:
+            normalized_version = None
+        else:
+            normalized_version = str(version).strip()
+            if normalized_version.lower() in {'', 'none', 'null'}:
+                normalized_version = None
+
+        return {'module': module, 'version': normalized_version}
+
     # Generic method to get the details from the error
     # Takes the prompt from the the error handler and the parser to ensure the information is returned correctly
     def generic_get_module_from_error(self, prompt, parser):
@@ -286,29 +309,39 @@ class OllamaHelper(OllamaHelperBase):
     # Generic method to prompt for a version
     # Uses the targeted prompt and parser plus the previous failing versions
     def generic_get_version_with_bad_modules(self, prompt, parser, previous_versions):
-        out = None
+        out = {'module': None, 'version': None}
+        previous_version_set = {version.strip() for version in str(previous_versions).split(',') if version.strip()}
 
         for loop in range(0, 5):
             try:
-                out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="repair")
+                raw_out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="repair")
 
-                print(out)
+                print(raw_out)
+
+                normalized_out = self._normalize_module_version_output(raw_out)
+                if normalized_out is None:
+                    print('could not find version: Error getting versions from error message: invalid model response schema')
+                    continue
+                if normalized_out['module'] is not None:
+                    out['module'] = normalized_out['module']
+                candidate_version = normalized_out['version']
 
                 # If the same version is chosen by the model then there's a chance the module is exhausted
                 # We should remove and only re-add if requested during build.
-                for version in previous_versions.split(', '):
-                    if version == out['version']:
-                        out = None
-                            
-                if out['version'] == None or self.is_valid_version(out['version']): return out
-                # return out
+                if candidate_version in previous_version_set:
+                    continue
+
+                if candidate_version is None:
+                    out['version'] = None
+                    return out
+                if self.is_valid_version(candidate_version):
+                    out['version'] = candidate_version
+                    return out
             except Exception as e:
                 print(f'could not find version: Error getting versions from error message: {e}')
-        
-        for version in previous_versions.split(', '):
-            if version == out['version']:
-                out['version'] = None
 
+        # Fallback when all retries fail to produce a usable version.
+        out['version'] = None
         return out
 
 

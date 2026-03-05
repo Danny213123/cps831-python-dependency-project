@@ -166,6 +166,7 @@ def launch_terminal_ui(
                     "  python3 cli/pllm_cli.py run --file /abs/path/snippet.py\n"
                     "  python3 cli/pllm_cli.py run --case-id <id> --benchmark-source all-gists\n"
                     "  python3 cli/pllm_cli.py benchmark run --source competition-run --limit 100\n"
+                    "  python3 cli/pllm_cli.py benchmark run --resume --run-id <run-id>\n"
                     "  python3 cli/pllm_cli.py benchmark breakdown\n"
                     "  python3 cli/pllm_cli.py doctor\n"
                 ),
@@ -440,16 +441,23 @@ class TerminalBenchmarkDashboard:
         rag: bool,
         verbose: bool,
         artifacts_dir: Path,
+        completed: int = 0,
+        succeeded: int = 0,
+        failed: int = 0,
+        elapsed_seconds: float = 0.0,
     ) -> None:
         self.run_id = run_id
         self.total = total
+        self.completed = max(0, min(total, completed))
+        self.successes = max(0, succeeded)
+        self.failures = max(0, failed)
         self.source = source
         self.model = model
         self.loop = loop
         self.search_range = search_range
         self.rag = rag
         self.verbose = verbose
-        self.started_at = time.monotonic()
+        self.started_at = time.monotonic() - max(0.0, elapsed_seconds)
         if self._isatty:
             self._start_prompt_toolkit_app()
         else:
@@ -697,6 +705,7 @@ def _run_menu(*, options: UIOptions, default_file: str) -> None:
             ("Snippet", "snippet"),
             ("Case", "case"),
             ("Benchmark", "benchmark"),
+            ("Resume", "resume"),
             ("Back", "back"),
         ],
         style=UI_STYLE,
@@ -705,6 +714,9 @@ def _run_menu(*, options: UIOptions, default_file: str) -> None:
         return
     if run_action == "benchmark":
         _run_benchmark_dialog(options=options)
+        return
+    if run_action == "resume":
+        _run_resume_benchmark_dialog(options=options)
         return
     if run_action == "case":
         config = _collect_case_run_config(options=options)
@@ -1205,6 +1217,126 @@ def _run_benchmark_dialog(
     ).run()
 
 
+def _run_resume_benchmark_dialog(
+    *,
+    options: UIOptions,
+) -> None:
+    assert PROMPT_TOOLKIT_AVAILABLE
+    run_entry = _prompt_resume_run_dialog()
+    if run_entry is None:
+        return
+
+    run_id = str(run_entry.get("run_id", "") or "").strip()
+    if not run_id:
+        message_dialog(
+            title="Resume benchmark",
+            text="Selected run is missing a valid run id.",
+            style=UI_STYLE,
+        ).run()
+        return
+
+    source = _normalize_source(str(run_entry.get("source", options.source) or options.source))
+    model = str(run_entry.get("model", options.model) or options.model).strip() or options.model
+    base = str(run_entry.get("base", options.base) or options.base).strip() or options.base
+    temp = _parse_float(str(run_entry.get("temp", options.temp)), options.temp)
+    loop = max(1, _parse_int(str(run_entry.get("loop", options.loop)), options.loop))
+    search_range = max(0, _parse_int(str(run_entry.get("search_range", options.search_range)), options.search_range))
+    rag = _parse_bool(run_entry.get("rag"), options.rag)
+    verbose = _parse_bool(run_entry.get("verbose"), options.verbose)
+    completed = max(0, _parse_int(str(run_entry.get("completed", 0)), 0))
+    total = max(0, _parse_int(str(run_entry.get("total", 0)), 0))
+
+    flags = checkboxlist_dialog(
+        title="Resume options",
+        text=(
+            f"Run: {run_id}\n"
+            f"Progress: {completed}/{total}\n"
+            "Select runtime options for the resumed session."
+        ),
+        values=[
+            ("fail_fast", "Stop on first failure"),
+            ("show_output", "Show full per-case output"),
+        ],
+        default_values=[
+            *([] if not options.benchmark_fail_fast else ["fail_fast"]),
+            *([] if not options.benchmark_show_output else ["show_output"]),
+        ],
+        style=UI_STYLE,
+    ).run()
+    if flags is None:
+        return
+
+    fail_fast = "fail_fast" in flags
+    show_output = "show_output" in flags
+    options.source = source
+    options.model = model
+    options.base = base
+    options.temp = temp
+    options.loop = loop
+    options.search_range = search_range
+    options.rag = rag
+    options.verbose = verbose
+    options.benchmark_fail_fast = fail_fast
+    options.benchmark_show_output = show_output
+
+    if show_output:
+
+        def handler(line: str) -> None:
+            print(line)
+
+    else:
+
+        def handler(_line: str) -> None:
+            return
+
+    observer = None
+    if not show_output:
+        observer = TerminalBenchmarkDashboard()
+
+    try:
+        return_code, summary = run_benchmark(
+            source=source,
+            model=model,
+            base=base,
+            temp=temp,
+            loop=loop,
+            search_range=search_range,
+            rag=rag,
+            verbose=verbose,
+            fail_fast=fail_fast,
+            show_case_output=show_output,
+            line_handler=handler,
+            observer=observer,
+            run_id=run_id,
+            resume=True,
+        )
+    except Exception as exc:
+        message_dialog(
+            title="Resume failed",
+            text=f"{type(exc).__name__}: {exc}",
+            style=UI_STYLE,
+        ).run()
+        return
+
+    message_dialog(
+        title="Benchmark resumed",
+        text=(
+            f"Run ID: {run_id}\n"
+            f"Source: {summary.source}\n"
+            f"Selected: {summary.total_selected}\n"
+            f"Attempted: {summary.attempted}\n"
+            f"Succeeded: {summary.succeeded}\n"
+            f"Failed: {summary.failed}\n"
+            f"Skipped: {summary.skipped}\n"
+            f"Elapsed: {summary.elapsed_seconds:.1f}s\n"
+            f"Summary: {summary.summary_path or '(not written)'}\n"
+            f"Results CSV: {summary.results_csv_path or '(not written)'}\n"
+            f"Exit code: {return_code}"
+        ),
+        style=UI_STYLE,
+    ).run()
+
+
 def _choose_benchmark_source_dialog(current: BenchmarkSource) -> BenchmarkSource | None:
     assert PROMPT_TOOLKIT_AVAILABLE
     return radiolist_dialog(
@@ -1373,18 +1505,19 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
         print("1) Run snippet")
         print("2) Run benchmark case")
         print("3) Run benchmark")
-        print("4) Reports")
-        print("5) Configure")
-        print("6) Loadouts")
-        print("7) Doctor checks")
-        print("8) Quit")
+        print("4) Resume benchmark")
+        print("5) Reports")
+        print("6) Configure")
+        print("7) Loadouts")
+        print("8) Doctor checks")
+        print("9) Quit")
         choice = input("Select option: ").strip()
-        if choice == "8":
+        if choice == "9":
             return 0
-        if choice == "7":
+        if choice == "8":
             print(format_doctor_report(run_doctor(options.base)))
             continue
-        if choice == "6":
+        if choice == "7":
             print("Loadouts")
             print("1) Save 2) Load 3) Delete 4) Back")
             sub = input("Select option: ").strip()
@@ -1415,7 +1548,7 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
                         path.unlink()
                         print(f"Deleted {name}")
             continue
-        if choice == "5":
+        if choice == "6":
             print("Configure")
             print("1) Tool 2) Model 3) Source 4) Runtime 5) Benchmark defaults 6) Back")
             sub = input("Select option: ").strip()
@@ -1502,14 +1635,71 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
                     or ("y" if options.benchmark_show_output else "n")
                 ) in {"y", "yes"}
             continue
-        if choice in {"1", "2", "3"} and not _ensure_tool_supported(options):
+        if choice in {"1", "2", "3", "4"} and not _ensure_tool_supported(options):
             continue
-        if choice == "4":
+        if choice == "5":
             print(breakdown_summary(active_source))
             path, matched, csv_total = rebuild_competition_filter()
             print(f"Filter file: {path}")
             print(f"CSV ids parsed: {csv_total}")
             print(f"Matched all-gists ids: {matched}")
+            continue
+        if choice == "4":
+            run_entry = _prompt_resume_run_text()
+            if run_entry is None:
+                continue
+            run_id = str(run_entry.get("run_id", "") or "").strip()
+            if not run_id:
+                print("Invalid run selection.")
+                continue
+            active_source = _normalize_source(str(run_entry.get("source", active_source) or active_source))
+            options.source = active_source
+            options.model = str(run_entry.get("model", options.model) or options.model).strip() or options.model
+            options.base = str(run_entry.get("base", options.base) or options.base).strip() or options.base
+            options.temp = _parse_float(str(run_entry.get("temp", options.temp)), options.temp)
+            options.loop = max(1, _parse_int(str(run_entry.get("loop", options.loop)), options.loop))
+            options.search_range = max(
+                0,
+                _parse_int(str(run_entry.get("search_range", options.search_range)), options.search_range),
+            )
+            options.rag = _parse_bool(run_entry.get("rag"), options.rag)
+            options.verbose = _parse_bool(run_entry.get("verbose"), options.verbose)
+            fail_fast = (
+                input(f"Fail fast [{options.benchmark_fail_fast}] y/n: ").strip().lower()
+                or ("y" if options.benchmark_fail_fast else "n")
+            ) in {"y", "yes"}
+            show_output = (
+                input(f"Show output [{options.benchmark_show_output}] y/n: ").strip().lower()
+                or ("y" if options.benchmark_show_output else "n")
+            ) in {"y", "yes"}
+            options.benchmark_fail_fast = fail_fast
+            options.benchmark_show_output = show_output
+            observer = None if show_output else TerminalBenchmarkDashboard()
+            try:
+                return_code, summary = run_benchmark(
+                    source=active_source,
+                    model=options.model,
+                    base=options.base,
+                    temp=options.temp,
+                    loop=max(1, options.loop),
+                    search_range=max(0, options.search_range),
+                    rag=options.rag,
+                    verbose=options.verbose,
+                    fail_fast=fail_fast,
+                    show_case_output=show_output,
+                    observer=observer,
+                    run_id=run_id,
+                    resume=True,
+                )
+            except Exception as exc:
+                print(f"Resume failed: {type(exc).__name__}: {exc}")
+                continue
+            print(
+                f"Resumed run={run_id} source={summary.source} selected={summary.total_selected} "
+                f"attempted={summary.attempted} succeeded={summary.succeeded} "
+                f"failed={summary.failed} skipped={summary.skipped} "
+                f"elapsed={summary.elapsed_seconds:.1f}s rc={return_code}"
+            )
             continue
         if choice == "3":
             limit = max(
@@ -1618,6 +1808,114 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
         )
 
 
+def _runs_dir() -> Path:
+    return ROOT_DIR / "artifacts" / "runs"
+
+
+def _read_run_state(run_dir: Path) -> dict[str, object]:
+    path = run_dir / "run-state.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _count_completed_results(run_dir: Path) -> int:
+    return sum(1 for path in run_dir.glob("*/result.json") if path.is_file())
+
+
+def _available_run_entries(*, resumable_only: bool = False) -> list[dict[str, object]]:
+    runs_dir = _runs_dir()
+    if not runs_dir.exists():
+        return []
+
+    run_dirs = [path for path in runs_dir.iterdir() if path.is_dir()]
+    run_dirs.sort(key=lambda path: (-path.stat().st_mtime, path.name))
+    entries: list[dict[str, object]] = []
+    for run_dir in run_dirs:
+        state = _read_run_state(run_dir)
+        run_id = str(state.get("run_id", run_dir.name) or run_dir.name)
+        total = max(
+            0,
+            _parse_int(str(state.get("total", state.get("total_selected", 0))), 0),
+        )
+        completed = max(0, _parse_int(str(state.get("completed", 0)), 0))
+        if completed <= 0:
+            completed = _count_completed_results(run_dir)
+        status = str(state.get("status", "unknown") or "unknown")
+        source = _normalize_source(str(state.get("benchmark_source", state.get("source", "all-gists")) or "all-gists"))
+        model_summary = str(state.get("model_summary", state.get("model", "")) or "").strip() or "unknown"
+        resumable = status in {"running", "stopping", "paused", "interrupted", "stopped"} or (
+            total > 0 and completed < total
+        )
+        if resumable_only and not resumable:
+            continue
+        label = f"{run_id} [{status}] {completed}/{total} source={source} model={model_summary}"
+        entries.append(
+            {
+                "run_id": run_id,
+                "label": label,
+                "status": status,
+                "total": total,
+                "completed": completed,
+                "source": source,
+                "model": str(state.get("model", "") or ""),
+                "model_summary": model_summary,
+                "base": str(state.get("base", "") or ""),
+                "temp": state.get("temp", 0.7),
+                "loop": state.get("loop", 10),
+                "search_range": state.get("search_range", 0),
+                "rag": state.get("rag", True),
+                "verbose": state.get("verbose", False),
+            }
+        )
+    return entries
+
+
+def _prompt_resume_run_dialog() -> dict[str, object] | None:
+    assert PROMPT_TOOLKIT_AVAILABLE
+    run_entries = _available_run_entries(resumable_only=True)
+    if not run_entries:
+        message_dialog(
+            title="Resume benchmark",
+            text=f"No resumable benchmark runs found in {_runs_dir()}.",
+            style=UI_STYLE,
+        ).run()
+        return None
+    selected = radiolist_dialog(
+        title="Resume benchmark",
+        text="Choose a benchmark run to resume.",
+        values=[(str(entry["run_id"]), str(entry["label"])) for entry in run_entries],
+        default=str(run_entries[0]["run_id"]),
+        style=UI_STYLE,
+    ).run()
+    if selected is None:
+        return None
+    return next((entry for entry in run_entries if str(entry["run_id"]) == str(selected)), None)
+
+
+def _prompt_resume_run_text() -> dict[str, object] | None:
+    run_entries = _available_run_entries(resumable_only=True)
+    if not run_entries:
+        print(f"No resumable benchmark runs found in {_runs_dir()}.")
+        return None
+    print("\nResumable runs:")
+    for index, entry in enumerate(run_entries, start=1):
+        print(f"  {index}) {entry['label']}")
+    raw = input("Select run number: ").strip()
+    if not raw.isdigit():
+        print("Invalid run selection.")
+        return None
+    index = int(raw) - 1
+    if index < 0 or index >= len(run_entries):
+        print("Invalid run selection.")
+        return None
+    return run_entries[index]
+
+
 def _format_elapsed(seconds: float) -> str:
     total = max(0, int(seconds))
     hours, rem = divmod(total, 3600)
@@ -1655,6 +1953,20 @@ def _progress_bar(ratio: float, width: int = 30) -> tuple[str, str]:
     clamped = max(0.0, min(1.0, ratio))
     filled = int(width * clamped)
     return ("#" * filled, "-" * (width - filled))
+
+
+def _parse_bool(raw: object, default: bool) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off"}:
+            return False
+    return default
 
 
 def _parse_int(raw: str, default: int) -> int:

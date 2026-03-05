@@ -28,26 +28,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Tool '{args.tool}' is not wired yet for benchmark runs. Use --tool pllm.")
             return 2
         if args.benchmark_command == "run":
+            run_id = args.run_id.strip() if isinstance(args.run_id, str) else ""
+            if args.resume and not run_id:
+                print("--resume requires --run-id.")
+                return 2
             observer = None
             if args.dashboard and not args.show_case_output and sys.stdin.isatty() and sys.stdout.isatty():
                 from cli.pllm.terminal_ui import TerminalBenchmarkDashboard
 
                 observer = TerminalBenchmarkDashboard()
-            return_code, summary = run_benchmark(
-                source=args.source,
-                model=args.model,
-                base=args.base,
-                temp=args.temp,
-                loop=args.loop,
-                search_range=args.range,
-                rag=args.rag,
-                verbose=args.verbose,
-                limit=args.limit,
-                offset=args.offset,
-                fail_fast=args.fail_fast,
-                show_case_output=args.show_case_output,
-                observer=observer,
-            )
+            try:
+                return_code, summary = run_benchmark(
+                    source=args.source,
+                    model=args.model,
+                    base=args.base,
+                    temp=args.temp,
+                    loop=args.loop,
+                    search_range=args.range,
+                    rag=args.rag,
+                    verbose=args.verbose,
+                    limit=args.limit,
+                    offset=args.offset,
+                    fail_fast=args.fail_fast,
+                    show_case_output=args.show_case_output,
+                    observer=observer,
+                    run_id=run_id or None,
+                    resume=args.resume,
+                )
+            except Exception as exc:
+                print(f"{type(exc).__name__}: {exc}")
+                return 1
             print(
                 f"Benchmark source={summary.source} "
                 f"selected={summary.total_selected} attempted={summary.attempted} "
@@ -204,6 +214,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--dashboard",
         action="store_true",
         help="Show active benchmark dashboard (TTY)",
+    )
+    run_benchmark_parser.add_argument(
+        "--run-id",
+        default="",
+        help="Benchmark run id (required with --resume, optional for custom id on new run)",
+    )
+    run_benchmark_parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume an existing benchmark run from artifacts/runs/<run-id>",
     )
     _add_runtime_args_no_file(run_benchmark_parser)
 

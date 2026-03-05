@@ -363,12 +363,19 @@ def run_benchmark(
         elapsed_seconds += stats.elapsed_seconds
         success = return_code == 0
         status = "success" if success else "failed"
+        final_error_category = ""
+        if not success:
+            final_error_category = _extract_case_failure_category(
+                case_output_lines=case_output_lines,
+                snippet_path=snippet_path,
+            )
         row = {
             "index": index,
             "case_id": case_id,
             "status": status,
             "success": success,
             "return_code": return_code,
+            "final_error_category": final_error_category,
             "elapsed_seconds": round(stats.elapsed_seconds, 6),
             "started_at": case_started_at,
             "finished_at": finished_at,
@@ -1352,12 +1359,14 @@ def _parse_official_passed_flag(value: object) -> bool | None:
 def _run_result_label_for_official(row: dict[str, object]) -> str:
     if bool(row.get("success", False)):
         return "OtherPass"
-    category = _normalize_result_label(row.get("final_error_category", ""))
+    category = _normalize_result_label(_canonical_error_category(row.get("final_error_category", "")))
     status = _normalize_result_label(row.get("status", ""))
     if status == "skipped" or category == "skipped":
         return "Skipped"
     if category in {"modulenotfounderror", "modulenotfound"}:
         return "ModuleNotFound"
+    if category in {"couldnotbuildwheels"}:
+        return "CouldNotBuildWheels"
     if category in {"importerror", "syntaxerror", "nameerror", "typeerror", "attributeerror"}:
         return {
             "importerror": "ImportError",
@@ -1456,13 +1465,113 @@ def _looks_like_build_log_line(line: str) -> bool:
     return stripped.startswith("#") or "docker build" in stripped.lower() or "build details:" in stripped.lower()
 
 
+def _extract_case_failure_category(*, case_output_lines: list[str], snippet_path: Path) -> str:
+    from_output_data = _extract_error_type_from_output_data(snippet_path.parent)
+    from_logs = _classify_failure_from_log_text("\n".join(case_output_lines))
+
+    # Prefer detailed log-based categorization when output_data only has generic buckets.
+    if from_logs and from_output_data in {"", "ExecutionFailed", "BuildFailure", "RuntimeNonZero", "NonZeroCode"}:
+        return from_logs
+    if from_output_data:
+        return from_output_data
+    if from_logs:
+        return from_logs
+    return "ExecutionFailed"
+
+
+def _extract_error_type_from_output_data(snippet_dir: Path) -> str:
+    output_files = sorted(
+        snippet_dir.glob("output_data_*.yml"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    pattern = re.compile(r"^\s*-\s*error_type:\s*(.+?)\s*$", re.MULTILINE)
+
+    for path in output_files[:5]:
+        try:
+            payload = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        matches = pattern.findall(payload)
+        for match in reversed(matches):
+            normalized = _canonical_error_category(str(match).strip().strip("\"'"))
+            if normalized:
+                return normalized
+    return ""
+
+
+def _classify_failure_from_log_text(log_text: str) -> str:
+    lower = log_text.lower()
+    if not lower.strip():
+        return ""
+    if "could not build wheels" in lower or "failed building wheel for" in lower:
+        return "CouldNotBuildWheels"
+    if "modulenotfounderror" in lower or "module not found" in lower:
+        return "ModuleNotFound"
+    if "importerror" in lower or "import error" in lower:
+        return "ImportError"
+    if "syntaxerror" in lower:
+        return "SyntaxError"
+    if "attributeerror" in lower:
+        return "AttributeError"
+    if "typeerror" in lower:
+        return "TypeError"
+    if "nameerror" in lower:
+        return "NameError"
+    if "could not find a version that satisfies the requirement" in lower or "no matching distribution found" in lower:
+        return "VersionNotFound"
+    if "dependency conflict" in lower or "resolutionimpossible" in lower:
+        return "DependencyConflict"
+    if "invalidversion" in lower or "invalid version" in lower:
+        return "InvalidVersion"
+    if "failed to build" in lower or "failed to solve" in lower or "docker runtime/build error" in lower:
+        return "DockerError"
+    if "traceback (most recent call last):" in lower:
+        return "PythonRuntimeError"
+    if "non-zero code" in lower or "returned a non-zero code" in lower:
+        return "NonZeroCode"
+    return ""
+
+
+def _canonical_error_category(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    normalized = re.sub(r"[^a-z0-9]+", "", text.lower())
+    mapping = {
+        "none": "",
+        "unknown": "",
+        "skipped": "Skipped",
+        "executionfailed": "ExecutionFailed",
+        "buildfailure": "BuildFailure",
+        "runtimenonzero": "RuntimeNonZero",
+        "nonzerocode": "NonZeroCode",
+        "couldnotbuildwheels": "CouldNotBuildWheels",
+        "versionnotfound": "VersionNotFound",
+        "dependencyconflict": "DependencyConflict",
+        "modulenotfound": "ModuleNotFound",
+        "modulenotfounderror": "ModuleNotFound",
+        "importerror": "ImportError",
+        "syntaxerror": "SyntaxError",
+        "nameerror": "NameError",
+        "typeerror": "TypeError",
+        "attributeerror": "AttributeError",
+        "invalidversion": "InvalidVersion",
+        "dockererror": "DockerError",
+        "pythonruntimeerror": "PythonRuntimeError",
+    }
+    if normalized in mapping:
+        return mapping[normalized]
+    return text
+
+
 def _normalize_result_row(row: dict[str, object]) -> dict[str, object]:
     status = str(row.get("status", "unknown") or "unknown")
     success = bool(row.get("success", False))
     attempts = 0 if status == "skipped" else 1
-    final_error_category = ""
+    final_error_category = _canonical_error_category(row.get("final_error_category"))
     if not success:
-        final_error_category = "Skipped" if status == "skipped" else "ExecutionFailed"
+        final_error_category = final_error_category or ("Skipped" if status == "skipped" else "ExecutionFailed")
     elapsed = _as_float(row.get("elapsed_seconds"), default=0.0)
     return {
         "index": _as_int(row.get("index"), default=0),

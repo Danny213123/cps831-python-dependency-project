@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import time
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from cli.pllm.benchmark_data import BenchmarkSource, list_case_ids, resolve_snippet_path
 from cli.pllm.core import ROOT_DIR, RunConfig, stream_executor
@@ -50,8 +50,16 @@ class BenchmarkSummary:
     run_id: str = ""
     report_dir: str = ""
     summary_path: str = ""
+    summary_csv_path: str = ""
     results_csv_path: str = ""
     results_json_path: str = ""
+    results_markdown_path: str = ""
+    leaderboard_markdown_path: str = ""
+    timeline_json_path: str = ""
+    timeline_csv_path: str = ""
+    timeline_markdown_path: str = ""
+    llm_trace_path: str = ""
+    warnings_path: str = ""
     report_markdown_path: str = ""
 
 
@@ -80,7 +88,21 @@ def run_benchmark(
     if limit > 0:
         case_ids = case_ids[:limit]
     rows: list[dict[str, object]] = []
-    started_at = _utc_now_iso()
+    run_started_at = _utc_now_iso()
+    run_trace_path = run_dir / "llm-trace.log"
+    warnings_path = run_dir / "warnings.log"
+    warnings_written = False
+    _initialize_trace_log(
+        trace_path=run_trace_path,
+        run_id=run_id,
+        source=source,
+        model=model,
+        base=base,
+        loop=loop,
+        search_range=search_range,
+        rag=rag,
+        verbose=verbose,
+    )
     current_cases: list[str] = []
     last_case_id = ""
     last_status = "starting"
@@ -106,11 +128,14 @@ def run_benchmark(
         skipped=0,
         elapsed_seconds=0.0,
         rows=rows,
-        started_at=started_at,
+        started_at=run_started_at,
         current_cases=current_cases,
         last_case_id=last_case_id,
         last_status=last_status,
         status="running" if total_selected > 0 else "empty",
+        stop_requested=False,
+        llm_trace_path=str(run_trace_path),
+        warnings_path=None,
     )
 
     if observer is not None:
@@ -154,16 +179,27 @@ def run_benchmark(
             skipped=0,
             elapsed_seconds=0.0,
             rows=rows,
-            started_at=started_at,
+            started_at=run_started_at,
             current_cases=[],
             last_case_id="",
             last_status="no_cases_selected",
             status="empty",
+            stop_requested=False,
+            llm_trace_path=str(run_trace_path),
+            warnings_path=None,
         )
         summary.report_dir = str(run_dir)
         summary.summary_path = str(run_dir / "summary.json")
+        summary.summary_csv_path = str(run_dir / "summary.csv")
         summary.results_csv_path = str(run_dir / "results.csv")
         summary.results_json_path = str(run_dir / "results.json")
+        summary.results_markdown_path = str(run_dir / "results.md")
+        summary.leaderboard_markdown_path = str(run_dir / "leaderboard.md")
+        summary.timeline_json_path = str(run_dir / "timeline.json")
+        summary.timeline_csv_path = str(run_dir / "timeline.csv")
+        summary.timeline_markdown_path = str(run_dir / "timeline.md")
+        summary.llm_trace_path = str(run_dir / "llm-trace.log")
+        summary.warnings_path = ""
         summary.report_markdown_path = str(run_dir / "report.md")
         if observer is not None:
             observer.finish(summary=summary, status="empty")
@@ -199,11 +235,14 @@ def run_benchmark(
             skipped=skipped,
             elapsed_seconds=elapsed_seconds,
             rows=rows,
-            started_at=started_at,
+            started_at=run_started_at,
             current_cases=current_cases,
             last_case_id=last_case_id,
             last_status=last_status,
             status="running",
+            stop_requested=stop_requested,
+            llm_trace_path=str(run_trace_path),
+            warnings_path=str(warnings_path) if warnings_written else None,
         )
 
         snippet_path = resolve_snippet_path(case_id, source=source)
@@ -219,7 +258,13 @@ def run_benchmark(
                 "elapsed_seconds": 0.0,
                 "started_at": now,
                 "finished_at": now,
+                "source_path": "",
+                "trace_path": str(run_dir / case_id / "llm-trace.log"),
             }
+            _append_log_line(run_trace_path, f"[{_utc_now_iso()}] CASE SKIPPED {case_id} (missing snippet)")
+            _append_log_line(run_dir / case_id / "llm-trace.log", f"[{_utc_now_iso()}] skipped: missing snippet")
+            _append_log_line(warnings_path, f"{now} {case_id} skipped: missing snippet")
+            warnings_written = True
             rows.append(row)
             _write_case_result(run_dir=run_dir, run_id=run_id, source=source, row=row)
             last_case_id = case_id
@@ -243,11 +288,14 @@ def run_benchmark(
                 skipped=skipped,
                 elapsed_seconds=elapsed_seconds,
                 rows=rows,
-                started_at=started_at,
+                started_at=run_started_at,
                 current_cases=current_cases,
                 last_case_id=last_case_id,
                 last_status=last_status,
                 status="running",
+                stop_requested=stop_requested,
+                llm_trace_path=str(run_trace_path),
+                warnings_path=str(warnings_path) if warnings_written else None,
             )
             _emit(line_handler, f"[{index}/{total_selected}] {case_id} skipped (missing snippet)")
             if observer is not None:
@@ -265,6 +313,10 @@ def run_benchmark(
         if observer is not None:
             observer.case_started(case_id)
         _emit(line_handler, f"[{index}/{total_selected}] running {case_id}")
+        source_copy_path = _write_case_source(run_dir=run_dir, case_id=case_id, snippet_path=snippet_path)
+        case_trace_path = run_dir / case_id / "llm-trace.log"
+        _append_log_line(run_trace_path, f"[{_utc_now_iso()}] CASE START {case_id}")
+        _append_log_line(case_trace_path, f"[{_utc_now_iso()}] CASE START {case_id}")
         config = RunConfig(
             file=str(snippet_path),
             model=model,
@@ -276,11 +328,13 @@ def run_benchmark(
             verbose=verbose,
         )
 
-        callback = (lambda _line, _stats: None)
-        if show_case_output:
-            callback = lambda line, _stats: _emit(line_handler, line)
+        def callback(line: str, _stats: object) -> None:
+            _append_log_line(run_trace_path, line)
+            _append_log_line(case_trace_path, line)
+            if show_case_output:
+                _emit(line_handler, line)
 
-        started_at = _utc_now_iso()
+        case_started_at = _utc_now_iso()
         return_code, stats = stream_executor(config, line_callback=callback)
         finished_at = _utc_now_iso()
         attempted += 1
@@ -294,9 +348,13 @@ def run_benchmark(
             "success": success,
             "return_code": return_code,
             "elapsed_seconds": round(stats.elapsed_seconds, 6),
-            "started_at": started_at,
+            "started_at": case_started_at,
             "finished_at": finished_at,
+            "source_path": str(source_copy_path) if source_copy_path is not None else "",
+            "trace_path": str(case_trace_path),
         }
+        _append_log_line(run_trace_path, f"[{_utc_now_iso()}] CASE END {case_id} rc={return_code}")
+        _append_log_line(case_trace_path, f"[{_utc_now_iso()}] case end rc={return_code}")
         rows.append(row)
         _write_case_result(run_dir=run_dir, run_id=run_id, source=source, row=row)
         last_case_id = case_id
@@ -319,6 +377,11 @@ def run_benchmark(
             _emit(line_handler, f"[{index}/{total_selected}] {case_id} ok ({stats.elapsed_seconds:.1f}s)")
         else:
             failed += 1
+            _append_log_line(
+                warnings_path,
+                f"{finished_at} {case_id} failed: return_code={return_code} elapsed={stats.elapsed_seconds:.6f}",
+            )
+            warnings_written = True
             _emit(
                 line_handler,
                 f"[{index}/{total_selected}] {case_id} failed rc={return_code} ({stats.elapsed_seconds:.1f}s)",
@@ -343,11 +406,14 @@ def run_benchmark(
             skipped=skipped,
             elapsed_seconds=elapsed_seconds,
             rows=rows,
-            started_at=started_at,
+            started_at=run_started_at,
             current_cases=current_cases,
             last_case_id=last_case_id,
             last_status=last_status,
             status="running",
+            stop_requested=stop_requested,
+            llm_trace_path=str(run_trace_path),
+            warnings_path=str(warnings_path) if warnings_written else None,
         )
 
     summary = BenchmarkSummary(
@@ -361,6 +427,11 @@ def run_benchmark(
         run_id=run_id,
     )
     final_status = "stopped" if stop_requested else "completed"
+    warnings_path_value = str(warnings_path) if warnings_written else None
+    _append_log_line(
+        run_trace_path,
+        f"[{_utc_now_iso()}] RUN END status={final_status} attempted={attempted} succeeded={succeeded} failed={failed} skipped={skipped}",
+    )
     _write_run_reports(
         run_dir=run_dir,
         run_id=run_id,
@@ -375,40 +446,39 @@ def run_benchmark(
         summary=summary,
         rows=rows,
         status=final_status,
-        started_at=started_at,
+        started_at=run_started_at,
+        llm_trace_path=str(run_trace_path),
+        warnings_path=warnings_path_value,
     )
     _write_run_state(
         run_dir=run_dir,
-        payload={
-            "run_id": run_id,
-            "status": final_status,
-            "source": source,
-            "model": model,
-            "base": base,
-            "temp": temp,
-            "loop": loop,
-            "search_range": search_range,
-            "rag": rag,
-            "verbose": verbose,
-            "total_selected": total_selected,
-            "completed": len(rows),
-            "attempted": attempted,
-            "succeeded": succeeded,
-            "failed": failed,
-            "skipped": skipped,
-            "success_rate": (succeeded / attempted) if attempted else 0.0,
-            "elapsed_seconds": round(elapsed_seconds, 6),
-            "started_at": started_at,
-            "last_updated_at": _utc_now_iso(),
-            "current_cases": [],
-            "last_case_id": last_case_id,
-            "last_status": last_status,
-            "summary_path": summary.summary_path,
-            "results_csv_path": summary.results_csv_path,
-            "results_json_path": summary.results_json_path,
-            "report_markdown_path": summary.report_markdown_path,
-            "report_dir": summary.report_dir,
-        },
+        payload=_build_run_state_payload(
+            run_id=run_id,
+            status=final_status,
+            source=source,
+            model=model,
+            base=base,
+            temp=temp,
+            loop=loop,
+            search_range=search_range,
+            rag=rag,
+            verbose=verbose,
+            total_selected=total_selected,
+            attempted=attempted,
+            succeeded=succeeded,
+            failed=failed,
+            skipped=skipped,
+            elapsed_seconds=elapsed_seconds,
+            started_at=run_started_at,
+            current_cases=[],
+            last_case_id=last_case_id,
+            last_status=last_status,
+            summary=summary,
+            completed=len(rows),
+            stop_requested=stop_requested,
+            llm_trace_path=str(run_trace_path),
+            warnings_path=warnings_path_value,
+        ),
     )
     if observer is not None:
         status = "stopped" if observer.stop_requested() or stop_requested else "completed"
@@ -449,22 +519,37 @@ def _write_run_reports(
     rows: list[dict[str, object]],
     status: str = "completed",
     started_at: str | None = None,
+    llm_trace_path: str = "",
+    warnings_path: str | None = None,
 ) -> None:
     summary_path = run_dir / "summary.json"
+    summary_csv_path = run_dir / "summary.csv"
     results_json_path = run_dir / "results.json"
     results_csv_path = run_dir / "results.csv"
+    results_markdown_path = run_dir / "results.md"
+    leaderboard_markdown_path = run_dir / "leaderboard.md"
+    timeline_json_path = run_dir / "timeline.json"
+    timeline_csv_path = run_dir / "timeline.csv"
+    timeline_markdown_path = run_dir / "timeline.md"
     report_markdown_path = run_dir / "report.md"
     now = _utc_now_iso()
+    normalized_rows = [_normalize_result_row(row) for row in rows]
+    normalized_rows.sort(key=lambda row: (row["index"], row["case_id"]))
+    results_rows = [_to_results_row(row, case_number=index) for index, row in enumerate(normalized_rows, start=1)]
 
     summary_payload = {
         "run_id": run_id,
         "status": status,
         "source": source,
+        "benchmark_source": source,
         "total_selected": summary.total_selected,
+        "total": summary.total_selected,
         "completed": len(rows),
         "attempted": summary.attempted,
         "succeeded": summary.succeeded,
         "failed": summary.failed,
+        "successes": summary.succeeded,
+        "failures": summary.failed,
         "skipped": summary.skipped,
         "success_rate": (summary.succeeded / summary.attempted) if summary.attempted else 0.0,
         "elapsed_seconds": round(summary.elapsed_seconds, 6),
@@ -477,28 +562,185 @@ def _write_run_reports(
         "search_range": search_range,
         "rag": rag,
         "verbose": verbose,
+        "model_summary": model,
+        "artifacts_dir": str(run_dir),
+        "llm_trace_path": llm_trace_path,
+        "warnings_path": warnings_path or "",
         "generated_at": now,
     }
     summary_path.write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
-    results_json_path.write_text(json.dumps({"run_id": run_id, "rows": rows}, indent=2), encoding="utf-8")
 
-    with results_csv_path.open("w", newline="", encoding="utf-8") as handle:
+    with summary_csv_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
             handle,
             fieldnames=[
-                "index",
                 "case_id",
-                "status",
                 "success",
-                "return_code",
-                "elapsed_seconds",
+                "attempts",
+                "initial_eval",
+                "final_error_category",
+                "wall_clock_seconds",
                 "started_at",
                 "finished_at",
             ],
         )
         writer.writeheader()
-        for row in rows:
+        for row in normalized_rows:
+            writer.writerow(
+                {
+                    "case_id": row["case_id"],
+                    "success": row["success"],
+                    "attempts": row["attempts"],
+                    "initial_eval": row["initial_eval"],
+                    "final_error_category": row["final_error_category"],
+                    "wall_clock_seconds": row["wall_clock_seconds"],
+                    "started_at": row["started_at"],
+                    "finished_at": row["finished_at"],
+                }
+            )
+
+    results_json_path.write_text(json.dumps({"run_id": run_id, "rows": results_rows}, indent=2), encoding="utf-8")
+
+    with results_csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "case_number",
+                "case_id",
+                "modules",
+                "result",
+                "attempts",
+                "initial_eval",
+                "final_error_category",
+                "dependencies",
+                "dependency_reason",
+                "research_bundle",
+                "research_features",
+                "selected_candidate_rank",
+                "strategy_type",
+                "retry_severity",
+                "conflict_precheck_failed",
+                "status",
+                "return_code",
+                "wall_clock_seconds",
+                "started_at",
+                "finished_at",
+                "source_path",
+                "trace_path",
+            ],
+        )
+        writer.writeheader()
+        for row in results_rows:
             writer.writerow(row)
+
+    result_markdown_lines = [
+        "# Case Results",
+        "",
+        f"Run ID: `{run_id}`",
+        "",
+        "| # | Case ID | Modules | Result | Attempts | Final Status | Dependencies | Time (s) |",
+        "| ---: | --- | --- | --- | ---: | --- | --- | ---: |",
+    ]
+    for row in results_rows:
+        result_markdown_lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(row["case_number"]),
+                    str(row["case_id"]),
+                    str(row["modules"] or "-"),
+                    str(row["result"]),
+                    str(row["attempts"]),
+                    str(row["final_error_category"] or "-"),
+                    str(row["dependencies"] or "-"),
+                    f"{float(row['wall_clock_seconds']):.2f}",
+                ]
+            )
+            + " |"
+        )
+    results_markdown_path.write_text("\n".join(result_markdown_lines) + "\n", encoding="utf-8")
+
+    leaderboard_lines = [
+        "# Benchmark Summary",
+        "",
+        f"- Run ID: `{run_id}`",
+        f"- Source: `{source}`",
+        f"- Model: `{model}`",
+        f"- Runtime: `loop={loop}` `range={search_range}` `rag={rag}` `verbose={verbose}`",
+        f"- Total cases: `{summary.total_selected}`",
+        f"- Attempted: `{summary.attempted}`",
+        f"- Successes: `{summary.succeeded}`",
+        f"- Failures: `{summary.failed}`",
+        f"- Skipped: `{summary.skipped}`",
+        f"- Success rate: `{((summary.succeeded / summary.attempted) if summary.attempted else 0.0):.2%}`",
+        f"- Time to finish: `{_format_elapsed(summary.elapsed_seconds)}`",
+    ]
+    leaderboard_markdown_path.write_text("\n".join(leaderboard_lines) + "\n", encoding="utf-8")
+
+    timeline_report = _build_timeline_report(run_id=run_id, rows=normalized_rows, run_started_at=started_at or now)
+    timeline_json_path.write_text(json.dumps(timeline_report, indent=2), encoding="utf-8")
+    with timeline_csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "case_id",
+                "success",
+                "final_error_category",
+                "attempts",
+                "started_at",
+                "finished_at",
+                "wall_clock_seconds",
+                "duration_human",
+                "relative_start_seconds",
+                "relative_end_seconds",
+            ],
+        )
+        writer.writeheader()
+        for row in timeline_report["rows"]:
+            writer.writerow(
+                {
+                    "case_id": row["case_id"],
+                    "success": row["success"],
+                    "final_error_category": row["final_error_category"],
+                    "attempts": row["attempts"],
+                    "started_at": row["started_at"],
+                    "finished_at": row["finished_at"],
+                    "wall_clock_seconds": row["wall_clock_seconds"],
+                    "duration_human": row["duration_human"],
+                    "relative_start_seconds": row["relative_start_seconds"],
+                    "relative_end_seconds": row["relative_end_seconds"],
+                }
+            )
+
+    timeline_lines = [
+        "# Case Timeline",
+        "",
+        f"Run ID: `{run_id}`",
+        f"Run started: `{timeline_report['run_started_at'] or 'unknown'}`",
+        f"Run finished: `{timeline_report['run_finished_at'] or 'unknown'}`",
+        f"Timeline span: `{timeline_report['total_span_human']}`",
+        "",
+        "| Case ID | Start | End | Duration | Attempts | Status | Timeline |",
+        "| --- | --- | --- | ---: | ---: | --- | --- |",
+    ]
+    for row in timeline_report["rows"]:
+        row_status = "Success" if row["success"] else (row["final_error_category"] or "failed")
+        timeline_lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(row["case_id"]),
+                    str(row["started_at"] or "unknown"),
+                    str(row["finished_at"] or "unknown"),
+                    str(row["duration_human"]),
+                    str(row["attempts"]),
+                    row_status,
+                    f"`{row['timeline_bar']}`",
+                ]
+            )
+            + " |"
+        )
+    timeline_markdown_path.write_text("\n".join(timeline_lines) + "\n", encoding="utf-8")
 
     lines = [
         "# PLLM Benchmark Report",
@@ -515,18 +757,34 @@ def _write_run_reports(
         f"- Succeeded: `{summary.succeeded}`",
         f"- Failed: `{summary.failed}`",
         f"- Skipped: `{summary.skipped}`",
-        f"- Elapsed: `{summary.elapsed_seconds:.1f}s`",
+        f"- Elapsed: `{_format_elapsed(summary.elapsed_seconds)}`",
         "",
         f"- Summary JSON: `{summary_path}`",
+        f"- Summary CSV: `{summary_csv_path}`",
         f"- Results CSV: `{results_csv_path}`",
         f"- Results JSON: `{results_json_path}`",
+        f"- Results Markdown: `{results_markdown_path}`",
+        f"- Leaderboard: `{leaderboard_markdown_path}`",
+        f"- Timeline JSON: `{timeline_json_path}`",
+        f"- Timeline CSV: `{timeline_csv_path}`",
+        f"- Timeline Markdown: `{timeline_markdown_path}`",
+        f"- LLM Trace: `{llm_trace_path}`",
+        f"- Warnings: `{warnings_path or '(none)'}`",
     ]
     report_markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     summary.report_dir = str(run_dir)
     summary.summary_path = str(summary_path)
+    summary.summary_csv_path = str(summary_csv_path)
     summary.results_csv_path = str(results_csv_path)
     summary.results_json_path = str(results_json_path)
+    summary.results_markdown_path = str(results_markdown_path)
+    summary.leaderboard_markdown_path = str(leaderboard_markdown_path)
+    summary.timeline_json_path = str(timeline_json_path)
+    summary.timeline_csv_path = str(timeline_csv_path)
+    summary.timeline_markdown_path = str(timeline_markdown_path)
+    summary.llm_trace_path = llm_trace_path
+    summary.warnings_path = warnings_path or ""
     summary.report_markdown_path = str(report_markdown_path)
 
 
@@ -536,9 +794,14 @@ def _write_case_result(*, run_dir: Path, run_id: str, source: BenchmarkSource, r
         return
     case_dir = run_dir / case_id
     case_dir.mkdir(parents=True, exist_ok=True)
-    payload = dict(row)
+    normalized = _normalize_result_row(row)
+    payload: dict[str, Any] = dict(normalized)
     payload["run_id"] = run_id
     payload["source"] = source
+    payload["case_source"] = source
+    payload["dependencies"] = []
+    payload["attempt_records"] = []
+    payload["candidate_provenance"] = {}
     (case_dir / "result.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -546,19 +809,67 @@ def _write_run_state(*, run_dir: Path, payload: dict[str, object]) -> None:
     state_path = run_dir / "run-state.json"
     state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
+    active_cases = payload.get("current_cases", [])
+    if not isinstance(active_cases, list):
+        active_cases = []
+    total = _as_int(payload.get("total"), default=_as_int(payload.get("total_selected"), default=0))
+    completed = _as_int(payload.get("completed"), default=0)
+    elapsed = _format_elapsed(_as_float(payload.get("elapsed_seconds"), default=0.0))
     lines = [
-        "# PLLM Run State",
+        "# Run Status",
         "",
-        f"- Run ID: `{payload.get('run_id', '')}`",
-        f"- Status: `{payload.get('status', '')}`",
-        f"- Source: `{payload.get('source', '')}`",
-        f"- Model: `{payload.get('model', '')}`",
-        f"- Progress: `{payload.get('completed', 0)}/{payload.get('total_selected', 0)}`",
-        f"- Attempted/Succeeded/Failed/Skipped: "
-        f"`{payload.get('attempted', 0)}/{payload.get('succeeded', 0)}/{payload.get('failed', 0)}/{payload.get('skipped', 0)}`",
-        f"- Last case: `{payload.get('last_case_id', '')}` (`{payload.get('last_status', '')}`)",
-        f"- Updated: `{payload.get('last_updated_at', '')}`",
+        f"- Run ID: `{payload.get('run_id', run_dir.name)}`",
+        f"- Status: `{payload.get('status', 'unknown')}`",
+        f"- Resolver: `{payload.get('resolver', 'pllm')}`",
+        f"- Preset: `{payload.get('preset', 'default')}`",
+        f"- Benchmark source: `{payload.get('benchmark_source', payload.get('source', 'all-gists'))}`",
+        f"- Prompt profile: `{payload.get('prompt_profile', 'default')}`",
+        f"- Research bundle: `{payload.get('research_bundle', 'baseline')}`",
+        f"- Research features: `{', '.join(payload.get('research_features', [])) if isinstance(payload.get('research_features', []), list) and payload.get('research_features', []) else 'none'}`",
+        f"- Jobs: `{payload.get('jobs', 1)}`",
+        f"- Target: `{payload.get('target', 'benchmark')}`",
+        f"- Progress: `{completed}/{total}`",
+        f"- Successes: `{payload.get('successes', payload.get('succeeded', 0))}`",
+        f"- Failures: `{payload.get('failures', payload.get('failed', 0))}`",
+        f"- Skipped: `{payload.get('skipped', 0)}`",
+        f"- Elapsed: `{elapsed}`",
+        f"- Started at: `{payload.get('started_at', '') or 'unknown'}`",
+        f"- Last updated: `{payload.get('last_updated_at', '') or 'unknown'}`",
+        f"- Last case: `{payload.get('last_case_id', '') or 'none'}`",
+        f"- Last status: `{payload.get('last_status', '') or 'none'}`",
+        f"- Stop requested: `{payload.get('stop_requested', False)}`",
+        "",
     ]
+    if active_cases:
+        lines.append("## Active Cases")
+        lines.append("")
+        for case_id in active_cases:
+            lines.append(f"- `{case_id}`")
+        lines.append("")
+    artifacts = [
+        ("Summary JSON", payload.get("summary_path")),
+        ("Summary CSV", payload.get("summary_csv_path")),
+        ("Results CSV", payload.get("results_csv_path")),
+        ("Results JSON", payload.get("results_json_path")),
+        ("Results Markdown", payload.get("results_markdown_path")),
+        ("Leaderboard", payload.get("leaderboard_markdown_path")),
+        ("Timeline JSON", payload.get("timeline_json_path")),
+        ("Timeline CSV", payload.get("timeline_csv_path")),
+        ("Timeline Markdown", payload.get("timeline_markdown_path")),
+        ("LLM Trace", payload.get("llm_trace_path")),
+        ("Report", payload.get("report_markdown_path")),
+        ("Warnings", payload.get("warnings_path")),
+    ]
+    if any(path for _, path in artifacts):
+        lines.append("## Artifacts")
+        lines.append("")
+        for label, path in artifacts:
+            if path:
+                lines.append(f"- {label}: `{path}`")
+        lines.append("")
+    error_text = str(payload.get("last_error", "") or "").strip()
+    if error_text:
+        lines.extend(["## Last Error", "", error_text, ""])
     (run_dir / "run-state.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -586,6 +897,9 @@ def _refresh_runtime_artifacts(
     last_case_id: str,
     last_status: str,
     status: str,
+    stop_requested: bool = False,
+    llm_trace_path: str = "",
+    warnings_path: str | None = None,
 ) -> None:
     summary = BenchmarkSummary(
         source=source,
@@ -612,37 +926,338 @@ def _refresh_runtime_artifacts(
         rows=rows,
         status=status,
         started_at=started_at,
+        llm_trace_path=llm_trace_path,
+        warnings_path=warnings_path,
     )
     _write_run_state(
         run_dir=run_dir,
         payload={
-            "run_id": run_id,
-            "status": status,
-            "source": source,
-            "model": model,
-            "base": base,
-            "temp": temp,
-            "loop": loop,
-            "search_range": search_range,
-            "rag": rag,
-            "verbose": verbose,
-            "total_selected": total_selected,
-            "completed": len(rows),
-            "attempted": attempted,
-            "succeeded": succeeded,
-            "failed": failed,
-            "skipped": skipped,
-            "success_rate": (succeeded / attempted) if attempted else 0.0,
-            "elapsed_seconds": round(elapsed_seconds, 6),
-            "started_at": started_at,
-            "last_updated_at": _utc_now_iso(),
-            "current_cases": current_cases,
-            "last_case_id": last_case_id,
-            "last_status": last_status,
-            "summary_path": summary.summary_path,
-            "results_csv_path": summary.results_csv_path,
-            "results_json_path": summary.results_json_path,
-            "report_markdown_path": summary.report_markdown_path,
-            "report_dir": summary.report_dir,
+            **_build_run_state_payload(
+                run_id=run_id,
+                status=status,
+                source=source,
+                model=model,
+                base=base,
+                temp=temp,
+                loop=loop,
+                search_range=search_range,
+                rag=rag,
+                verbose=verbose,
+                total_selected=total_selected,
+                attempted=attempted,
+                succeeded=succeeded,
+                failed=failed,
+                skipped=skipped,
+                elapsed_seconds=elapsed_seconds,
+                started_at=started_at,
+                current_cases=current_cases,
+                last_case_id=last_case_id,
+                last_status=last_status,
+                summary=summary,
+                completed=len(rows),
+                stop_requested=stop_requested,
+                llm_trace_path=llm_trace_path,
+                warnings_path=warnings_path,
+            )
         },
     )
+
+
+def _build_run_state_payload(
+    *,
+    run_id: str,
+    status: str,
+    source: BenchmarkSource,
+    model: str,
+    base: str,
+    temp: float,
+    loop: int,
+    search_range: int,
+    rag: bool,
+    verbose: bool,
+    total_selected: int,
+    attempted: int,
+    succeeded: int,
+    failed: int,
+    skipped: int,
+    elapsed_seconds: float,
+    started_at: str,
+    current_cases: list[str],
+    last_case_id: str,
+    last_status: str,
+    summary: BenchmarkSummary,
+    completed: int,
+    stop_requested: bool,
+    llm_trace_path: str,
+    warnings_path: str | None,
+) -> dict[str, object]:
+    return {
+        "run_id": run_id,
+        "status": status,
+        "resolver": "pllm",
+        "preset": "default",
+        "benchmark_source": source,
+        "prompt_profile": "default",
+        "research_bundle": "baseline",
+        "research_features": [],
+        "jobs": 1,
+        "target": "benchmark",
+        "source": source,
+        "model": model,
+        "model_summary": model,
+        "base": base,
+        "temp": temp,
+        "loop": loop,
+        "search_range": search_range,
+        "rag": rag,
+        "verbose": verbose,
+        "total": total_selected,
+        "total_selected": total_selected,
+        "completed": completed,
+        "attempted": attempted,
+        "successes": succeeded,
+        "failures": failed,
+        "succeeded": succeeded,
+        "failed": failed,
+        "skipped": skipped,
+        "success_rate": (succeeded / attempted) if attempted else 0.0,
+        "elapsed_seconds": round(elapsed_seconds, 6),
+        "started_at": started_at,
+        "last_updated_at": _utc_now_iso(),
+        "current_cases": current_cases,
+        "last_case_id": last_case_id,
+        "last_status": last_status,
+        "summary_path": summary.summary_path,
+        "summary_csv_path": summary.summary_csv_path,
+        "results_csv_path": summary.results_csv_path,
+        "results_json_path": summary.results_json_path,
+        "results_markdown_path": summary.results_markdown_path,
+        "leaderboard_markdown_path": summary.leaderboard_markdown_path,
+        "timeline_json_path": summary.timeline_json_path,
+        "timeline_csv_path": summary.timeline_csv_path,
+        "timeline_markdown_path": summary.timeline_markdown_path,
+        "llm_trace_path": llm_trace_path,
+        "report_markdown_path": summary.report_markdown_path,
+        "report_dir": summary.report_dir,
+        "artifacts_dir": summary.report_dir,
+        "warnings_path": warnings_path or "",
+        "stop_requested": stop_requested,
+    }
+
+
+def _initialize_trace_log(
+    *,
+    trace_path: Path,
+    run_id: str,
+    source: BenchmarkSource,
+    model: str,
+    base: str,
+    loop: int,
+    search_range: int,
+    rag: bool,
+    verbose: bool,
+) -> None:
+    lines = [
+        f"[{_utc_now_iso()}] RUN START {run_id}",
+        f"source={source}",
+        f"model={model}",
+        f"base={base}",
+        f"loop={loop} range={search_range} rag={rag} verbose={verbose}",
+        "",
+    ]
+    trace_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _append_log_line(path: Path, line: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(line.rstrip("\n") + "\n")
+
+
+def _write_case_source(*, run_dir: Path, case_id: str, snippet_path: Path) -> Path | None:
+    case_dir = run_dir / case_id
+    case_dir.mkdir(parents=True, exist_ok=True)
+    source_path = case_dir / "source.py"
+    try:
+        source_text = snippet_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    source_path.write_text(source_text, encoding="utf-8")
+    return source_path
+
+
+def _normalize_result_row(row: dict[str, object]) -> dict[str, object]:
+    status = str(row.get("status", "unknown") or "unknown")
+    success = bool(row.get("success", False))
+    attempts = 0 if status == "skipped" else 1
+    final_error_category = ""
+    if not success:
+        final_error_category = "Skipped" if status == "skipped" else "ExecutionFailed"
+    elapsed = _as_float(row.get("elapsed_seconds"), default=0.0)
+    return {
+        "index": _as_int(row.get("index"), default=0),
+        "case_id": str(row.get("case_id", "") or ""),
+        "status": status,
+        "success": success,
+        "return_code": _as_int(row.get("return_code"), default=0),
+        "elapsed_seconds": round(elapsed, 6),
+        "wall_clock_seconds": round(elapsed, 6),
+        "started_at": str(row.get("started_at", "") or ""),
+        "finished_at": str(row.get("finished_at", "") or ""),
+        "attempts": attempts,
+        "initial_eval": "",
+        "final_error_category": final_error_category,
+        "source_path": str(row.get("source_path", "") or ""),
+        "trace_path": str(row.get("trace_path", "") or ""),
+    }
+
+
+def _to_results_row(row: dict[str, object], *, case_number: int) -> dict[str, object]:
+    return {
+        "case_number": case_number,
+        "case_id": row["case_id"],
+        "modules": "",
+        "result": "success" if row["success"] else "failure",
+        "attempts": row["attempts"],
+        "initial_eval": row["initial_eval"],
+        "final_error_category": row["final_error_category"],
+        "dependencies": "",
+        "dependency_reason": "",
+        "research_bundle": "baseline",
+        "research_features": "",
+        "selected_candidate_rank": "",
+        "strategy_type": "",
+        "retry_severity": "",
+        "conflict_precheck_failed": False,
+        "status": row["status"],
+        "return_code": row["return_code"],
+        "wall_clock_seconds": row["wall_clock_seconds"],
+        "started_at": row["started_at"],
+        "finished_at": row["finished_at"],
+        "source_path": row.get("source_path", ""),
+        "trace_path": row.get("trace_path", ""),
+    }
+
+
+def _build_timeline_report(*, run_id: str, rows: list[dict[str, object]], run_started_at: str) -> dict[str, object]:
+    parsed_rows: list[dict[str, object]] = []
+    for row in rows:
+        started_dt = _parse_iso8601(row.get("started_at"))
+        finished_dt = _parse_iso8601(row.get("finished_at"))
+        parsed_rows.append(
+            {
+                **row,
+                "_started_dt": started_dt,
+                "_finished_dt": finished_dt,
+            }
+        )
+    parsed_rows.sort(key=lambda row: (row.get("index", 0), str(row.get("case_id", ""))))
+
+    parsed_starts = [row["_started_dt"] for row in parsed_rows if row["_started_dt"] is not None]
+    parsed_finishes = [row["_finished_dt"] for row in parsed_rows if row["_finished_dt"] is not None]
+    run_start_dt = _parse_iso8601(run_started_at) or (parsed_starts[0] if parsed_starts else None)
+    run_finish_dt = parsed_finishes[-1] if parsed_finishes else None
+
+    base_dt = run_start_dt or (parsed_starts[0] if parsed_starts else None)
+    if base_dt is None:
+        total_span_seconds = 0.0
+    else:
+        latest_dt = run_finish_dt or base_dt
+        total_span_seconds = max(0.0, (latest_dt - base_dt).total_seconds())
+
+    timeline_rows: list[dict[str, object]] = []
+    for row in parsed_rows:
+        started_dt = row["_started_dt"]
+        finished_dt = row["_finished_dt"]
+        duration = _as_float(row.get("wall_clock_seconds"), default=0.0)
+        if base_dt is None or started_dt is None:
+            relative_start = 0.0
+        else:
+            relative_start = max(0.0, (started_dt - base_dt).total_seconds())
+        if base_dt is None or finished_dt is None:
+            relative_end = relative_start + duration
+        else:
+            relative_end = max(relative_start, (finished_dt - base_dt).total_seconds())
+        timeline_rows.append(
+            {
+                "case_id": row.get("case_id", ""),
+                "success": row.get("success", False),
+                "final_error_category": row.get("final_error_category", ""),
+                "attempts": row.get("attempts", 0),
+                "started_at": row.get("started_at", ""),
+                "finished_at": row.get("finished_at", ""),
+                "wall_clock_seconds": row.get("wall_clock_seconds", 0.0),
+                "duration_human": _format_elapsed(duration),
+                "relative_start_seconds": round(relative_start, 6),
+                "relative_end_seconds": round(relative_end, 6),
+                "timeline_bar": _render_timeline_bar(
+                    relative_start_seconds=relative_start,
+                    duration_seconds=max(duration, relative_end - relative_start),
+                    total_span_seconds=total_span_seconds,
+                ),
+            }
+        )
+
+    return {
+        "run_id": run_id,
+        "run_started_at": run_started_at,
+        "run_finished_at": run_finish_dt.isoformat() if run_finish_dt is not None else "",
+        "total_span_seconds": round(total_span_seconds, 6),
+        "total_span_human": _format_elapsed(total_span_seconds),
+        "rows": timeline_rows,
+    }
+
+
+def _render_timeline_bar(*, relative_start_seconds: float, duration_seconds: float, total_span_seconds: float) -> str:
+    width = 36
+    if total_span_seconds <= 0.0:
+        return "#" + "." * (width - 1)
+    start_index = min(width - 1, max(0, int((relative_start_seconds / total_span_seconds) * (width - 1))))
+    segment = max(1, int((duration_seconds / total_span_seconds) * width))
+    end_index = min(width, start_index + segment)
+    bar = ["." for _ in range(width)]
+    for index in range(start_index, end_index):
+        bar[index] = "#"
+    return "".join(bar)
+
+
+def _parse_iso8601(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _as_int(value: object, *, default: int) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value: object, *, default: float) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _format_elapsed(seconds: float) -> str:
+    remaining = max(0, int(round(seconds)))
+    hours, remaining = divmod(remaining, 3600)
+    minutes, secs = divmod(remaining, 60)
+    if hours > 0:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes > 0:
+        return f"{minutes}m {secs}s"
+    return f"{seconds:.1f}s"

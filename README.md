@@ -169,11 +169,22 @@ python3 cli/pllm_cli.py benchmark run --source competition-run --limit 100
 Each benchmark run now writes report artifacts to:
 `artifacts/runs/<run_id>/` with live updates during runtime:
 - `summary.json`
+- `summary.csv`
 - `results.csv`
 - `results.json`
+- `results.md`
+- `leaderboard.md`
+- `timeline.json`
+- `timeline.csv`
+- `timeline.md`
 - `report.md`
 - `run-state.json`
+- `run-state.md`
+- `llm-trace.log`
+- `warnings.log` (when failures/skips occur)
 - `<case_id>/result.json`
+- `<case_id>/source.py`
+- `<case_id>/llm-trace.log`
 
 Run benchmark with the active dashboard screen (TTY):
 ```bash

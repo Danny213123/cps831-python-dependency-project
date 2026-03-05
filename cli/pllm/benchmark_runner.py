@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import csv
 import json
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -14,6 +15,9 @@ from cli.pllm.benchmark_data import BenchmarkSource, list_case_ids, resolve_snip
 from cli.pllm.core import ROOT_DIR, RunConfig, stream_executor
 
 LineHandler = Callable[[str], None]
+_OFFICIAL_PLLM_RESULTS_CSV = ROOT_DIR / "data" / "benchmarks" / "gistable" / "competition" / "summary-all-runs.csv"
+_OFFICIAL_CASE_ID_COLUMNS = ("name", "gist_id", "gistid", "case_id", "id")
+_OFFICIAL_CASE_TOKEN_PATTERN = re.compile(r"^[0-9A-Za-z]{6,40}$")
 
 
 class BenchmarkObserver(Protocol):
@@ -62,6 +66,7 @@ class BenchmarkSummary:
     timeline_markdown_path: str = ""
     llm_trace_path: str = ""
     warnings_path: str = ""
+    run_vs_official_csv_path: str = ""
     report_markdown_path: str = ""
 
 
@@ -202,6 +207,7 @@ def run_benchmark(
         summary.timeline_markdown_path = str(run_dir / "timeline.md")
         summary.llm_trace_path = str(run_dir / "llm-trace.log")
         summary.warnings_path = ""
+        summary.run_vs_official_csv_path = str(run_dir / "run-vs-official.csv")
         summary.report_markdown_path = str(run_dir / "report.md")
         if observer is not None:
             observer.finish(summary=summary, status="empty")
@@ -549,6 +555,7 @@ def _write_run_reports(
     summary_csv_path = run_dir / "summary.csv"
     results_json_path = run_dir / "results.json"
     results_csv_path = run_dir / "results.csv"
+    run_vs_official_csv_path = run_dir / "run-vs-official.csv"
     results_markdown_path = run_dir / "results.md"
     leaderboard_markdown_path = run_dir / "leaderboard.md"
     timeline_json_path = run_dir / "timeline.json"
@@ -589,6 +596,7 @@ def _write_run_reports(
         "artifacts_dir": str(run_dir),
         "llm_trace_path": llm_trace_path,
         "warnings_path": warnings_path or "",
+        "run_vs_official_csv_path": str(run_vs_official_csv_path),
         "generated_at": now,
     }
     summary_path.write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
@@ -662,6 +670,8 @@ def _write_run_reports(
         writer.writeheader()
         for row in results_rows:
             writer.writerow(row)
+
+    _write_run_vs_official_csv(path=run_vs_official_csv_path, run_rows=normalized_rows)
 
     result_markdown_lines = [
         "# Case Results",
@@ -792,6 +802,7 @@ def _write_run_reports(
         f"- Summary JSON: `{summary_path}`",
         f"- Summary CSV: `{summary_csv_path}`",
         f"- Results CSV: `{results_csv_path}`",
+        f"- Run vs Official CSV: `{run_vs_official_csv_path}`",
         f"- Results JSON: `{results_json_path}`",
         f"- Results Markdown: `{results_markdown_path}`",
         f"- Leaderboard: `{leaderboard_markdown_path}`",
@@ -807,6 +818,7 @@ def _write_run_reports(
     summary.summary_path = str(summary_path)
     summary.summary_csv_path = str(summary_csv_path)
     summary.results_csv_path = str(results_csv_path)
+    summary.run_vs_official_csv_path = str(run_vs_official_csv_path)
     summary.results_json_path = str(results_json_path)
     summary.results_markdown_path = str(results_markdown_path)
     summary.leaderboard_markdown_path = str(leaderboard_markdown_path)
@@ -880,6 +892,7 @@ def _write_run_state(*, run_dir: Path, payload: dict[str, object]) -> None:
         ("Summary JSON", payload.get("summary_path")),
         ("Summary CSV", payload.get("summary_csv_path")),
         ("Results CSV", payload.get("results_csv_path")),
+        ("Run vs Official CSV", payload.get("run_vs_official_csv_path")),
         ("Results JSON", payload.get("results_json_path")),
         ("Results Markdown", payload.get("results_markdown_path")),
         ("Leaderboard", payload.get("leaderboard_markdown_path")),
@@ -1060,6 +1073,7 @@ def _build_run_state_payload(
         "summary_path": summary.summary_path,
         "summary_csv_path": summary.summary_csv_path,
         "results_csv_path": summary.results_csv_path,
+        "run_vs_official_csv_path": summary.run_vs_official_csv_path,
         "results_json_path": summary.results_json_path,
         "results_markdown_path": summary.results_markdown_path,
         "leaderboard_markdown_path": summary.leaderboard_markdown_path,
@@ -1245,6 +1259,123 @@ def _combine_attempt_model_outputs(attempt_dirs: list[Path]) -> dict[str, list[d
                 merged.setdefault("attempt_folder", attempt_dir.name)
                 combined[stage].append(merged)
     return combined
+
+
+def _write_run_vs_official_csv(*, path: Path, run_rows: list[dict[str, object]]) -> None:
+    official_lookup = _load_official_pllm_lookup()
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["gistid", "result_a", "result_b", "both_matched"])
+        writer.writeheader()
+        for row in sorted(run_rows, key=lambda item: str(item.get("case_id", ""))):
+            case_id = str(row.get("case_id", "") or "")
+            result_a = _run_result_label_for_official(row)
+            result_b = official_lookup.get(case_id, "")
+            both_matched: str | bool = ""
+            if result_b:
+                both_matched = _normalize_result_label(result_a) == _normalize_result_label(result_b)
+            writer.writerow(
+                {
+                    "gistid": case_id,
+                    "result_a": result_a,
+                    "result_b": result_b,
+                    "both_matched": both_matched,
+                }
+            )
+
+
+def _load_official_pllm_lookup() -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    path = _OFFICIAL_PLLM_RESULTS_CSV
+    if not path.exists():
+        return lookup
+    try:
+        with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                case_ids = _extract_case_ids_from_official_row(row)
+                if not case_ids:
+                    continue
+                official_result = _official_lookup_value(row, "result")
+                if not official_result:
+                    official_passed = _official_lookup_value(row, "passed")
+                    if _parse_official_passed_flag(official_passed) is True:
+                        official_result = "OtherPass"
+                    elif _parse_official_passed_flag(official_passed) is False:
+                        official_result = "OtherFailure"
+                if not official_result:
+                    continue
+                for case_id in case_ids:
+                    lookup.setdefault(case_id, official_result)
+    except OSError:
+        return {}
+    return lookup
+
+
+def _extract_case_ids_from_official_row(row: dict[str, str]) -> set[str]:
+    normalized = {str(key).strip().lower(): str(value or "") for key, value in row.items() if key}
+    values = [normalized[column] for column in _OFFICIAL_CASE_ID_COLUMNS if column in normalized]
+    case_ids: set[str] = set()
+    for value in values:
+        for token in re.split(r"[^0-9A-Za-z]+", value):
+            stripped = token.strip()
+            if stripped and _OFFICIAL_CASE_TOKEN_PATTERN.fullmatch(stripped):
+                case_ids.add(stripped)
+    return case_ids
+
+
+def _official_lookup_value(row: dict[str, str], *keys: str) -> str:
+    for key in keys:
+        value = str(row.get(key, "") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _normalize_result_label(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def _parse_official_passed_flag(value: object) -> bool | None:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    if text in {"true", "t", "yes", "y", "pass", "passed"}:
+        return True
+    if text in {"false", "f", "no", "n", "fail", "failed"}:
+        return False
+    try:
+        return float(text) > 0.0
+    except ValueError:
+        return None
+
+
+def _run_result_label_for_official(row: dict[str, object]) -> str:
+    if bool(row.get("success", False)):
+        return "OtherPass"
+    category = _normalize_result_label(row.get("final_error_category", ""))
+    status = _normalize_result_label(row.get("status", ""))
+    if status == "skipped" or category == "skipped":
+        return "Skipped"
+    if category in {"modulenotfounderror", "modulenotfound"}:
+        return "ModuleNotFound"
+    if category in {"importerror", "syntaxerror", "nameerror", "typeerror", "attributeerror"}:
+        return {
+            "importerror": "ImportError",
+            "syntaxerror": "SyntaxError",
+            "nameerror": "NameError",
+            "typeerror": "TypeError",
+            "attributeerror": "AttributeError",
+        }[category]
+    if category in {"versionnotfound", "dependencyconflict", "nonzerocode", "invalidversion"}:
+        return {
+            "versionnotfound": "VersionNotFound",
+            "dependencyconflict": "DependencyConflict",
+            "nonzerocode": "NonZeroCode",
+            "invalidversion": "InvalidVersion",
+        }[category]
+    if category:
+        return category
+    return "OtherFailure"
 
 
 def _build_extract_prompt(snippet_path: Path) -> str:

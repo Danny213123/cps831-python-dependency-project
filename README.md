@@ -171,6 +171,7 @@ Each benchmark run now writes report artifacts to:
 - `summary.json`
 - `summary.csv`
 - `results.csv`
+- `run-vs-official.csv` (`gistid,result_a,result_b,both_matched`)
 - `results.json`
 - `results.md`
 - `leaderboard.md`

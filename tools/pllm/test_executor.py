@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import sys
 import time
 import multiprocessing as mp
 from multiprocessing import Process
@@ -42,24 +43,47 @@ class TestExecutor():
     def evaluate_file(self, llm, file):
         # First LLM pass- Evaluates the Python file and gives us the initial JSON
         llm_eval = llm.evaluate_file(file)
-        llm_eval['python_version'] = str(llm_eval['python_version'])
+        if not isinstance(llm_eval, dict):
+            llm_eval = {}
+        llm_eval['python_version'] = str(llm_eval.get('python_version', '3.8')).strip() or '3.8'
+        llm_eval['python_modules'] = llm_eval.get('python_modules', [])
 
         # Should normally be a list. Re-format to a list if it is a dict.
         python_modules = llm_eval['python_modules']
-        if type(python_modules) == dict:
+        if isinstance(python_modules, dict):
             list_modules = []
             for module in python_modules:
                 list_modules.append(module)
             llm_eval['python_modules'] = list_modules
+        elif isinstance(python_modules, str):
+            llm_eval['python_modules'] = [python_modules]
+        elif not isinstance(python_modules, list):
+            llm_eval['python_modules'] = []
 
         return llm_eval
 
     def get_module_specifics(self, llm, llm_eval):
         # Uses the modules from the LLM output to get a specific set of versions for the inferred Python version
         # Also returns an updated python version, based on what the model had provided
-        llm_eval['python_modules'], llm_eval['python_version'] = llm.pypi.get_module_specifics(llm_eval)
-        
-        module_versions = llm.get_module_versions(llm_eval)
+        try:
+            llm_eval['python_modules'], llm_eval['python_version'] = llm.pypi.get_module_specifics(llm_eval)
+        except Exception as e:
+            print(f"Failed to query module specifics from PyPI: {e}")
+            fallback_modules = llm_eval.get('python_modules', [])
+            if isinstance(fallback_modules, dict):
+                fallback_modules = list(fallback_modules.keys())
+            fallback_modules = llm.pypi.check_module_name(fallback_modules)
+            llm_eval['python_modules'] = fallback_modules
+            llm_eval['python_version'] = str(llm_eval.get('python_version', '3.8')).strip() or '3.8'
+
+        try:
+            module_versions = llm.get_module_versions(llm_eval)
+        except Exception as e:
+            print(f"Failed to infer module versions; falling back to unpinned installs: {e}")
+            module_versions = {}
+            for module in llm_eval.get('python_modules', []):
+                module_versions[module] = None
+
         llm_eval['python_modules'] = module_versions
 
         return llm_eval
@@ -71,6 +95,8 @@ class TestExecutor():
         if not passed:
             print(docker_build_output)
             output, error_type = llm.process_error(docker_build_output, error_details, llm_eval)
+            if error_type == "None":
+                error_type = "BuildFailure"
             print(f"docker build failed!")
             return False, docker_build_output, output, error_type
         else:
@@ -80,6 +106,8 @@ class TestExecutor():
     # Handle and update modules and versions that have previously had errors
     # Updates the 'error_modules' list to feed back ot the model later
     def naughty_bois(self, module, error_handler, error_type, llm_eval):
+        if error_type not in error_handler:
+            error_handler[error_type] = 0
         error_handler[error_type] += 1
         error_handler['previous'] = error_type
 
@@ -156,6 +184,12 @@ class TestExecutor():
             'AttributeError': 0,
             'NonZeroCode': 0,
             'SyntaxError': 0,
+            'NameError': 0,
+            'DockerError': 0,
+            'PythonRuntimeError': 0,
+            'BuildFailure': 0,
+            'RuntimeNonZero': 0,
+            'ExecutorException': 0,
         }
 
         # Get the project folder so we can write out our data file
@@ -171,11 +205,14 @@ class TestExecutor():
         output_file.write('iterations:\n')
         output_file.close()
         # Build loop
+        run_succeeded = False
         run_complete = False
         build_complete = False
         # job_complete = False
         loop = 1
         error_type = 'Unknown'  # Initialize error_type to avoid UnboundLocalError
+        docker_output = ""
+        stop_requested = False
 
         while not run_complete:
             error = ''
@@ -201,19 +238,35 @@ class TestExecutor():
                         if error_type == 'NonZeroCode' and 'PATH environment' in docker_output:
                             llm_eval['python_modules'].pop(output['module'])
                         # Update the loop number and log the details to the log file
-                        loop = self.end_test(file_to_open, llm_eval, dockerHelper, error_type, docker_output, loop, False)
+                        loop, stop_requested = self.end_test(
+                            file_to_open,
+                            llm_eval,
+                            dockerHelper,
+                            error_type,
+                            docker_output,
+                            loop,
+                            False,
+                        )
+                        if stop_requested:
+                            run_complete = True
+                            break
 
+                if stop_requested:
+                    break
                 # while not run_complete:
-                docker_output = dockerHelper.run_container_test()
+                run_passed, docker_output = dockerHelper.run_container_test()
                 print(docker_output)
 
                 # Processes Docker run information (after a build has been successul we must run it to see if everything is correct)
                 output, error_type = ollama_helper.process_error(docker_output, error_handler, llm_eval)
+                if not run_passed and error_type == 'None':
+                    error_type = 'RuntimeNonZero'
                 
                 # Direct the flow to the correct error logging method
                 if 'ImportError' in error_type:
                     if 'DJANGO_SETTINGS_MODULE is undefined' in docker_output:
                         run_complete = True
+                        run_succeeded = True
                         llm_eval = self.update_llm_eval(output, llm_eval)
                     else:
                         build_complete = False
@@ -254,16 +307,30 @@ class TestExecutor():
                     llm_eval = self.update_llm_eval(output, llm_eval)
                 elif 'None' in error_type:
                     run_complete = True
+                    run_succeeded = True
                     llm_eval = self.update_llm_eval(None, llm_eval)
+                else:
+                    build_complete = False
+                    error_handler = self.naughty_bois(None, error_handler, error_type, llm_eval)
             except Exception as e:
                 print(f"Failed to build container: {e}")
+                docker_output = str(e)
+                error_type = "ExecutorException"
+                build_complete = False
             # Update the loop number and log the details to the log file
-            loop = self.end_test(file_to_open, llm_eval, dockerHelper, error_type, docker_output, loop, run_complete)
-        
-        # If we've left the while loop then we need to make sure everything is killed correctly
-        loop = self.end_loop
-        # Update the loop number and log the details to the log file
-        self.end_test(file_to_open, llm_eval, dockerHelper, error_type, docker_output, loop, True)
+            loop, stop_requested = self.end_test(
+                file_to_open,
+                llm_eval,
+                dockerHelper,
+                error_type,
+                docker_output,
+                loop,
+                run_complete,
+            )
+            if stop_requested and not run_complete:
+                run_complete = True
+
+        return run_succeeded
 
     # Logging specific, ensures correct spaces in log file to avoid later errors
     def ensure_8_spaces(self, line):
@@ -291,36 +358,36 @@ class TestExecutor():
 
     # Handles the logging of the error messages and iterations to the log file
     def end_test(self, file_to_open, llm_eval, dockerHelper, error_type, docker_message, loop, run_complete):
-        out_file = open(file_to_open, "a")
-        python_modules = llm_eval["previous_python_modules"] if 'previous_python_modules' in llm_eval else llm_eval['python_modules']
-        out_file.write(f"  iteration_{loop}:\n")
-        out_file.write(f'    - python_module: {python_modules}\n')
-        out_file.write(f'    - error_type: {error_type}\n')
-        out_file.write(f'    - error: |\n')
-        if '"stream"' in docker_message:
-            error_message = docker_message.replace('{"stream":"', '').replace(':', '')
-            docker_message = error_message[:-5]
-        previous_line = ''
-        extend = ''
-        for line in docker_message.split('\n'):
-            if not line == '':
-            # if not line == '' and not 'errorDetail' in line:
-                if '^' in previous_line: extend = '  '  #and not 'iteration' in previous_line else '' # If there's a '^' in the previous line then we need to indent more for formatting
-                out_line = f'        {line}\n'
-                out_line = self.fix_error_line(out_line)
-                out_file.write(f'{extend}{out_line}')
-                previous_line = line
-        print(loop)
-        if loop + 1 > self.end_loop or run_complete:
-            end_time = time.time()
-            out_file.write(f'end_time: {end_time}\n')
-            out_file.write(f'total_time: {end_time - self.start_time}')
-            out_file.close()
+        docker_message = docker_message or ""
+        should_stop = loop + 1 > self.end_loop or run_complete
+        with open(file_to_open, "a") as out_file:
+            python_modules = llm_eval["previous_python_modules"] if 'previous_python_modules' in llm_eval else llm_eval['python_modules']
+            out_file.write(f"  iteration_{loop}:\n")
+            out_file.write(f'    - python_module: {python_modules}\n')
+            out_file.write(f'    - error_type: {error_type}\n')
+            out_file.write(f'    - error: |\n')
+            if '"stream"' in docker_message:
+                error_message = docker_message.replace('{"stream":"', '').replace(':', '')
+                docker_message = error_message[:-5]
+            previous_line = ''
+            extend = ''
+            for line in docker_message.split('\n'):
+                if not line == '':
+                # if not line == '' and not 'errorDetail' in line:
+                    if '^' in previous_line: extend = '  '  #and not 'iteration' in previous_line else '' # If there's a '^' in the previous line then we need to indent more for formatting
+                    out_line = f'        {line}\n'
+                    out_line = self.fix_error_line(out_line)
+                    out_file.write(f'{extend}{out_line}')
+                    previous_line = line
+            print(loop)
+            if should_stop:
+                end_time = time.time()
+                out_file.write(f'end_time: {end_time}\n')
+                out_file.write(f'total_time: {end_time - self.start_time}')
+        if should_stop:
             dockerHelper.delete_container()
             dockerHelper.delete_image()
-            exit(0)
-        else:
-            return loop + 1
+        return loop + 1, should_stop
 
 # Handle argument parsing
 def process_args():
@@ -378,7 +445,8 @@ def run_docker_process(
         "base_modules": base_modules,
         "rag": rag,
     }
-    worker.docker_create_process(None, run_details, file_path, process_num, helper_kwargs)
+    succeeded = worker.docker_create_process(None, run_details, file_path, process_num, helper_kwargs)
+    sys.exit(0 if succeeded else 1)
 
 # Main loop
 def main():
@@ -431,7 +499,7 @@ def main():
     # If python_versions is empty then there was an issue with versions.
     # Give the lowest Python and work with this range
     if not python_versions:
-        python_versions = testExecutor.pypi.get_python_range(python_version=llm_eval['python_version'], range=testExecutor.search_range)
+        python_versions = testExecutor.pypi.get_python_range(python_version=llm_eval['python_version'], pyrange=testExecutor.search_range)
     num_processes = (testExecutor.search_range * 2) + 1
 
     processes = []
@@ -465,6 +533,8 @@ def main():
         p.start()
 
     # Wait for all processes to finish
+    timed_out = False
+    worker_failed = False
     for p in processes:
         # Give the process 20 minutes to complete
         p.join(timeout=1200)
@@ -472,8 +542,15 @@ def main():
     for p in processes:
         if p.is_alive():
             p.terminate()
+            p.join(timeout=5)
+            timed_out = True
         else:
             print("Processing completed without the timeout")
+            if p.exitcode not in (0, None):
+                worker_failed = True
+
+    if timed_out or worker_failed:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

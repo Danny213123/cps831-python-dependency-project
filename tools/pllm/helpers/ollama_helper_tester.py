@@ -145,9 +145,24 @@ class OllamaHelper(OllamaHelperBase):
         )
         
         out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="extract")
-        
-        print(out)
-        return out
+        if not isinstance(out, dict):
+            out = {}
+
+        python_version = str(out.get("python_version", "3.8")).strip() or "3.8"
+        python_modules = out.get("python_modules", [])
+        if isinstance(python_modules, dict):
+            python_modules = list(python_modules.keys())
+        elif isinstance(python_modules, str):
+            python_modules = [python_modules]
+        elif not isinstance(python_modules, list):
+            python_modules = []
+
+        normalized = {
+            "python_version": python_version,
+            "python_modules": python_modules,
+        }
+        print(normalized)
+        return normalized
 
 
     # Gets the details for the modules
@@ -173,13 +188,11 @@ class OllamaHelper(OllamaHelperBase):
 
         updated_modules = {}
 
-        attempts = 5
-        completed = False
-        # Loop to ensure we get a version.
-        # If the LLM returns a bad version or bad information then we need to loop and try again
-        while not completed:
-            try:
-                for idx, module in enumerate(modules):
+        for module in modules:
+            selected_version = None
+            attempts = 5
+            while attempts > 0 and selected_version is None:
+                try:
                     versions = self.read_python_file(f"{self.base_modules}/{module}_{details['python_version']}.txt")
 
                     tp = "Infer a possible working version of the '{module}' module for Python {python_version}.\nReturn the information with the format {format_instructions}"
@@ -195,20 +208,37 @@ class OllamaHelper(OllamaHelperBase):
                     )
 
                     out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="version")
+                    if isinstance(out, dict):
+                        raw_version = out.get("version")
+                        if isinstance(raw_version, (list, tuple)):
+                            raw_version = raw_version[0] if len(raw_version) > 0 else ""
+                        if raw_version is not None:
+                            clean_version = str(raw_version).split(" ")[0].strip()
+                            if clean_version and clean_version.lower() != "none":
+                                selected_version = clean_version
+                except Exception:
+                    pass
+                finally:
+                    attempts -= 1
 
-                    updated_modules[out['module']] = out['version'].split(' ')[0]
-                completed = True
-            except Exception as e:
-                completed = False
-                attempts -= 1
-            
-            if attempts <= 0:
-                print("Failed to find versions")
-                exit(0)
+            if selected_version is None:
+                selected_version = self._fallback_module_version(module, details['python_version'])
+                if self.logging:
+                    print(f"Using fallback version for {module}: {selected_version}")
+
+            updated_modules[module] = selected_version
 
         print(updated_modules)
 
         return updated_modules
+
+    def _fallback_module_version(self, module, python_version):
+        try:
+            versions = self.read_python_file(f"{self.base_modules}/{module}_{python_version}.txt")
+            candidates = [piece.strip() for piece in versions.split(",") if piece.strip()]
+            return candidates[-1] if candidates else None
+        except Exception:
+            return None
 
 
     # NOTE: Deprecated, update instances that use this!
@@ -587,40 +617,59 @@ class OllamaHelper(OllamaHelperBase):
     def process_error(self, message, error_details, llm_eval):
         error_type = None
         output = None
+        message = message or ""
+        lower_message = message.lower()
         
-        if 'Could not find a version' in message:
+        if 'could not find a version' in lower_message:
             if self.logging: print("Could not find a version")
             error_type = 'VersionNotFound'
             output = self.could_not_find_version(message, error_details, llm_eval)
-        elif 'dependency conflicts' in message:
+        elif 'dependency conflicts' in lower_message:
             if self.logging: print("Dependency conflict")
             error_type = 'DependencyConflict'
             output = self.dependency_conflict(message)
-        elif 'ImportError' in message:
+        elif 'importerror' in lower_message:
             if self.logging: print('Import Error')
             error_type = 'ImportError'
             if 'DJANGO_SETTINGS_MODULE is undefined' in message:
                 output = None
             else:
                 output = self.import_error(message, error_details, llm_eval)
-        elif 'ModuleNotFoundError' in message:
+        elif 'modulenotfounderror' in lower_message:
             if self.logging: print("Module not found")
             error_type = 'ModuleNotFound'
             output = self.module_not_found(message, error_details, llm_eval)
-        elif 'AttributeError' in message:
+        elif 'attributeerror' in lower_message:
             if self.logging: print("Attribute error")
             error_type = 'AttributeError'
             output = self.attribute_error(message, error_details, llm_eval)
-        elif 'InvalidVersion' in message:
+        elif 'invalidversion' in lower_message:
             if self.logging: print('Invalid Version')
             error_type = 'InvalidVersion'
             output = self.invalid_version(message)
-        elif 'non-zero code' in message: # Docker specific error message
+        elif 'non-zero code' in lower_message: # Docker specific error message
             if self.logging: print('Non-zero error code from docker build')
             error_type = 'NonZeroCode'
             output = self.non_zero_error(message)
             output = self.non_zero_error_version(message, output, error_details, llm_eval)
-        elif 'SyntaxError' in message:
+        elif 'nameerror' in lower_message:
+            if self.logging: print('Name Error')
+            error_type = 'NameError'
+        elif (
+            'failed to build' in lower_message
+            or 'failed to solve' in lower_message
+            or 'error response from daemon' in lower_message
+            or 'cannot connect to the docker daemon' in lower_message
+            or 'permission denied while trying to connect to the docker daemon socket' in lower_message
+            or 'permission denied while trying to connect to the docker api' in lower_message
+            or 'docker: command not found' in lower_message
+        ):
+            if self.logging: print('Docker runtime/build error')
+            error_type = 'DockerError'
+        elif 'traceback (most recent call last):' in lower_message:
+            if self.logging: print('Unhandled Python runtime traceback')
+            error_type = 'PythonRuntimeError'
+        elif 'syntaxerror' in lower_message:
             if self.logging: print('Syntax Error: Python specific error that needs more information')
             error_type = 'SyntaxError'
             output = self.syntax_error_helper(message, error_details, llm_eval)

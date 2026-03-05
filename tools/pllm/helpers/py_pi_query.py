@@ -62,63 +62,64 @@ class PyPIQuery:
     # NOTE: DOUBLE CHECK THIS, POSSIBLE BAD RETURN IN CERTAIN CASES!
     def get_python_dates(self, python_version):
         checked_version = self.check_format(python_version)
-        
+        selected_idx = None
+
         # Loop through the different python versions
         for idx, x in enumerate(self.python_versions):
-            if checked_version in x['cycle']:
-                if idx > 0:
-                    next_date = datetime.strptime(self.python_versions[idx-1]['releaseDate'], self.date_format).date()
-                    next_ver = self.python_versions[idx-1]['cycle']
-                else:
-                    next_date = datetime.now().strftime(self.date_format)
-                    next_ver = ''
-                return datetime.strptime(x['releaseDate'], self.date_format).date(), next_date, checked_version
+            if checked_version == x['cycle']:
+                selected_idx = idx
+                break
+
+        if selected_idx is None:
+            fallback_cycle = "3.8"
+            for idx, x in enumerate(self.python_versions):
+                if x['cycle'] == fallback_cycle:
+                    selected_idx = idx
+                    checked_version = fallback_cycle
+                    break
+            if selected_idx is None:
+                selected_idx = 0
+                checked_version = self.python_versions[0]['cycle']
+
+        current = self.python_versions[selected_idx]
+        current_date = datetime.strptime(current['releaseDate'], self.date_format).date()
+        if selected_idx > 0:
+            next_date = datetime.strptime(self.python_versions[selected_idx - 1]['releaseDate'], self.date_format).date()
+        else:
+            next_date = datetime.now().date()
+        return current_date, next_date, checked_version
 
     # Get a range of Python versions based on the given version
     # For example if we give Python 3.7 it will return [3.5, 3.6, 3.7, 3.8, 3.9]
     def get_python_range(self, python_version, pyrange=2):
         checked_version = self.check_format(python_version)
-
         selected_python = []
 
         try:
-            # Loop through the different python versions
-            for idx, x in enumerate(self.python_versions):
-                if checked_version in x['cycle']:
-                    # Total elements is the current version plus the range either side
-                    total_elements_to_select = 1 + (pyrange*2)
-                    num_values_each_side = pyrange
+            cycles = [entry["cycle"] for entry in self.python_versions]
+            if checked_version not in cycles:
+                checked_version = "3.8" if "3.8" in cycles else cycles[0]
 
-                    start_index = max(0, idx - num_values_each_side)
-                    end_index = min(len(self.python_versions), idx + num_values_each_side + 1)
+            target = cycles.index(checked_version)
+            start_index = max(0, target - pyrange)
+            end_index = min(len(cycles), target + pyrange + 1)
 
-                    # Adjust start and end index if necessary to ensure a total of 5 elements are selected
-                    if end_index - start_index < 5:
-                        if start_index == 0:
-                            end_index += total_elements_to_select - (end_index - start_index)
-                        else:
-                            start_index -= total_elements_to_select - (end_index - start_index)
+            # Try to keep the requested window size when close to boundaries.
+            target_size = (pyrange * 2) + 1
+            while (end_index - start_index) < target_size and start_index > 0:
+                start_index -= 1
+            while (end_index - start_index) < target_size and end_index < len(cycles):
+                end_index += 1
 
-                    result = self.python_versions[start_index:end_index]
-                    for version in result:
-                        selected_python.append(version['cycle'])
+            selected_python = cycles[start_index:end_index]
         except Exception as e:
             print(f"Unable to get Python version: {e}")
-        
-        if len(selected_python) <= 0:
-            for i in range(0, pyrange+1):
-                if i == 0:
-                    selected_python.append('3.8')
-                elif i == 1:
-                    selected_python.append('2.7')
-                    selected_python.append(f'3.{8+i}')
-                else:
-                    selected_python.append(f'3.{8+i}')
-                    selected_python.append(f'3.{8-i}')
-        elif not '2.7' in selected_python:
-            selected_python[-1] = '2.7' if len(selected_python) > 0 else selected_python.append('2.7')
 
-        if self.logging: print(selected_python)
+        if len(selected_python) <= 0:
+            selected_python = ["3.8"]
+
+        if self.logging:
+            print(selected_python)
         return selected_python
 
     

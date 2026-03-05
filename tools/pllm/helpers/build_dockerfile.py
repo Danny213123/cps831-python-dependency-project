@@ -2,7 +2,6 @@
 import os
 import shutil
 import subprocess
-from time import sleep
 
 try:
     import docker as docker_sdk  # type: ignore
@@ -80,16 +79,18 @@ class DockerHelper:
                 name = module
                 version = python_modules[module]
 
+            install_target = name
             if isinstance(version, str):
-                self.dockerfile_out += (
-                    'RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100",'
-                    f'"{name}=={version}"]\n'
-                )
-            else:
-                self.dockerfile_out += (
-                    'RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100",'
-                    f'"{name}=={version[0]}"]\n'
-                )
+                clean_version = version.strip().split(" ")[0]
+                if clean_version and clean_version.lower() != "none":
+                    install_target = f"{name}=={clean_version}"
+            elif isinstance(version, (list, tuple)) and len(version) > 0 and version[0]:
+                install_target = f"{name}=={version[0]}"
+
+            self.dockerfile_out += (
+                'RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100",'
+                f'"{install_target}"]\n'
+            )
 
         self.dockerfile_out += "# Copy the specified directory to /app\n"
         self.dockerfile_out += f"COPY {project_file} /app\n"
@@ -121,7 +122,8 @@ class DockerHelper:
                 return True, ""
             return False, error_lines
 
-        command = ["docker", "build", "-f", dockerfile, "-t", self.image_name, project_dir]
+        dockerfile_path = dockerfile if os.path.isabs(dockerfile) else os.path.join(project_dir, dockerfile)
+        command = ["docker", "build", "-f", dockerfile_path, "-t", self.image_name, project_dir]
         completed = subprocess.run(command, capture_output=True, text=True, check=False)
         output = f"{completed.stdout or ''}\n{completed.stderr or ''}".strip()
         if self.logging and output:
@@ -161,21 +163,24 @@ class DockerHelper:
         )
 
     # Runs the container we built to see if the python snippet runs.
-    # Returns logs for analysis.
+    # Returns (success, logs) for analysis.
     def run_container_test(self):
         self.delete_container()
 
         if self._use_sdk and self.client is not None:
             logs = ""
             container = None
+            status_code = 1
             try:
                 container = self.client.containers.create(self.image_name, name=self.container_name)
                 container.start()
-                sleep(10)
-                while container.status == "running":
-                    sleep(5)
+                wait_result = container.wait(timeout=600)
+                if isinstance(wait_result, dict):
+                    status_code = int(wait_result.get("StatusCode", 1))
+                else:
+                    status_code = int(wait_result)
                 if self.logging:
-                    print(container.status)
+                    print(f"Container exit code: {status_code}")
                 logs = container.logs()
                 container.remove(v=True, force=True)
                 container = None
@@ -183,21 +188,21 @@ class DockerHelper:
                 if self.logging:
                     print(exc)
                 if container:
-                    while container.status == "running":
-                        sleep(5)
-                    if self.logging:
-                        print(container.status)
-                    logs = container.logs()
+                    try:
+                        logs = container.logs()
+                    except Exception:
+                        logs = str(exc)
                     container.remove(v=True, force=True)
                     container = None
 
-            return logs.decode("utf-8") if isinstance(logs, (bytes, bytearray)) else str(logs)
+            output = logs.decode("utf-8") if isinstance(logs, (bytes, bytearray)) else str(logs)
+            return status_code == 0, output
 
         command = ["docker", "run", "--name", self.container_name, self.image_name]
         completed = subprocess.run(command, capture_output=True, text=True, check=False)
         output = f"{completed.stdout or ''}\n{completed.stderr or ''}".strip()
         self.delete_container()
-        return output
+        return completed.returncode == 0, output
 
 
 def main():

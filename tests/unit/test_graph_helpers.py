@@ -121,6 +121,29 @@ def test_reconcile_inferred_target_python_uses_python2_import_signal() -> None:
     assert source == "python2_import_signal"
 
 
+def test_reconcile_inferred_target_python_uses_py2_syntax_guardrail_without_benchmark_py2() -> None:
+    version, source = reconcile_inferred_target_python(
+        "3.7",
+        benchmark_target_python="3.12",
+        source_text="print 'hello world'\n",
+    )
+
+    assert version == "2.7.18"
+    assert source == "source_syntax_py2_guardrail"
+
+
+def test_reconcile_inferred_target_python_uses_py2_import_signal_without_benchmark_py2() -> None:
+    version, source = reconcile_inferred_target_python(
+        "3.7",
+        benchmark_target_python="3.12",
+        source_text="import BaseHTTPServer\n",
+        extracted_imports=["BaseHTTPServer"],
+    )
+
+    assert version == "2.7.18"
+    assert source == "python2_import_signal_default"
+
+
 def test_infer_graph_recursion_limit_scales_with_attempts() -> None:
     assert infer_graph_recursion_limit(1) >= 32
     assert infer_graph_recursion_limit(4) > 25

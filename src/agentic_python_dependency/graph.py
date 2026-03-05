@@ -263,12 +263,16 @@ def reconcile_inferred_target_python(
     inferred_version = snapped
     inferred_major = inferred_version.split(".", 1)[0]
     benchmark_major = benchmark_target_python.split(".", 1)[0] if benchmark_target_python else ""
+    if inferred_major == "3" and not _is_python3_syntax_compatible(source_text):
+        if benchmark_major == "2" and benchmark_target_python:
+            return benchmark_target_python, "benchmark_dockerfile_syntax_guardrail"
+        return "2.7.18", "source_syntax_py2_guardrail"
+    if inferred_major == "3" and extracted_imports and _has_python2_only_imports(extracted_imports):
+        if benchmark_major == "2" and benchmark_target_python:
+            return benchmark_target_python, "python2_import_signal"
+        return "2.7.18", "python2_import_signal_default"
     if inferred_major == benchmark_major:
         return inferred_version, "llm_prompt_a"
-    if benchmark_major == "2" and inferred_major == "3" and not _is_python3_syntax_compatible(source_text):
-        return benchmark_target_python, "benchmark_dockerfile_syntax_guardrail"
-    if benchmark_major == "2" and inferred_major == "3" and extracted_imports and _has_python2_only_imports(extracted_imports):
-        return benchmark_target_python, "python2_import_signal"
     return inferred_version, "llm_prompt_a"
 
 
@@ -687,6 +691,7 @@ class ResolutionWorkflow:
             option = self.pypi_store.get_version_options(
                 alias,
                 state["target_python"],
+                limit=self._version_option_limit(state.get("target_python", "3.12")),
                 preset=self.settings.preset,
             )
         except FileNotFoundError:
@@ -741,6 +746,40 @@ class ResolutionWorkflow:
 
     def _research_bundle_name(self) -> str:
         return self.settings.research_bundle if self._is_research() else "baseline"
+
+    def _version_option_limit(self, target_python: str) -> int:
+        try:
+            target = Version(target_python)
+        except InvalidVersion:
+            return 20
+        if self._is_research():
+            if target <= Version("3.8"):
+                return 80
+            if target <= Version("3.10"):
+                return 50
+            return 30
+        if self._is_experimental():
+            if target <= Version("3.8"):
+                return 60
+            return 30
+        if self.settings.preset in {"accuracy", "thorough"} and target <= Version("3.8"):
+            return 40
+        return 20
+
+    def _constraint_top_k(self, target_python: str) -> int:
+        try:
+            target = Version(target_python)
+        except InvalidVersion:
+            return 5
+        if self._is_research():
+            if target <= Version("3.8"):
+                return 20
+            if target <= Version("3.10"):
+                return 12
+            return 8
+        if self._is_experimental():
+            return 12 if target <= Version("3.8") else 8
+        return 5
 
     @staticmethod
     def _strategy_type_from(previous: list[str], current: list[str]) -> str:
@@ -1280,6 +1319,7 @@ class ResolutionWorkflow:
         state["model_outputs"]["extract"] = [{"file": next(iter(state["source_files"].keys()), "snippet.py"), "output": raw_output}]
         state["structured_outputs"]["extract_raw"] = raw_output
         raw_version_output = raw_output
+        extract_structured_failed = False
         try:
             llm_candidates = parse_experimental_package_payload(raw_output)
         except StructuredOutputError:
@@ -1295,6 +1335,7 @@ class ResolutionWorkflow:
             except StructuredOutputError:
                 state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
                 llm_candidates = []
+                extract_structured_failed = True
         _, inferred_python_version = parse_package_inference_output(raw_version_output)
         if inferred_python_version:
             resolved_python_version, version_source = reconcile_inferred_target_python(
@@ -1305,9 +1346,10 @@ class ResolutionWorkflow:
             )
             state["inferred_target_python"] = inferred_python_version
             if (
-                state.get("structured_prompt_failures", 0) > 0
+                extract_structured_failed
                 and version_source == "llm_prompt_a"
                 and (self._is_experimental() or self._is_research())
+                and state.get("python_version_source") == "benchmark_dockerfile"
             ):
                 benchmark_py = state.get("benchmark_target_python", "")
                 if benchmark_py:
@@ -1506,6 +1548,7 @@ class ResolutionWorkflow:
             self._trace_response(state, "extract", raw_output)
             outputs.append({"file": file_name, "output": raw_output})
             packages, inferred_python_version = parse_package_inference_output(raw_output)
+            extract_structured_failed = False
             if inferred_python_version:
                 resolved_python_version, version_source = reconcile_inferred_target_python(
                     inferred_python_version,
@@ -1515,9 +1558,10 @@ class ResolutionWorkflow:
                 )
                 state["inferred_target_python"] = inferred_python_version
                 if (
-                    state.get("structured_prompt_failures", 0) > 0
+                    extract_structured_failed
                     and version_source == "llm_prompt_a"
                     and (self._is_experimental() or self._is_research())
+                    and state.get("python_version_source") == "benchmark_dockerfile"
                 ):
                     benchmark_py = state.get("benchmark_target_python", "")
                     if benchmark_py:
@@ -1589,6 +1633,7 @@ class ResolutionWorkflow:
         state["structured_outputs"]["extract_raw"] = raw_output
 
         raw_version_output = raw_output
+        extract_structured_failed = False
         try:
             packages = parse_experimental_package_payload(raw_output)
         except StructuredOutputError:
@@ -1604,6 +1649,7 @@ class ResolutionWorkflow:
             except StructuredOutputError:
                 state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
                 packages = []
+                extract_structured_failed = True
 
         inferred = [entry["package"] for entry in packages]
         _, inferred_python_version = parse_package_inference_output(raw_version_output)
@@ -1617,9 +1663,10 @@ class ResolutionWorkflow:
             )
             state["inferred_target_python"] = inferred_python_version
             if (
-                state.get("structured_prompt_failures", 0) > 0
+                extract_structured_failed
                 and version_source == "llm_prompt_a"
                 and (self._is_experimental() or self._is_research())
+                and state.get("python_version_source") == "benchmark_dockerfile"
             ):
                 benchmark_py = state.get("benchmark_target_python", "")
                 if benchmark_py:
@@ -1664,6 +1711,7 @@ class ResolutionWorkflow:
             return state
         options = []
         unresolved: list[str] = []
+        version_limit = self._version_option_limit(state.get("target_python", "3.12"))
         for package in packages:
             if not package:
                 continue
@@ -1674,6 +1722,7 @@ class ResolutionWorkflow:
                 option = self.pypi_store.get_version_options(
                     package,
                     state["target_python"],
+                    limit=version_limit,
                     preset=self.settings.preset,
                 )
             except FileNotFoundError:
@@ -1716,9 +1765,10 @@ class ResolutionWorkflow:
         ):
             return state
         updated_options: list[PackageVersionOptions] = []
+        top_k = self._constraint_top_k(state.get("target_python", "3.12"))
         for option in state.get("version_options", []):
             release_requires_dist: dict[str, list[str]] = {}
-            for version in option.versions[:5]:
+            for version in option.versions[:top_k]:
                 release_files = self.pypi_store.release_files(option.package, version)
                 metadata = self.package_metadata_store.parse_release_metadata(
                     option.package,
@@ -1758,6 +1808,7 @@ class ResolutionWorkflow:
         pack = build_constraint_pack(
             state.get("version_options", []),
             target_python=state.get("target_python", "3.12"),
+            top_k=self._constraint_top_k(state.get("target_python", "3.12")),
         )
         state["constraint_pack"] = pack
         state["version_conflict_notes"] = list(pack.conflict_notes)

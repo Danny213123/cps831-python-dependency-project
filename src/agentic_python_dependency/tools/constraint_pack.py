@@ -113,7 +113,7 @@ def build_constraint_pack(
         package_conflict_matrix=dict(matrix),
         python_intersection=python_intersection,
         python_intersection_valid=python_intersection_valid,
-        conflict_precheck_failed=bool(conflict_notes) or not python_intersection_valid,
+        conflict_precheck_failed=not python_intersection_valid,
     )
 
 

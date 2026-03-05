@@ -132,6 +132,30 @@ def test_build_constraint_pack_detects_python_intersection_and_pairwise_conflict
     assert generate_candidate_bundles(pack)
 
 
+def test_build_constraint_pack_keeps_requires_dist_conflicts_non_terminal_when_python_intersection_is_valid() -> None:
+    pack = build_constraint_pack(
+        [
+            PackageVersionOptions(
+                package="alpha",
+                versions=["1.0.0"],
+                requires_python={"1.0.0": ">=3.8"},
+                requires_dist={"1.0.0": ["beta<1"]},
+            ),
+            PackageVersionOptions(
+                package="beta",
+                versions=["2.0.0"],
+                requires_python={"2.0.0": ">=3.8"},
+                requires_dist={"2.0.0": []},
+            ),
+        ],
+        target_python="3.12",
+    )
+
+    assert pack.python_intersection_valid is True
+    assert pack.conflict_precheck_failed is False
+    assert any(note.kind == "requires_dist" for note in pack.conflict_notes)
+
+
 def test_classify_retry_decision_limits_native_build_retries_once_system_packages_were_injected() -> None:
     first = classify_retry_decision("NativeBuildError", system_packages_injected=False, native_retry_used=0)
     second = classify_retry_decision("NativeBuildError", system_packages_injected=True, native_retry_used=1)

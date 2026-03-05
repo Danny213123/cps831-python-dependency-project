@@ -7,6 +7,19 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-03-05
+
+### Changed
+
+- Broadened experimental/research version-candidate windows for older Python targets so precheck and planning can consider older compatible releases instead of only recent versions.
+- Updated constraint-pack selection in experimental/research flows to use target-Python-aware top-k limits.
+
+### Fixed
+
+- Fixed Python-target reconciliation to preserve Python 2 compatibility signals (syntax and Python-2-only stdlib imports) even when no benchmark Dockerfile target is available.
+- Fixed structured-output fallback behavior that was forcing `target_python` to benchmark defaults (often `3.12`) in non-docker benchmark sources.
+- Fixed aggressive `ConstraintConflictError` precheck behavior by treating conflict notes as advisory and only failing precheck on invalid Python-constraint intersection.
+
 ## [1.1.4] - 2026-03-05
 
 ### Changed

@@ -131,7 +131,10 @@ class TestExecutor():
     # Main docker process loop
     # This method is given as a process to run in parallel with each other
     # Handles the main loop of building | running | validating
-    def docker_create_process(self, ollama_helper, llm_eval, file, process_num):
+    def docker_create_process(self, ollama_helper, llm_eval, file, process_num, helper_kwargs=None):
+        if ollama_helper is None:
+            helper_kwargs = helper_kwargs or {}
+            ollama_helper = OllamaHelper(**helper_kwargs)
         # Create the YAML file in the same folder as the snippet
         dockerHelper = DockerHelper(logging=True)
 
@@ -342,6 +345,37 @@ def process_args():
     parser.add_argument('-v', '--verbose', action="store_true", help="Verbose logging of information")
     return parser.parse_args()
 
+def run_docker_process(
+    base_url,
+    model,
+    temp,
+    end_loop,
+    search_range,
+    base_modules,
+    run_details,
+    file_path,
+    process_num,
+    rag,
+):
+    worker = TestExecutor(
+        base_url=base_url,
+        model=model,
+        logging=True,
+        temp=temp,
+        end_loop=end_loop,
+        search_range=search_range,
+        base_modules=base_modules,
+    )
+    helper_kwargs = {
+        "base_url": base_url,
+        "model": model,
+        "logging": True,
+        "temp": temp,
+        "base_modules": base_modules,
+        "rag": rag,
+    }
+    worker.docker_create_process(None, run_details, file_path, process_num, helper_kwargs)
+
 # Main loop
 def main():
     llm_eval = None
@@ -409,12 +443,19 @@ def main():
         # run_details['python_version'] = '3.6'
         # Give the docker create process, ollama helper, the snippet analysis, python file and the iteration
         p = mp.Process(
-            target=testExecutor.docker_create_process,
+            target=run_docker_process,
             args=(
-                OllamaHelper(base_url=args.base, model=args.model, logging=True, temp=args.temp, base_modules=file_path+"/modules", rag=args.rag),
+                args.base,
+                args.model,
+                args.temp,
+                args.loop,
+                args.range,
+                file_path + "/modules",
                 run_details,
                 args.file,
-                i)
+                i,
+                args.rag,
+            )
             )
         processes.append(p)
         p.start()

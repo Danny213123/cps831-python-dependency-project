@@ -3,8 +3,15 @@
 import json
 import os
 import re
-from pypi_json import PyPIJSON
 from datetime import datetime
+from types import SimpleNamespace
+
+import requests
+
+try:
+    from pypi_json import PyPIJSON  # type: ignore
+except Exception:
+    PyPIJSON = None
 
 from helpers.github_cruiser_core import GithubCruiserCore
 from helpers.deps_scraper import DepsScraper
@@ -165,9 +172,19 @@ class PyPIQuery:
     # Returns the request meta data
     def query_module(self, module_name):
         try:
-            with PyPIJSON() as client:
-                requests_metadata = client.get_metadata(module_name)
-            return requests_metadata
+            if PyPIJSON is not None:
+                with PyPIJSON() as client:
+                    return client.get_metadata(module_name)
+
+            response = requests.get(f"https://pypi.org/pypi/{module_name}/json", timeout=10)
+            if response.status_code != 200:
+                return None
+            payload = response.json()
+            releases = payload.get("releases", {})
+            if not isinstance(releases, dict):
+                return None
+            # Keep the existing call-sites unchanged by returning a simple object with a .releases attribute.
+            return SimpleNamespace(releases=releases)
         except Exception as e:
             return None
 

@@ -7,6 +7,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-03-05
+
+### Changed
+
+- Reduced benchmark startup overhead by reusing the already-fetched dataset object between run preparation and execution instead of fetching twice per invocation.
+- Optimized `competition-run` startup selection to iterate directly over filtered competition case IDs and check existence, rather than scanning all `all-gists` directories first.
+
+### Fixed
+
+- Fixed slow startup behavior on large Windows repositories by removing redundant filesystem scans in competition filter resolution and case selection.
+
 ## [1.1.3] - 2026-03-04
 
 ### Added

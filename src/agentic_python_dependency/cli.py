@@ -1222,6 +1222,7 @@ def run_benchmark(
         ref,
         case_ids,
         run_id,
+        dataset=dataset,
         jobs=jobs,
         observer=observer,
         notify_paths=notify_paths,
@@ -1236,14 +1237,16 @@ def run_case_batch(
     case_ids: list[str],
     run_id: str | None,
     *,
+    dataset: GistableDataset | None = None,
     jobs: int = 1,
     observer: BenchmarkObserver | None = None,
     notify_paths: bool = True,
     fresh_run: bool = False,
     target_label: str = "benchmark",
 ) -> int:
-    dataset = GistableDataset(settings)
-    dataset.fetch(ref)
+    runtime_dataset = dataset or GistableDataset(settings)
+    if dataset is None:
+        runtime_dataset.fetch(ref)
 
     active_run_id = run_id or uuid4().hex[:12]
     run_dir = settings.artifacts_dir / active_run_id
@@ -1349,7 +1352,7 @@ def run_case_batch(
     )
 
     def process_case(case_id: str) -> dict[str, object]:
-        case = dataset.load_case(case_id, ref, case_source=settings.benchmark_case_source)
+        case = runtime_dataset.load_case(case_id, ref, case_source=settings.benchmark_case_source)
         workflow = ResolutionWorkflow(settings)
         state = workflow.initial_state_for_case(case, run_id=active_run_id)
         final_state = workflow.run(state)
@@ -1455,6 +1458,7 @@ def run_failed_cases(
         ref,
         failed_case_ids,
         run_id,
+        dataset=dataset,
         jobs=jobs,
         observer=observer,
         notify_paths=notify_paths,

@@ -207,18 +207,11 @@ class GistableDataset:
         return path, len(effective)
 
     def competition_case_ids(self, ref: str | None = None) -> set[str]:
-        root = self.dataset_root(ref)
-        case_root = root / "all-gists"
-        if not case_root.exists():
-            return set()
-        known_case_ids = {path.name for path in case_root.iterdir() if path.is_dir() and (path / "snippet.py").exists()}
-        if not known_case_ids:
-            return set()
-        csv_selected = self._load_competition_case_ids_from_csvs() & known_case_ids
+        csv_selected = self._load_competition_case_ids_from_csvs()
         if csv_selected:
             self._persist_competition_case_ids_file(csv_selected)
             return csv_selected
-        file_selected = self._load_competition_case_ids_from_file() & known_case_ids
+        file_selected = self._load_competition_case_ids_from_file()
         if file_selected:
             return file_selected
         return set()
@@ -276,6 +269,14 @@ class GistableDataset:
         allowed_case_ids: set[str] | None = None
         if resolved_source == "competition-run":
             allowed_case_ids = self.competition_case_ids(ref)
+            for case_id in sorted(allowed_case_ids):
+                case_dir = case_root / case_id
+                if not case_dir.is_dir():
+                    continue
+                if not (case_dir / "snippet.py").exists():
+                    continue
+                ids.append(case_id)
+            return ids
         for case_dir in sorted(path for path in case_root.iterdir() if path.is_dir()):
             if allowed_case_ids is not None and case_dir.name not in allowed_case_ids:
                 continue

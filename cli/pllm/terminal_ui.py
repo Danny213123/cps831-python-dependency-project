@@ -1197,6 +1197,8 @@ def _run_benchmark_dialog(
             f"Failed: {summary.failed}\n"
             f"Skipped: {summary.skipped}\n"
             f"Elapsed: {summary.elapsed_seconds:.1f}s\n"
+            f"Summary: {summary.summary_path or '(not written)'}\n"
+            f"Results CSV: {summary.results_csv_path or '(not written)'}\n"
             f"Exit code: {return_code}"
         ),
         style=UI_STYLE,

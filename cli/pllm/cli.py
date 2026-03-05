@@ -54,6 +54,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"succeeded={summary.succeeded} failed={summary.failed} skipped={summary.skipped} "
                 f"elapsed={summary.elapsed_seconds:.1f}s"
             )
+            if summary.summary_path:
+                print(f"Summary: {summary.summary_path}")
+            if summary.results_csv_path:
+                print(f"Results CSV: {summary.results_csv_path}")
+            if summary.report_markdown_path:
+                print(f"Report: {summary.report_markdown_path}")
             return return_code
         if args.benchmark_command == "breakdown":
             print(breakdown_summary(active_source=args.source))

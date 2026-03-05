@@ -71,6 +71,7 @@ from agentic_python_dependency.tools.repo_evidence import build_repo_evidence
 from agentic_python_dependency.tools.retry_policy import classify_retry_decision
 from agentic_python_dependency.tools.structured_outputs import (
     StructuredOutputError,
+    parse_alias_resolution_payload,
     parse_candidate_plan_payload,
     parse_cross_validation_payload,
     parse_experimental_package_payload,
@@ -741,6 +742,24 @@ class ResolutionWorkflow:
     def _allowed_versions_map(options: list[PackageVersionOptions]) -> dict[str, set[str]]:
         return {normalize_package_name(option.package): set(option.versions) for option in options}
 
+    @staticmethod
+    def _build_pypi_evidence_payload(
+        options: list[PackageVersionOptions], unresolved_packages: list[str]
+    ) -> dict[str, Any]:
+        return {
+            "packages": [
+                {
+                    "package": option.package,
+                    "versions": option.versions,
+                    "requires_python": option.requires_python,
+                    "requires_dist": option.requires_dist,
+                    "policy_notes": option.policy_notes,
+                }
+                for option in options
+            ],
+            "unresolved_packages": unresolved_packages,
+        }
+
     def _research_allowed_packages(self, state: ResolutionState) -> set[str]:
         return {normalize_package_name(package) for package in state.get("inferred_packages", [])}
 
@@ -1024,6 +1043,7 @@ class ResolutionWorkflow:
         current = self.infer_package_candidates(current)
         current = self.cross_validate_packages(current)
         current = self.retrieve_pypi_metadata(current)
+        current = self.resolve_aliases(current)
         current = self.retrieve_version_specific_metadata(current)
         current = self.build_constraint_pack(current)
         current = self.requires_python_intersection_check(current)
@@ -1113,6 +1133,7 @@ class ResolutionWorkflow:
         graph.add_node("infer_package_candidates", self.infer_package_candidates)
         graph.add_node("cross_validate_packages", self.cross_validate_packages)
         graph.add_node("retrieve_pypi_metadata", self.retrieve_pypi_metadata)
+        graph.add_node("resolve_aliases", self.resolve_aliases)
         graph.add_node("retrieve_version_specific_metadata", self.retrieve_version_specific_metadata)
         graph.add_node("build_constraint_pack", self.build_constraint_pack)
         graph.add_node("requires_python_intersection_check", self.requires_python_intersection_check)
@@ -1137,7 +1158,8 @@ class ResolutionWorkflow:
         graph.add_edge("build_dynamic_alias_candidates", "infer_package_candidates")
         graph.add_edge("infer_package_candidates", "cross_validate_packages")
         graph.add_edge("cross_validate_packages", "retrieve_pypi_metadata")
-        graph.add_edge("retrieve_pypi_metadata", "retrieve_version_specific_metadata")
+        graph.add_edge("retrieve_pypi_metadata", "resolve_aliases")
+        graph.add_edge("resolve_aliases", "retrieve_version_specific_metadata")
         graph.add_edge("retrieve_version_specific_metadata", "build_constraint_pack")
         graph.add_edge("build_constraint_pack", "requires_python_intersection_check")
         graph.add_conditional_edges(
@@ -1738,21 +1760,151 @@ class ResolutionWorkflow:
             option.package: option.policy_notes for option in options if option.policy_notes
         }
         if self._is_research():
-            pypi_evidence = {
-                "packages": [
+            pypi_evidence = self._build_pypi_evidence_payload(options, unresolved)
+            state["pypi_evidence"] = pypi_evidence
+            self._write_json_artifact(state, "pypi-evidence.json", pypi_evidence)
+        return state
+
+    def resolve_aliases(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_research() or not self._uses_full_apd():
+            return state
+        unresolved = [package for package in state.get("unresolved_packages", []) if looks_like_package_name(package)]
+        if not unresolved:
+            return state
+
+        source_context = "\n\n".join(
+            f"# file: {file_name}\n{code}" for file_name, code in state.get("source_files", {}).items()
+        )[:6000]
+        unresolved_text = "\n".join(sorted(set(unresolved), key=str.lower))
+        prompt_text = self._format_prompt(
+            "resolve_aliases.txt",
+            unresolved_packages=unresolved_text,
+            raw_file=source_context,
+        )
+        self._trace_request(state, "extract", prompt_text)
+        raw_output = self.prompt_runner.invoke_template(
+            "extract",
+            "resolve_aliases.txt",
+            {
+                "unresolved_packages": unresolved_text,
+                "raw_file": source_context,
+            },
+        )
+        self._trace_response(state, "extract", raw_output)
+        state["structured_outputs"]["resolve_aliases_raw"] = raw_output
+        try:
+            aliases = parse_alias_resolution_payload(raw_output)
+        except StructuredOutputError:
+            cleaned = self._adjudicate_json(
+                state,
+                "resolve_aliases",
+                raw_output,
+                '{"aliases":[{"import_name":"yaml","pypi_package":"PyYAML"}]}',
+            )
+            try:
+                aliases = parse_alias_resolution_payload(cleaned)
+            except StructuredOutputError:
+                state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
+                aliases = []
+
+        options_by_normalized = {
+            normalize_package_name(option.package): option for option in state.get("version_options", [])
+        }
+        inferred_by_normalized = {
+            normalize_package_name(package): package for package in state.get("inferred_packages", [])
+        }
+        provenance = dict(state.get("candidate_provenance", {}))
+        resolved_aliases: list[dict[str, str]] = []
+        rejected_aliases: list[dict[str, str]] = []
+        resolved_imports: set[str] = set()
+        version_limit = self._version_option_limit(state.get("target_python", "3.12"))
+
+        for alias in aliases:
+            import_name = alias["import_name"].split(".", 1)[0].strip()
+            package = alias["pypi_package"].strip()
+            if not import_name or not looks_like_package_name(package):
+                rejected_aliases.append(
                     {
-                        "package": option.package,
-                        "versions": option.versions,
-                        "requires_python": option.requires_python,
-                        "requires_dist": option.requires_dist,
-                        "policy_notes": option.policy_notes,
+                        "import_name": import_name,
+                        "pypi_package": package,
+                        "reason": "invalid_package_name",
                     }
-                    for option in options
-                ],
-                "unresolved_packages": unresolved,
+                )
+                continue
+            try:
+                option = self.pypi_store.get_version_options(
+                    package,
+                    state["target_python"],
+                    limit=version_limit,
+                    preset=self.settings.preset,
+                )
+            except FileNotFoundError:
+                rejected_aliases.append(
+                    {
+                        "import_name": import_name,
+                        "pypi_package": package,
+                        "reason": "not_found_on_pypi",
+                    }
+                )
+                continue
+            if not option.versions:
+                rejected_aliases.append(
+                    {
+                        "import_name": import_name,
+                        "pypi_package": package,
+                        "reason": "no_compatible_versions",
+                    }
+                )
+                continue
+            normalized_package = normalize_package_name(option.package)
+            normalized_import = normalize_package_name(import_name)
+            if normalized_import != normalized_package:
+                inferred_by_normalized.pop(normalized_import, None)
+                for key in list(provenance):
+                    if normalize_package_name(key) == normalized_import:
+                        provenance.pop(key, None)
+            if normalized_package not in options_by_normalized:
+                options_by_normalized[normalized_package] = option
+            canonical_name = inferred_by_normalized.get(normalized_package, option.package)
+            inferred_by_normalized[normalized_package] = canonical_name
+            provenance[canonical_name] = "alias"
+            resolved_imports.add(normalized_import)
+            resolved_aliases.append(
+                {
+                    "import_name": import_name,
+                    "pypi_package": option.package,
+                }
+            )
+
+        state["version_options"] = list(options_by_normalized.values())
+        state["inferred_packages"] = sorted(inferred_by_normalized.values(), key=str.lower)
+        state["candidate_provenance"] = provenance
+        state["unresolved_packages"] = [
+            package
+            for package in state.get("unresolved_packages", [])
+            if normalize_package_name(package) not in resolved_imports
+        ]
+        if self._is_research():
+            pypi_evidence = self._build_pypi_evidence_payload(
+                state.get("version_options", []),
+                state.get("unresolved_packages", []),
+            )
+            pypi_evidence["alias_resolution"] = {
+                "resolved_aliases": resolved_aliases,
+                "rejected_aliases": rejected_aliases,
             }
             state["pypi_evidence"] = pypi_evidence
             self._write_json_artifact(state, "pypi-evidence.json", pypi_evidence)
+        self._write_json_artifact(
+            state,
+            "alias-resolutions.json",
+            {
+                "unresolved_before": unresolved,
+                "resolved_aliases": resolved_aliases,
+                "rejected_aliases": rejected_aliases,
+                "unresolved_after": state.get("unresolved_packages", []),
+            },
+        )
         return state
 
     def retrieve_version_specific_metadata(self, state: ResolutionState) -> ResolutionState:

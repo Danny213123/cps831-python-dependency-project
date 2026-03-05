@@ -1,0 +1,33 @@
+You are resolving Python import-to-package-name mismatches for a dependency resolver.
+
+These imports were extracted from source code but do not exist on PyPI by import name:
+{unresolved_packages}
+
+For each unresolved import, suggest the correct PyPI distribution that provides it.
+
+Common examples:
+- cv2 -> opencv-python
+- PIL -> Pillow
+- sklearn -> scikit-learn
+- yaml -> PyYAML
+- memcache -> python-memcached
+- gi -> PyGObject
+- Crypto -> pycryptodome
+
+Return strict JSON only:
+{{
+  "aliases": [
+    {{
+      "import_name": "module_name",
+      "pypi_package": "distribution-name"
+    }}
+  ]
+}}
+
+Rules:
+- Only include mappings you are confident about.
+- Omit uncertain mappings.
+- No markdown, no prose, no extra keys.
+
+Source code context:
+{raw_file}

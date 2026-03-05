@@ -7,6 +7,23 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-03-05
+
+### Added
+
+- Added a research alias-resolution prompt stage (`resolve_aliases.txt`) that asks the model to map unresolved import names to probable PyPI package names before candidate-plan generation.
+- Added `alias-resolutions.json` case artifacts with unresolved-before/after snapshots plus resolved and rejected alias mappings.
+
+### Changed
+
+- Wired the research graph/fallback flow to execute `resolve_aliases` between PyPI metadata retrieval and version-specific metadata retrieval.
+- Updated research RAG context to include `unresolved_packages` so downstream planning prompts see unresolved import evidence.
+- Updated `pypi-evidence.json` writing to include alias-resolution outcomes when applicable.
+
+### Fixed
+
+- Fixed unresolved imports being silently dropped in research runs by validating LLM-proposed import-to-package aliases against PyPI and reinserting valid mappings into planning inputs.
+
 ## [1.1.5] - 2026-03-05
 
 ### Changed

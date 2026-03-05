@@ -81,6 +81,23 @@ def parse_cross_validation_payload(raw_output: str) -> tuple[list[dict[str, Any]
     return parsed_accepted, parsed_rejected
 
 
+def parse_alias_resolution_payload(raw_output: str) -> list[dict[str, str]]:
+    payload = _load_json(raw_output)
+    aliases = payload.get("aliases", [])
+    if not isinstance(aliases, list):
+        raise StructuredOutputError("'aliases' must be a list")
+    parsed: list[dict[str, str]] = []
+    for item in aliases:
+        if not isinstance(item, dict):
+            raise StructuredOutputError("Alias entries must be objects")
+        import_name = str(item.get("import_name", "")).strip()
+        pypi_package = str(item.get("pypi_package", "")).strip()
+        if not import_name or not pypi_package:
+            raise StructuredOutputError("Alias entries require import_name and pypi_package")
+        parsed.append({"import_name": import_name, "pypi_package": pypi_package})
+    return parsed
+
+
 def parse_candidate_plan_payload(
     raw_output: str,
     *,

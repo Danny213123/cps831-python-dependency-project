@@ -34,6 +34,7 @@ def build_research_rag_context(
         "imports": state.get("extracted_imports", []),
         "dynamic_imports": state.get("dynamic_import_candidates", []),
         "inferred_packages": state.get("inferred_packages", []),
+        "unresolved_packages": state.get("unresolved_packages", []),
         "repo_alias_candidates": state.get("repo_alias_candidates", {}),
         "python_constraint_intersection": state.get("python_constraint_intersection", []),
         "version_conflict_notes": [

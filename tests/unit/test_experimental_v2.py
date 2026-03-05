@@ -5,12 +5,16 @@ from pathlib import Path
 from agentic_python_dependency.config import Settings
 from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.presets import resolve_research_features
-from agentic_python_dependency.state import PackageVersionOptions
+from agentic_python_dependency.state import BenchmarkCase, PackageVersionOptions
 from agentic_python_dependency.tools.constraint_pack import build_constraint_pack, generate_candidate_bundles
 from agentic_python_dependency.tools.dynamic_imports import collect_dynamic_import_candidates
 from agentic_python_dependency.tools.repo_aliases import build_repo_alias_candidates
 from agentic_python_dependency.tools.repair_feedback import append_feedback_event, summarize_feedback_memory
 from agentic_python_dependency.tools.retry_policy import classify_retry_decision
+from agentic_python_dependency.tools.structured_outputs import (
+    StructuredOutputError,
+    parse_alias_resolution_payload,
+)
 
 
 class FakePyPIStore:
@@ -35,6 +39,36 @@ class FakePackageMetadataStore:
             "requires_dist": ["numpy>=1.21"],
             "source": "wheel",
         }
+
+
+class FakeAliasPromptRunner:
+    @staticmethod
+    def stage_model(stage: str) -> str:
+        return stage
+
+    @staticmethod
+    def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+        assert stage == "extract"
+        assert template == "resolve_aliases.txt"
+        assert "memcache" in variables["unresolved_packages"]
+        return '{"aliases":[{"import_name":"memcache","pypi_package":"python-memcached"}]}'
+
+
+class FakeAliasPyPIStore:
+    @staticmethod
+    def get_version_options(
+        package: str,
+        target_python: str,
+        *,
+        limit: int = 20,
+        preset: str = "optimized",
+    ) -> PackageVersionOptions:
+        assert target_python
+        assert limit >= 1
+        assert preset
+        if package == "python-memcached":
+            return PackageVersionOptions(package="python-memcached", versions=["1.62"])
+        raise FileNotFoundError(package)
 
 
 def test_settings_from_env_resolves_research_bundle_and_feature_overrides(tmp_path: Path) -> None:
@@ -240,7 +274,54 @@ def test_research_prompt_templates_render_without_format_key_errors(tmp_path: Pa
             conflict_notes="[]",
             repo_evidence="{}",
         ),
+        "resolve_aliases": workflow._format_prompt(
+            "resolve_aliases.txt",
+            unresolved_packages="memcache\nyaml",
+            raw_file="import memcache\nimport yaml\n",
+        ),
     }
 
     assert all(rendered.values())
     assert "Target Python:" not in rendered["package_inference"]
+
+
+def test_parse_alias_resolution_payload_is_strict() -> None:
+    parsed = parse_alias_resolution_payload(
+        '{"aliases":[{"import_name":"memcache","pypi_package":"python-memcached"}]}'
+    )
+    assert parsed == [{"import_name": "memcache", "pypi_package": "python-memcached"}]
+
+    try:
+        parse_alias_resolution_payload('{"aliases":[{"import_name":"memcache"}]}')
+    except StructuredOutputError:
+        pass
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Missing pypi_package should raise StructuredOutputError.")
+
+
+def test_resolve_aliases_converts_unresolved_imports_to_validated_packages(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+    workflow = ResolutionWorkflow(settings, prompt_runner=FakeAliasPromptRunner(), pypi_store=FakeAliasPyPIStore())
+
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import memcache\n", encoding="utf-8")
+    case = BenchmarkCase(case_id="case-1", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    state = workflow.initial_state_for_case(case, run_id="run-1")
+    state["source_files"] = {"snippet.py": "import memcache\n"}
+    state["target_python"] = "3.12"
+    state["inferred_packages"] = ["memcache"]
+    state["candidate_provenance"] = {"memcache": "ast"}
+    state["version_options"] = []
+    state["unresolved_packages"] = ["memcache"]
+    state["structured_outputs"] = {}
+
+    updated = workflow.resolve_aliases(state)
+
+    assert updated["unresolved_packages"] == []
+    assert "python-memcached" in updated["inferred_packages"]
+    assert "memcache" not in updated["inferred_packages"]
+    assert updated["version_options"][0].package == "python-memcached"
+    assert updated["candidate_provenance"]["python-memcached"] == "alias"

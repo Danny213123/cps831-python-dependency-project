@@ -1,6 +1,9 @@
 # Ollama helper, handles requests.
 # TESTER FILE FOR PLAYING WITH NEW IDEAS
 import argparse
+import json
+import os
+from pathlib import Path
 import re
 
 from helpers.ollama_helper_base import OllamaHelperBase
@@ -41,6 +44,81 @@ class OllamaHelper(OllamaHelperBase):
         self.base_modules = base_modules
         self.rag = rag
         self.pypi = PyPIQuery(logging=logging, base_modules=base_modules)
+        self._prompt_counter = 0
+        self._artifact_case_dir: Path | None = None
+        self._artifact_attempt_dir: Path | None = None
+        self._artifact_prompts_dir: Path | None = None
+        self._model_outputs_payload = {
+            "extract": [],
+            "version": [],
+            "repair": [],
+            "adjudicate": [],
+        }
+        self._init_artifacts()
+
+    def _init_artifacts(self) -> None:
+        artifact_root = os.getenv("PLLM_CASE_ARTIFACT_DIR", "").strip()
+        if not artifact_root:
+            return
+        self._artifact_case_dir = Path(artifact_root)
+        attempt_raw = os.getenv("PLLM_ATTEMPT_INDEX", "1").strip()
+        try:
+            attempt_index = max(1, int(attempt_raw))
+        except ValueError:
+            attempt_index = 1
+        self._artifact_attempt_dir = self._artifact_case_dir / f"attempt_{attempt_index:02d}"
+        self._artifact_prompts_dir = self._artifact_attempt_dir / "prompts"
+        self._artifact_prompts_dir.mkdir(parents=True, exist_ok=True)
+
+    def _prompt_to_text(self, prompt) -> str:
+        try:
+            prompt_value = prompt.invoke({})
+            if hasattr(prompt_value, "to_string"):
+                return prompt_value.to_string()
+            return str(prompt_value)
+        except Exception:
+            try:
+                return prompt.format()
+            except Exception:
+                return "<prompt unavailable>"
+
+    def _write_model_outputs(self) -> None:
+        if self._artifact_attempt_dir is None:
+            return
+        (self._artifact_attempt_dir / "model_outputs.json").write_text(
+            json.dumps(self._model_outputs_payload, indent=2),
+            encoding="utf-8",
+        )
+
+    def _record_prompt_and_output(self, *, stage: str, prompt_text: str, output_obj) -> None:
+        if self._artifact_attempt_dir is None or self._artifact_prompts_dir is None:
+            return
+        self._prompt_counter += 1
+        output_text = json.dumps(output_obj, indent=2) if isinstance(output_obj, (dict, list)) else str(output_obj)
+        stage_bucket = stage if stage in self._model_outputs_payload else "repair"
+        self._model_outputs_payload[stage_bucket].append(
+            {
+                "attempt": self._prompt_counter,
+                "output": output_text,
+            }
+        )
+        prompt_path = self._artifact_prompts_dir / f"prompt_{self._prompt_counter:03d}_{stage_bucket}.txt"
+        prompt_path.write_text(prompt_text, encoding="utf-8")
+
+        prompt_a_path = self._artifact_attempt_dir / "prompt_a.txt"
+        prompt_b_path = self._artifact_attempt_dir / "prompt_b.txt"
+        if not prompt_a_path.exists():
+            prompt_a_path.write_text(prompt_text, encoding="utf-8")
+        elif not prompt_b_path.exists():
+            prompt_b_path.write_text(prompt_text, encoding="utf-8")
+        self._write_model_outputs()
+
+    def _invoke_prompt_parser(self, *, prompt, parser, stage: str):
+        prompt_text = self._prompt_to_text(prompt)
+        chain = prompt | self.model | parser
+        out = chain.invoke({})
+        self._record_prompt_and_output(stage=stage, prompt_text=prompt_text, output_obj=out)
+        return out
 
     """_summary_
     Validates the json from the model using pydantic to parse it
@@ -66,9 +144,7 @@ class OllamaHelper(OllamaHelperBase):
             partial_variables={"raw_file": raw_file, "format_instructions": parser.get_format_instructions()}
         )
         
-        chain = prompt | self.model | parser
-
-        out = chain.invoke({})
+        out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="extract")
         
         print(out)
         return out
@@ -118,9 +194,7 @@ class OllamaHelper(OllamaHelperBase):
                         partial_variables=pv
                     )
 
-                    chain = prompt | self.model | parser
-
-                    out = chain.invoke({})
+                    out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="version")
 
                     updated_modules[out['module']] = out['version'].split(' ')[0]
                 completed = True
@@ -169,9 +243,7 @@ class OllamaHelper(OllamaHelperBase):
         # We want it to extract a module name which we can work with later
         for loop in range(0, 5):
             try:
-                chain = prompt | self.model | parser
-
-                out = chain.invoke({})
+                out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="repair")
                 # Get the name of the offending module from the error message        
                 bad_module = self.pypi.check_module_name(out['module'])[0]
 
@@ -188,9 +260,7 @@ class OllamaHelper(OllamaHelperBase):
 
         for loop in range(0, 5):
             try:
-                chain = prompt | self.model | parser
-
-                out = chain.invoke({})
+                out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="repair")
 
                 print(out)
 
@@ -295,10 +365,7 @@ class OllamaHelper(OllamaHelperBase):
             partial_variables={"error": error, "format_instructions": parser.get_format_instructions()}
         )
 
-        chain = prompt | self.model | parser
-
-        passed, json_out = self.execute_chain(chain, ModuleVersion)
-        
+        json_out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="repair")
         print(json_out)
         return json_out
     
@@ -431,10 +498,7 @@ class OllamaHelper(OllamaHelperBase):
             partial_variables={"error": error, "format_instructions": parser.get_format_instructions()}
         )
 
-        chain = prompt | self.model | parser
-
-        passed, json_out = self.execute_chain(chain, ModuleVersion)
-        
+        json_out = self._invoke_prompt_parser(prompt=prompt, parser=parser, stage="repair")
         print(json_out)
         return json_out
     

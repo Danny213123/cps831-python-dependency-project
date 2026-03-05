@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -85,6 +86,7 @@ def stream_executor(
     *,
     stop_event: threading.Event | None = None,
     python_executable: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> tuple[int, RunStats]:
     stats = RunStats()
     command = build_executor_command(config, python_executable=python_executable)
@@ -96,6 +98,7 @@ def stream_executor(
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        env={**os.environ, **(env or {})},
     )
 
     def stop_watcher() -> None:

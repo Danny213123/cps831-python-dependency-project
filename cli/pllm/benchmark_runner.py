@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ast
 import csv
 import json
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -328,15 +330,29 @@ def run_benchmark(
             verbose=verbose,
         )
 
+        case_output_lines: list[str] = []
+        case_env = {
+            "PLLM_CASE_ARTIFACT_DIR": str(run_dir / case_id),
+            "PLLM_RUN_ID": run_id,
+            "PLLM_CASE_ID": case_id,
+        }
+
         def callback(line: str, _stats: object) -> None:
+            case_output_lines.append(line)
             _append_log_line(run_trace_path, line)
             _append_log_line(case_trace_path, line)
             if show_case_output:
                 _emit(line_handler, line)
 
         case_started_at = _utc_now_iso()
-        return_code, stats = stream_executor(config, line_callback=callback)
+        return_code, stats = stream_executor(config, line_callback=callback, env=case_env)
         finished_at = _utc_now_iso()
+        attempt_meta = _materialize_case_attempt_artifacts(
+            run_dir=run_dir,
+            case_id=case_id,
+            snippet_path=snippet_path,
+            case_output_lines=case_output_lines,
+        )
         attempted += 1
         elapsed_seconds += stats.elapsed_seconds
         success = return_code == 0
@@ -352,6 +368,13 @@ def run_benchmark(
             "finished_at": finished_at,
             "source_path": str(source_copy_path) if source_copy_path is not None else "",
             "trace_path": str(case_trace_path),
+            "run_log_path": attempt_meta.get("run_log_path", ""),
+            "build_log_path": attempt_meta.get("build_log_path", ""),
+            "dockerfile_path": attempt_meta.get("dockerfile_path", ""),
+            "model_outputs_path": attempt_meta.get("model_outputs_path", ""),
+            "prompt_a_path": attempt_meta.get("prompt_a_path", ""),
+            "prompt_b_path": attempt_meta.get("prompt_b_path", ""),
+            "attempt_count": attempt_meta.get("attempt_count", 1),
         }
         _append_log_line(run_trace_path, f"[{_utc_now_iso()}] CASE END {case_id} rc={return_code}")
         _append_log_line(case_trace_path, f"[{_utc_now_iso()}] case end rc={return_code}")
@@ -627,6 +650,13 @@ def _write_run_reports(
                 "finished_at",
                 "source_path",
                 "trace_path",
+                "run_log_path",
+                "build_log_path",
+                "dockerfile_path",
+                "model_outputs_path",
+                "prompt_a_path",
+                "prompt_b_path",
+                "attempt_count",
             ],
         )
         writer.writeheader()
@@ -1086,6 +1116,215 @@ def _write_case_source(*, run_dir: Path, case_id: str, snippet_path: Path) -> Pa
     return source_path
 
 
+def _materialize_case_attempt_artifacts(
+    *,
+    run_dir: Path,
+    case_id: str,
+    snippet_path: Path,
+    case_output_lines: list[str],
+) -> dict[str, object]:
+    case_dir = run_dir / case_id
+    case_dir.mkdir(parents=True, exist_ok=True)
+    snippet_dir = snippet_path.parent
+
+    run_log_path = case_dir / "run.log"
+    run_log_payload = "\n".join(case_output_lines).strip()
+    if run_log_payload:
+        run_log_path.write_text(run_log_payload + "\n", encoding="utf-8")
+    elif (snippet_dir / "run.log").exists():
+        shutil.copy2(snippet_dir / "run.log", run_log_path)
+
+    build_log_path = case_dir / "build.log"
+    build_lines = [line for line in case_output_lines if _looks_like_build_log_line(line)]
+    if build_lines:
+        build_log_path.write_text("\n".join(build_lines) + "\n", encoding="utf-8")
+    elif (snippet_dir / "build.log").exists():
+        shutil.copy2(snippet_dir / "build.log", build_log_path)
+
+    dockerfiles = sorted(snippet_dir.glob("Dockerfile-llm-*"))
+    yaml_outputs = sorted(snippet_dir.glob("output_data_*.yml"))
+    existing_attempt_dirs = sorted(path for path in case_dir.glob("attempt_*") if path.is_dir())
+    attempt_count = max(1, len(existing_attempt_dirs), len(dockerfiles), len(yaml_outputs))
+    attempt_dirs = [case_dir / f"attempt_{index:02d}" for index in range(1, attempt_count + 1)]
+    for attempt_dir in attempt_dirs:
+        attempt_dir.mkdir(parents=True, exist_ok=True)
+
+    for attempt_dir in attempt_dirs:
+        if run_log_path.exists():
+            shutil.copy2(run_log_path, attempt_dir / "run.log")
+        if build_log_path.exists():
+            shutil.copy2(build_log_path, attempt_dir / "build.log")
+
+    dockerfile_path: Path | None = None
+    if dockerfiles:
+        for index, dockerfile in enumerate(dockerfiles):
+            target_dir = attempt_dirs[min(index, len(attempt_dirs) - 1)]
+            shutil.copy2(dockerfile, target_dir / "Dockerfile.generated")
+        dockerfile_path = case_dir / "Dockerfile.generated"
+        shutil.copy2(dockerfiles[0], dockerfile_path)
+
+    for index, yaml_file in enumerate(yaml_outputs):
+        target_dir = attempt_dirs[min(index, len(attempt_dirs) - 1)]
+        shutil.copy2(yaml_file, target_dir / yaml_file.name)
+
+    prompt_a_path: Path | None = None
+    prompt_b_path: Path | None = None
+    for attempt_dir in attempt_dirs:
+        prompt_a = attempt_dir / "prompt_a.txt"
+        prompt_b = attempt_dir / "prompt_b.txt"
+        if prompt_a.exists() and prompt_a_path is None:
+            prompt_a_path = case_dir / "prompt_a.txt"
+            shutil.copy2(prompt_a, prompt_a_path)
+        if prompt_b.exists() and prompt_b_path is None:
+            prompt_b_path = case_dir / "prompt_b.txt"
+            shutil.copy2(prompt_b, prompt_b_path)
+    if prompt_a_path is None:
+        prompt_a_path = case_dir / "prompt_a.txt"
+        prompt_a_path.write_text(_build_extract_prompt(snippet_path), encoding="utf-8")
+    if prompt_b_path is None:
+        prompt_b_path = case_dir / "prompt_b.txt"
+        prompt_b_path.write_text(_build_version_prompt(snippet_dir), encoding="utf-8")
+    first_attempt_dir = attempt_dirs[0]
+    if not (first_attempt_dir / "prompt_a.txt").exists():
+        shutil.copy2(prompt_a_path, first_attempt_dir / "prompt_a.txt")
+    if not (first_attempt_dir / "prompt_b.txt").exists():
+        shutil.copy2(prompt_b_path, first_attempt_dir / "prompt_b.txt")
+    first_attempt_prompts_dir = first_attempt_dir / "prompts"
+    first_attempt_prompts_dir.mkdir(parents=True, exist_ok=True)
+    if not any(first_attempt_prompts_dir.glob("prompt_*.txt")):
+        shutil.copy2(prompt_a_path, first_attempt_prompts_dir / "prompt_001_extract.txt")
+        shutil.copy2(prompt_b_path, first_attempt_prompts_dir / "prompt_002_version.txt")
+
+    combined_model_outputs = _combine_attempt_model_outputs(attempt_dirs)
+    if not any(combined_model_outputs[stage] for stage in ("extract", "version", "repair", "adjudicate")):
+        inferred_outputs = _infer_model_outputs_from_logs(case_output_lines)
+        for stage in combined_model_outputs:
+            combined_model_outputs[stage].extend(inferred_outputs[stage])
+    model_outputs_path: Path | None = case_dir / "model_outputs.json"
+    assert model_outputs_path is not None
+    model_outputs_path.write_text(json.dumps(combined_model_outputs, indent=2), encoding="utf-8")
+    if not (first_attempt_dir / "model_outputs.json").exists():
+        shutil.copy2(model_outputs_path, first_attempt_dir / "model_outputs.json")
+
+    return {
+        "run_log_path": str(run_log_path) if run_log_path.exists() else "",
+        "build_log_path": str(build_log_path) if build_log_path.exists() else "",
+        "dockerfile_path": str(dockerfile_path) if dockerfile_path is not None else "",
+        "model_outputs_path": str(model_outputs_path) if model_outputs_path is not None else "",
+        "prompt_a_path": str(prompt_a_path) if prompt_a_path is not None else "",
+        "prompt_b_path": str(prompt_b_path) if prompt_b_path is not None else "",
+        "attempt_count": attempt_count,
+    }
+
+
+def _combine_attempt_model_outputs(attempt_dirs: list[Path]) -> dict[str, list[dict[str, object]]]:
+    combined: dict[str, list[dict[str, object]]] = {
+        "extract": [],
+        "version": [],
+        "repair": [],
+        "adjudicate": [],
+    }
+    for attempt_dir in attempt_dirs:
+        payload_path = attempt_dir / "model_outputs.json"
+        if not payload_path.exists():
+            continue
+        try:
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        for stage in combined:
+            entries = payload.get(stage, [])
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                merged = dict(entry)
+                merged.setdefault("attempt_folder", attempt_dir.name)
+                combined[stage].append(merged)
+    return combined
+
+
+def _build_extract_prompt(snippet_path: Path) -> str:
+    snippet_text = ""
+    try:
+        snippet_text = snippet_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        snippet_text = ""
+    return (
+        "List the required third-party libraries that need to be installed for the following Python code to execute "
+        "successfully. Provide just the library names without any additional explanation.\n\n"
+        f"Python code:\n{snippet_text}"
+    )
+
+
+def _build_version_prompt(snippet_dir: Path) -> str:
+    modules_dir = snippet_dir / "modules"
+    if not modules_dir.exists():
+        return "# skipped: no compatible PyPI version options were inferred\n"
+    package_lines: list[str] = []
+    for path in sorted(modules_dir.glob("*_*.txt")):
+        stem = path.stem
+        if "_" not in stem:
+            continue
+        module_name = stem.rsplit("_", 1)[0]
+        try:
+            raw_versions = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        versions = [token.strip() for token in raw_versions.replace("\n", ",").split(",") if token.strip()]
+        if not versions:
+            continue
+        package_lines.append(f"{module_name}: {', '.join(versions[:25])}")
+    if not package_lines:
+        return "# skipped: no compatible PyPI version options were inferred\n"
+    return (
+        "You are given a list of Python packages and their available versions from PyPI. Determine the most "
+        "appropriate version for each package to ensure compatibility and successful execution. Only consider the "
+        "versions explicitly listed.\n\n"
+        "Return the result as a plain list using the format package_name==version, with no additional explanation or "
+        "formatting.\n\n"
+        "Packages and versions:\n"
+        + "\n".join(package_lines)
+    )
+
+
+def _infer_model_outputs_from_logs(case_output_lines: list[str]) -> dict[str, list[dict[str, object]]]:
+    payload: dict[str, list[dict[str, object]]] = {
+        "extract": [],
+        "version": [],
+        "repair": [],
+        "adjudicate": [],
+    }
+    for line in case_output_lines:
+        stripped = line.strip()
+        if not stripped.startswith("{") or not stripped.endswith("}"):
+            continue
+        try:
+            parsed = ast.literal_eval(stripped)
+        except (SyntaxError, ValueError):
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        output_text = json.dumps(parsed, indent=2)
+        if "python_version" in parsed and "python_modules" in parsed:
+            payload["extract"].append({"attempt": len(payload["extract"]) + 1, "output": output_text, "source": "stdout"})
+            continue
+        if "module" in parsed and "version" in parsed:
+            payload["version"].append({"attempt": len(payload["version"]) + 1, "output": output_text, "source": "stdout"})
+            continue
+    return payload
+
+
+def _looks_like_build_log_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    return stripped.startswith("#") or "docker build" in stripped.lower() or "build details:" in stripped.lower()
+
+
 def _normalize_result_row(row: dict[str, object]) -> dict[str, object]:
     status = str(row.get("status", "unknown") or "unknown")
     success = bool(row.get("success", False))
@@ -1109,6 +1348,13 @@ def _normalize_result_row(row: dict[str, object]) -> dict[str, object]:
         "final_error_category": final_error_category,
         "source_path": str(row.get("source_path", "") or ""),
         "trace_path": str(row.get("trace_path", "") or ""),
+        "run_log_path": str(row.get("run_log_path", "") or ""),
+        "build_log_path": str(row.get("build_log_path", "") or ""),
+        "dockerfile_path": str(row.get("dockerfile_path", "") or ""),
+        "model_outputs_path": str(row.get("model_outputs_path", "") or ""),
+        "prompt_a_path": str(row.get("prompt_a_path", "") or ""),
+        "prompt_b_path": str(row.get("prompt_b_path", "") or ""),
+        "attempt_count": _as_int(row.get("attempt_count"), default=1),
     }
 
 
@@ -1136,6 +1382,13 @@ def _to_results_row(row: dict[str, object], *, case_number: int) -> dict[str, ob
         "finished_at": row["finished_at"],
         "source_path": row.get("source_path", ""),
         "trace_path": row.get("trace_path", ""),
+        "run_log_path": row.get("run_log_path", ""),
+        "build_log_path": row.get("build_log_path", ""),
+        "dockerfile_path": row.get("dockerfile_path", ""),
+        "model_outputs_path": row.get("model_outputs_path", ""),
+        "prompt_a_path": row.get("prompt_a_path", ""),
+        "prompt_b_path": row.get("prompt_b_path", ""),
+        "attempt_count": row.get("attempt_count", 1),
     }
 
 

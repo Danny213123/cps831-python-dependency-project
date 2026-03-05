@@ -185,6 +185,19 @@ Each benchmark run now writes report artifacts to:
 - `<case_id>/result.json`
 - `<case_id>/source.py`
 - `<case_id>/llm-trace.log`
+- `<case_id>/run.log`
+- `<case_id>/build.log` (when build output exists)
+- `<case_id>/Dockerfile.generated` (when generated)
+- `<case_id>/prompt_a.txt`
+- `<case_id>/prompt_b.txt`
+- `<case_id>/model_outputs.json`
+- `<case_id>/attempt_01/` (and `attempt_02+` when multiple attempts are present)
+- `<case_id>/attempt_XX/run.log`
+- `<case_id>/attempt_XX/build.log`
+- `<case_id>/attempt_XX/prompt_a.txt`
+- `<case_id>/attempt_XX/prompt_b.txt`
+- `<case_id>/attempt_XX/model_outputs.json`
+- `<case_id>/attempt_XX/prompts/prompt_*.txt`
 
 Run benchmark with the active dashboard screen (TTY):
 ```bash

@@ -2,6 +2,7 @@
 # Everything should be automated through this file
 import argparse
 import json
+import os
 import time
 import multiprocessing as mp
 from multiprocessing import Process
@@ -357,6 +358,9 @@ def run_docker_process(
     process_num,
     rag,
 ):
+    artifact_root = os.getenv("PLLM_CASE_ARTIFACT_DIR", "").strip()
+    if artifact_root:
+        os.environ["PLLM_ATTEMPT_INDEX"] = str(process_num + 1)
     worker = TestExecutor(
         base_url=base_url,
         model=model,

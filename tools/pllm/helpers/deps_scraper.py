@@ -87,7 +87,7 @@ class DepsScraper():
                 print(file_name)
                 file_path = os.path.join(root, file_name)
                 
-                file = file_path.split('/')[-1:][0]
+                file = os.path.basename(file_path)
                 if '.py' in file and not '.pyc' in file:
                     # print(file)
                     python_files.append(file_path)

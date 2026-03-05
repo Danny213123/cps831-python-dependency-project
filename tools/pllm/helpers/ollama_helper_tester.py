@@ -11,7 +11,7 @@ from helpers.py_pi_query import PyPIQuery
 
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from typing import Dict, List
 from langchain_core.output_parsers import JsonOutputParser
 
@@ -705,9 +705,15 @@ def process_args():
 
 def main():
     args = process_args()
-    file_path = '/'.join(args.file.split('/')[:-1])
+    file_path = os.path.dirname(os.path.abspath(args.file))
     # ollama_helper = OllamaHelper(model='gpt-4o-2024-05-13', logging=True)
-    ollama_helper = OllamaHelper(base_url=args.base, model=args.model, logging=True, temp=args.temp, base_modules=file_path+"/modules")
+    ollama_helper = OllamaHelper(
+        base_url=args.base,
+        model=args.model,
+        logging=True,
+        temp=args.temp,
+        base_modules=os.path.join(file_path, "modules"),
+    )
 
     meow = {'python_version': '2.7', 'python_modules': {'sqlalchemy': '1.4.49', 'redis': '3.5.3', 'requests': '2.27.1', 'python-memcached': '1.62'}}
 

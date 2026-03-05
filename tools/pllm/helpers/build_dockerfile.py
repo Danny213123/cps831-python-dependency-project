@@ -49,10 +49,33 @@ class DockerHelper:
     # Breaks down the file path to get the folder and the file name
     # file: The path to the file
     def get_project_dir(self, file):
-        split_path = file.split("/")
-        file_path = "/".join(split_path[:-1])
-        file_name = split_path[-1]
-        dir_name = split_path[-2]
+        raw_path = str(file).strip()
+        candidate_paths = [raw_path]
+        if "\\" in raw_path:
+            candidate_paths.append(raw_path.replace("\\", os.sep))
+        if "/" in raw_path:
+            candidate_paths.append(raw_path.replace("/", os.sep))
+
+        file_name = ""
+        file_path = ""
+        for candidate in candidate_paths:
+            normalized_path = os.path.normpath(candidate)
+            candidate_name = os.path.basename(normalized_path)
+            candidate_dir = os.path.dirname(normalized_path)
+            if candidate_name:
+                file_name = candidate_name
+                file_path = candidate_dir
+                if candidate_dir:
+                    break
+
+        if not file_name:
+            raise ValueError(f"Invalid file path: {file}")
+
+        # If a bare filename is provided, use the current working directory.
+        if not file_path:
+            file_path = os.getcwd()
+
+        dir_name = os.path.basename(file_path.rstrip("\\/")) or "pllm-case"
         return file_path, dir_name, file_name
 
     # Creates the dockerfile based on the llm information
@@ -100,7 +123,7 @@ class DockerHelper:
         self.image_name = f"test/pllm:{dir_name}_{llm_out['python_version']}"
         self.container_name = f"{dir_name}_{llm_out['python_version']}"
         self.dockerfile_name = f"Dockerfile-llm-{llm_out['python_version']}"
-        with open(f"{project_dir}/{self.dockerfile_name}", "w") as file_handle:
+        with open(os.path.join(project_dir, self.dockerfile_name), "w", encoding="utf-8") as file_handle:
             file_handle.write(self.dockerfile_out)
 
     # Uses Docker SDK or CLI to build created dockerfiles.

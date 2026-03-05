@@ -456,10 +456,18 @@ def main():
     
     # Process the arguments, file, model ...
     args = process_args()
-    file_path = '/'.join(args.file.split('/')[:-1])
+    file_path = os.path.dirname(os.path.abspath(args.file))
 
     # Create the main 
-    testExecutor = TestExecutor(base_url=args.base, model=args.model, logging=True, temp=args.temp, end_loop=args.loop, search_range=args.range, base_modules=file_path+"/modules")
+    testExecutor = TestExecutor(
+        base_url=args.base,
+        model=args.model,
+        logging=True,
+        temp=args.temp,
+        end_loop=args.loop,
+        search_range=args.range,
+        base_modules=os.path.join(file_path, "modules"),
+    )
     # Use a simple search to grab imports from file without the LLM
     python_deps = []
     if args.rag:

@@ -658,6 +658,8 @@ class OllamaHelper(OllamaHelperBase):
         elif (
             'failed to build' in lower_message
             or 'failed to solve' in lower_message
+            or 'input/output error' in lower_message
+            or 'io.containerd.metadata.v1.bolt/meta.db' in lower_message
             or 'error response from daemon' in lower_message
             or 'cannot connect to the docker daemon' in lower_message
             or 'permission denied while trying to connect to the docker daemon socket' in lower_message

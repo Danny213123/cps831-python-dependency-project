@@ -93,6 +93,16 @@ class TestExecutor():
         dockerHelper.create_dockerfile(llm_eval, file)
         passed, docker_build_output = dockerHelper.build_dockerfile(file)
         if not passed:
+            lower_build_output = (docker_build_output or "").lower()
+            if (
+                "io.containerd.metadata.v1.bolt/meta.db" in lower_build_output
+                or ("input/output error" in lower_build_output and "failed to solve" in lower_build_output)
+            ):
+                docker_build_output = (
+                    f"{docker_build_output}\n"
+                    "[PLLM] Docker storage backend I/O failure detected. "
+                    "On Windows 11 Docker Desktop, run 'docker builder prune -af' and restart Docker Desktop."
+                )
             print(docker_build_output)
             output, error_type = llm.process_error(docker_build_output, error_details, llm_eval)
             if error_type == "None":
@@ -213,6 +223,7 @@ class TestExecutor():
         error_type = 'Unknown'  # Initialize error_type to avoid UnboundLocalError
         docker_output = ""
         stop_requested = False
+        fatal_error_types = {'DockerError', 'ExecutorException'}
 
         while not run_complete:
             error = ''
@@ -226,6 +237,19 @@ class TestExecutor():
                     build_complete, docker_output, output, error_type = self.build_container(dockerHelper, ollama_helper, llm_eval, file, error_handler)
                     # If the build failed, handle the error
                     if not build_complete:
+                        if error_type in fatal_error_types:
+                            error_handler = self.naughty_bois(output, error_handler, error_type, llm_eval)
+                            loop, stop_requested = self.end_test(
+                                file_to_open,
+                                llm_eval,
+                                dockerHelper,
+                                error_type,
+                                docker_output,
+                                loop,
+                                False,
+                            )
+                            run_complete = True
+                            break
                         # Update error_handler with any failing module and version
                         error_handler = self.naughty_bois(output, error_handler, error_type, llm_eval)
                         # Update the LLM details with the information from the build ouput
@@ -305,6 +329,9 @@ class TestExecutor():
                     run_complete = True
                     error_handler = self.naughty_bois(output, error_handler, error_type, llm_eval)
                     llm_eval = self.update_llm_eval(output, llm_eval)
+                elif 'DockerError' in error_type:
+                    run_complete = True
+                    error_handler = self.naughty_bois(output, error_handler, error_type, llm_eval)
                 elif 'None' in error_type:
                     run_complete = True
                     run_succeeded = True

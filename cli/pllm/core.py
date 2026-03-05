@@ -257,6 +257,25 @@ def run_doctor(base_url: str = "http://localhost:11434") -> list[DoctorCheck]:
     return checks
 
 
+def list_tools() -> list[str]:
+    tools_root = ROOT_DIR / "tools"
+    if not tools_root.exists():
+        return []
+    tools = []
+    for path in tools_root.iterdir():
+        if path.is_dir() and not path.name.startswith("."):
+            tools.append(path.name)
+    tools.sort()
+    return tools
+
+
+def fetch_ollama_models(base_url: str = "http://localhost:11434") -> list[str]:
+    models = _fetch_ollama_models_from_api(base_url)
+    if models:
+        return models
+    return _fetch_ollama_models_from_cli()
+
+
 def doctor_passed(checks: list[DoctorCheck]) -> bool:
     return all(check.ok for check in checks if check.required)
 
@@ -326,6 +345,46 @@ def _check_ollama_api(base_url: str) -> tuple[bool, str]:
         return True, f"reachable at {url} ({model_count} models visible)"
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         return False, f"{exc}"
+
+
+def _fetch_ollama_models_from_api(base_url: str) -> list[str]:
+    url = base_url.rstrip("/") + "/api/tags"
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        models = payload.get("models", [])
+        if not isinstance(models, list):
+            return []
+        names = []
+        for item in models:
+            if isinstance(item, dict):
+                name = str(item.get("name", "")).strip()
+                if name:
+                    names.append(name)
+        return sorted(set(names))
+    except Exception:
+        return []
+
+
+def _fetch_ollama_models_from_cli() -> list[str]:
+    ollama_path = shutil.which("ollama")
+    if ollama_path is None:
+        return []
+    ok, output = _run_command([ollama_path, "list"])
+    if not ok:
+        return []
+    names = []
+    for idx, line in enumerate(output.splitlines()):
+        if idx == 0 and "NAME" in line and "SIZE" in line:
+            continue
+        stripped = line.strip()
+        if not stripped:
+            continue
+        name = stripped.split()[0].strip()
+        if name:
+            names.append(name)
+    return sorted(set(names))
 
 
 def _module_importable(module_name: str) -> bool:

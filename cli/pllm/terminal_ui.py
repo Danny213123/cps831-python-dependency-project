@@ -16,12 +16,21 @@ from cli.pllm.benchmark_data import (
     resolve_snippet_path,
 )
 from cli.pllm.benchmark_runner import BenchmarkSummary, run_benchmark
-from cli.pllm.core import ROOT_DIR, RunConfig, RunStats, format_doctor_report, run_doctor, stream_executor
+from cli.pllm.core import (
+    ROOT_DIR,
+    RunConfig,
+    RunStats,
+    fetch_ollama_models,
+    format_doctor_report,
+    list_tools,
+    run_doctor,
+    stream_executor,
+)
 
 PROMPT_TOOLKIT_AVAILABLE = True
 try:
     from prompt_toolkit.application import Application
-    from prompt_toolkit.formatted_text import AnyFormattedText
+    from prompt_toolkit.formatted_text import AnyFormattedText, HTML
     from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.layout import Layout
     from prompt_toolkit.layout.containers import HSplit, Window
@@ -64,6 +73,7 @@ if PROMPT_TOOLKIT_AVAILABLE:
 
 @dataclass
 class UIOptions:
+    tool: str
     model: str
     base: str
     temp: float
@@ -85,8 +95,12 @@ def launch_terminal_ui(
     default_range: int = 0,
     default_file: str = "",
     default_benchmark_source: BenchmarkSource = "all-gists",
+    default_tool: str = "pllm",
 ) -> int:
+    available_tools = list_tools()
+    selected_tool = default_tool if default_tool in available_tools else (available_tools[0] if available_tools else "pllm")
     options = UIOptions(
+        tool=selected_tool,
         model=default_model,
         base=default_base,
         temp=0.7,
@@ -653,17 +667,29 @@ class TerminalBenchmarkDashboard:
         return max(0.0, seconds_per_case * (self.total - self.completed))
 
 
-def _menu_dialog_text(options: UIOptions) -> str:
-    return (
-        f"Source: {options.source}\n"
-        f"Model: {options.model}\n"
-        f"Loop/range: {options.loop}/{options.search_range}\n"
-        f"RAG/verbose: {options.rag}/{options.verbose}"
+def _menu_dialog_text(options: UIOptions) -> AnyFormattedText:
+    model_count = len(fetch_ollama_models(options.base))
+    loadout_count = len(_list_loadout_names())
+    return HTML(
+        "<b><ansibrightyellow>PLLM Command Center</ansibrightyellow></b>\n"
+        "<style fg='#98c1d9'>Run, report, and configure without memorizing commands.</style>\n\n"
+        f"<b>Tool:</b> {options.tool}\n"
+        f"<b>Benchmark source:</b> {options.source}\n"
+        f"<b>Model:</b> {options.model}\n"
+        f"<b>Ollama models:</b> {model_count}\n"
+        f"<b>Runtime:</b> loop {options.loop} | range {options.search_range} | "
+        f"RAG {'on' if options.rag else 'off'} | verbose {'on' if options.verbose else 'off'}\n"
+        f"<b>Benchmark defaults:</b> limit {options.benchmark_limit} | offset {options.benchmark_offset} | "
+        f"fail-fast {'on' if options.benchmark_fail_fast else 'off'}\n"
+        f"<b>Loadouts:</b> {loadout_count}\n"
+        f"<b>Ollama base:</b> {options.base}"
     )
 
 
 def _run_menu(*, options: UIOptions, default_file: str) -> None:
     assert PROMPT_TOOLKIT_AVAILABLE
+    if not _ensure_tool_supported(options):
+        return
     run_action = button_dialog(
         title="Run",
         text="Choose run type",
@@ -737,6 +763,8 @@ def _configure_menu(options: UIOptions) -> None:
             title="Configure",
             text="Adjust source and runtime defaults.",
             buttons=[
+                ("Tool", "tool"),
+                ("Model", "model"),
                 ("Source", "source"),
                 ("Runtime", "runtime"),
                 ("Benchmark", "benchmark"),
@@ -746,6 +774,12 @@ def _configure_menu(options: UIOptions) -> None:
         ).run()
         if choice in {None, "back"}:
             return
+        if choice == "tool":
+            _choose_tool_dialog(options)
+            continue
+        if choice == "model":
+            _choose_model_dialog(options)
+            continue
         if choice == "source":
             selected = _choose_benchmark_source_dialog(options.source)
             if selected is not None:
@@ -757,6 +791,64 @@ def _configure_menu(options: UIOptions) -> None:
             continue
         if choice == "benchmark":
             _configure_benchmark_defaults_dialog(options)
+
+
+def _choose_tool_dialog(options: UIOptions) -> None:
+    assert PROMPT_TOOLKIT_AVAILABLE
+    tools = list_tools()
+    if not tools:
+        message_dialog(title="Tool", text="No tool folders found under tools/.", style=UI_STYLE).run()
+        return
+    selected = radiolist_dialog(
+        title="Select tool",
+        text="Choose tool from tools/ directory",
+        values=[(tool, tool) for tool in tools],
+        default=options.tool if options.tool in tools else tools[0],
+        style=UI_STYLE,
+    ).run()
+    if selected is None:
+        return
+    options.tool = selected
+    message_dialog(title="Tool", text=f"Active tool set to {selected}.", style=UI_STYLE).run()
+
+
+def _choose_model_dialog(options: UIOptions) -> None:
+    assert PROMPT_TOOLKIT_AVAILABLE
+    models = fetch_ollama_models(options.base)
+    if models:
+        values: list[tuple[str, str]] = [(model, model) for model in models]
+        values.append(("__manual__", "Manual entry"))
+        selected = radiolist_dialog(
+            title="Select model",
+            text=f"Available Ollama models from {options.base}",
+            values=values,
+            default=options.model if options.model in models else models[0],
+            style=UI_STYLE,
+        ).run()
+        if selected is None:
+            return
+        if selected == "__manual__":
+            manual = input_dialog(
+                title="Manual model",
+                text="Model name",
+                default=options.model,
+                style=UI_STYLE,
+            ).run()
+            if manual:
+                options.model = manual.strip()
+        else:
+            options.model = selected
+    else:
+        manual = input_dialog(
+            title="Select model",
+            text="No models discovered automatically. Enter model name.",
+            default=options.model,
+            style=UI_STYLE,
+        ).run()
+        if manual:
+            options.model = manual.strip()
+
+    message_dialog(title="Model", text=f"Active model set to {options.model}.", style=UI_STYLE).run()
 
 
 def _configure_runtime_dialog(options: UIOptions) -> None:
@@ -869,6 +961,23 @@ def _loadout_menu(options: UIOptions) -> None:
             _delete_loadout_dialog()
 
 
+def _ensure_tool_supported(options: UIOptions) -> bool:
+    if options.tool == "pllm":
+        return True
+    if PROMPT_TOOLKIT_AVAILABLE:
+        message_dialog(
+            title="Tool not wired",
+            text=(
+                f"Tool '{options.tool}' is selectable but not wired to this runner yet.\n"
+                "Switch tool to 'pllm' in Config -> Tool to run now."
+            ),
+            style=UI_STYLE,
+        ).run()
+    else:
+        print(f"Tool '{options.tool}' is not wired yet. Select tool 'pllm' to run.")
+    return False
+
+
 def _save_loadout_dialog(options: UIOptions) -> None:
     assert PROMPT_TOOLKIT_AVAILABLE
     name = input_dialog(
@@ -946,6 +1055,7 @@ def _list_loadout_names() -> list[str]:
 
 def _options_to_dict(options: UIOptions) -> dict[str, object]:
     return {
+        "tool": options.tool,
         "model": options.model,
         "base": options.base,
         "temp": options.temp,
@@ -962,6 +1072,10 @@ def _options_to_dict(options: UIOptions) -> dict[str, object]:
 
 
 def _apply_options_dict(options: UIOptions, payload: dict[str, object]) -> None:
+    available_tools = list_tools()
+    loaded_tool = str(payload.get("tool", options.tool) or options.tool)
+    if loaded_tool in available_tools:
+        options.tool = loaded_tool
     options.model = str(payload.get("model", options.model) or options.model)
     options.base = str(payload.get("base", options.base) or options.base)
     options.temp = _parse_float(str(payload.get("temp", options.temp)), options.temp)
@@ -1248,8 +1362,12 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
     print("prompt_toolkit is not installed. Falling back to plain text mode.")
     active_source: BenchmarkSource = options.source
     while True:
+        model_count = len(fetch_ollama_models(options.base))
         print("\nPLLM Command Center")
-        print(f"Source={active_source} model={options.model} loop={options.loop} range={options.search_range}")
+        print(
+            f"Tool={options.tool} source={active_source} model={options.model} "
+            f"models={model_count} loop={options.loop} range={options.search_range}"
+        )
         print("1) Run snippet")
         print("2) Run benchmark case")
         print("3) Run benchmark")
@@ -1297,9 +1415,47 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
             continue
         if choice == "5":
             print("Configure")
-            print("1) Source 2) Runtime 3) Benchmark defaults 4) Back")
+            print("1) Tool 2) Model 3) Source 4) Runtime 5) Benchmark defaults 6) Back")
             sub = input("Select option: ").strip()
             if sub == "1":
+                tools = list_tools()
+                if not tools:
+                    print("No tools found under tools/.")
+                    continue
+                print("Available tools:")
+                for index, tool in enumerate(tools, start=1):
+                    marker = "*" if tool == options.tool else " "
+                    print(f"  {index}){marker} {tool}")
+                selected = input(f"Tool [{options.tool}]: ").strip()
+                if selected:
+                    if selected.isdigit() and 1 <= int(selected) <= len(tools):
+                        options.tool = tools[int(selected) - 1]
+                    elif selected in tools:
+                        options.tool = selected
+                    else:
+                        print("Invalid tool selection.")
+                        continue
+                print(f"Tool set to {options.tool}")
+            elif sub == "2":
+                models = fetch_ollama_models(options.base)
+                if models:
+                    print("Discovered Ollama models:")
+                    for index, model_name in enumerate(models, start=1):
+                        marker = "*" if model_name == options.model else " "
+                        print(f"  {index}){marker} {model_name}")
+                    selected = input(f"Model [{options.model}] (index/name): ").strip()
+                    if selected:
+                        if selected.isdigit() and 1 <= int(selected) <= len(models):
+                            options.model = models[int(selected) - 1]
+                        elif selected in models:
+                            options.model = selected
+                        else:
+                            options.model = selected
+                    print(f"Model set to {options.model}")
+                else:
+                    options.model = input(f"Model [{options.model}]: ").strip() or options.model
+                    print(f"Model set to {options.model}")
+            elif sub == "3":
                 print("1) all-gists 2) dockerized-gists 3) competition-run")
                 sel = input("Source: ").strip()
                 if sel == "1":
@@ -1309,7 +1465,7 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
                 elif sel == "3":
                     active_source = "competition-run"
                 options.source = active_source
-            elif sub == "2":
+            elif sub == "4":
                 options.model = input(f"Model [{options.model}]: ").strip() or options.model
                 options.base = input(f"Ollama base [{options.base}]: ").strip() or options.base
                 options.temp = _parse_float(input(f"Temp [{options.temp}]: ").strip() or str(options.temp), options.temp)
@@ -1320,7 +1476,7 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
                 )
                 options.rag = (input(f"RAG [{options.rag}] y/n: ").strip().lower() or ("y" if options.rag else "n")) in {"y", "yes"}
                 options.verbose = (input(f"Verbose [{options.verbose}] y/n: ").strip().lower() or ("y" if options.verbose else "n")) in {"y", "yes"}
-            elif sub == "3":
+            elif sub == "5":
                 options.benchmark_limit = max(
                     0,
                     _parse_int(
@@ -1343,6 +1499,8 @@ def _launch_plain_text_ui(*, default_file: str, options: UIOptions) -> int:
                     input(f"Show output [{options.benchmark_show_output}] y/n: ").strip().lower()
                     or ("y" if options.benchmark_show_output else "n")
                 ) in {"y", "yes"}
+            continue
+        if choice in {"1", "2", "3"} and not _ensure_tool_supported(options):
             continue
         if choice == "4":
             print(breakdown_summary(active_source))

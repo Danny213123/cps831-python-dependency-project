@@ -24,6 +24,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if doctor_passed(checks) else 1
 
     if args.command == "benchmark":
+        if args.tool != "pllm":
+            print(f"Tool '{args.tool}' is not wired yet for benchmark runs. Use --tool pllm.")
+            return 2
         if args.benchmark_command == "run":
             observer = None
             if args.dashboard and not args.show_case_output and sys.stdin.isatty() and sys.stdout.isatty():
@@ -73,7 +76,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             default_range=args.range,
             default_file=args.file,
             default_benchmark_source=args.benchmark_source,
+            default_tool=args.tool,
         )
+
+    if args.tool != "pllm":
+        print(f"Tool '{args.tool}' is not wired yet for direct runs. Use --tool pllm.")
+        return 2
 
     resolved_file = args.file
     if args.case_id:
@@ -160,8 +168,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     benchmark_parser = subparsers.add_parser("benchmark", help="Benchmark data helpers")
+    benchmark_parser.add_argument(
+        "--tool",
+        default="pllm",
+        help="Tool folder under tools/ (currently runner support: pllm)",
+    )
     benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
     run_benchmark_parser = benchmark_subparsers.add_parser("run", help="Run benchmark cases from a source")
+    run_benchmark_parser.add_argument(
+        "--tool",
+        default="pllm",
+        help="Tool folder under tools/ (currently runner support: pllm)",
+    )
     run_benchmark_parser.add_argument(
         "--source",
         choices=_benchmark_source_choices(),
@@ -209,6 +227,11 @@ def _add_shared_runtime_args(parser: argparse.ArgumentParser, *, require_file: b
             help="Optional default snippet path for UI",
         )
 
+    parser.add_argument(
+        "--tool",
+        default="pllm",
+        help="Tool folder under tools/ (currently runner support: pllm)",
+    )
     _add_runtime_args_no_file(parser)
 
 

@@ -1,0 +1,841 @@
+---
+python_version: 2.7
+start_time: 1772675119.8588748
+iterations:
+  iteration_1:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/363vbwww0mzailzk2ed9j0ydp
+  iteration_2:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/y12lhu8bqjkuf89d3k6flj33y
+  iteration_3:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/bm6mrczy5wu4wu3d0yjfbewdu
+  iteration_4:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/na8k7auvpce7i06r0jperfn42
+  iteration_5:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/igg9337fo8v9f1ybopdpcsgmj
+  iteration_6:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/3nn6q2kb12qvm198q19ziyk62
+  iteration_7:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ry6b0hzehbu0wqcbxg008jybs
+  iteration_8:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/tt47z8eytkq3snrgd3j5u3lnt
+  iteration_9:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/roqttc1tqky4b6s1s3qh6lxmx
+  iteration_10:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wug8ac8msbfdaps9yb49gs1i2
+end_time: 1772675123.605283
+total_time: 3.746408224105835---
+python_version: 2.7
+start_time: 1772675847.923073
+iterations:
+  iteration_1:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ey1o9yrjp5f9k8xtkwu60tbjw
+  iteration_2:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mcuwl0sosc4lrqoqjx4grit0c
+  iteration_3:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/t58zsrg6odhr9ij0ip9ouw58w
+  iteration_4:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/66u6q7a7ulha900fqjeemenck
+  iteration_5:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/25vr5f2poyyzkyy5bdpis8amp
+  iteration_6:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/0tg0gs577b7i2g26vlomn05jd
+  iteration_7:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/h0wlpzh1kntz36qcvwlm1wjwx
+  iteration_8:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/crvgzfmes9e0437zswqwg0aaf
+  iteration_9:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xf0rr4sqmjre36au1af5nih5d
+  iteration_10:
+    - python_module: {'corefoundation': '16.2.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/zwvqmhwdopsbk5ricr717ghjh
+end_time: 1772675851.894159
+total_time: 3.971086025238037---
+python_version: 2.7
+start_time: 1772676340.644693
+iterations:
+  iteration_1:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/fftd2ywi7hakbf5j5uxycpsb9
+  iteration_2:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/0q1fplgky0xbx9bq47b7o1sfz
+  iteration_3:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u2vcafcdi92ygjee2omlswywx
+  iteration_4:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/0tpl46dcfrcg01sk5zs8n50dt
+  iteration_5:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/3u8cakjxe31qvu9td8i3e2y78
+  iteration_6:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/atsdk0utom6ymy3zpdo7skjw3
+  iteration_7:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mo5f1nmx72f3nori31cpg02e5
+  iteration_8:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jo4vwhx8nzuv3picdcmfljm2s
+  iteration_9:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/898r5oymthwpu9yomfyn04nl1
+  iteration_10:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/nwdz91gcf3iqtsygihpk9dz4s
+end_time: 1772676344.641901
+total_time: 3.9972081184387207---
+python_version: 2.7
+start_time: 1772677059.913023
+iterations:
+  iteration_1:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/p0ypqcfn06xcorqi64o94yu7y
+  iteration_2:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/l0ku15o82q6wwlmjpw7l6sihj
+  iteration_3:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/b46mon9ao1fa8mx03opwpe20f
+  iteration_4:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/l9no6h86cixekscy6u68cgwh8
+  iteration_5:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ew57122tkxbeglkebwlb3ktqc
+  iteration_6:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/gdk8fy47vkon9ieb9f57qzk3t
+  iteration_7:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ysz2p6rxq8khopulexxvwl2vb
+  iteration_8:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/j1elb4houzuy65hcss7y4jss3
+  iteration_9:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/5hm0lcekueku00yj78qsr2ev7
+  iteration_10:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/typ1giarzlm1lve7q8syc36j4
+end_time: 1772677064.131708
+total_time: 4.218684911727905---
+python_version: 2.7
+start_time: 1772677747.725014
+iterations:
+  iteration_1:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/oj7sw6yzmymdcw43yndgx95s7
+  iteration_2:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/q1rfata8il25r982ivonyx4k8
+  iteration_3:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/z7fbc42yh51zv3uxtrp02pkj3
+  iteration_4:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uwxgab3vwjv1i6qdrluzukaz9
+  iteration_5:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/8s96c445tfws69jp7p0rpjcet
+  iteration_6:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/9wm5scyfiqkquihef7zajoyjg
+  iteration_7:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/nnpoh8kg4txak9lzhrg1dh8c3
+  iteration_8:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ys3cx03v2kg4oz1jv0yn5v5vs
+  iteration_9:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/iylp0rhdu7cj265wml1h7umzb
+  iteration_10:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mt1avwbjp3l7vhuaeirroejbi
+end_time: 1772677752.327153
+total_time: 4.602138996124268---
+python_version: 2.7
+start_time: 1772678255.651387
+iterations:
+  iteration_1:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u96l6ylhp7wy9cjdbk8tf4ffj
+  iteration_2:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/m9rb5pu0wm8ryjgo1ofby2ni6
+  iteration_3:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vdm3ks11q3qjtb6hoxs9o02io
+  iteration_4:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xgzllsfydttmdfkaieinkjwp6
+  iteration_5:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u0fryb0ctcxe2s4fe7wfxe7wl
+  iteration_6:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/3j94tw4g01e7693yu22w30901
+  iteration_7:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/kxf8rc71lj8d7st7qexb8ihdf
+  iteration_8:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/kd3cipnt4zvnahfoni8kqmvvk
+  iteration_9:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/o7gh7ghqdsqbryo68h4ood18r
+  iteration_10:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/2sl63wohsq1wbdje648kvx78i
+end_time: 1772678259.437268
+total_time: 3.7858810424804688---
+python_version: 2.7
+start_time: 1772678566.745206
+iterations:
+  iteration_1:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/cbyjy6jdq4gyc2r15bxj9onba
+  iteration_2:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xdntrqnrsgaqujg99y1lqy4u6
+  iteration_3:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/v9eq2z3fijk3g3cmi291ko9b3
+  iteration_4:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/x35dtgnxyl1ro4a4eyohzeiab
+  iteration_5:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/8mvown9pfeidavw0t62ux4ua2
+  iteration_6:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ivx35p4ur2ffsq6kumvwfn7rr
+  iteration_7:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ax0g9f7s11bsjfjp81qhtvhsi
+  iteration_8:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/7tlu9ghjcby2n7zb0twdnayun
+  iteration_9:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/nxgvj78dihur7rd2rqof2b6t7
+  iteration_10:
+    - python_module: {'corefoundation': '15.2.1', 'foundation': '0.1.0a0.dev1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ucoo9w8pdgvrc8tno3v7v1ikq
+end_time: 1772678571.078906
+total_time: 4.333699941635132---
+python_version: 2.7
+start_time: 1772680217.159219
+iterations:
+  iteration_1:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/v6m4ocjil4tyrhhplodwphta7
+  iteration_2:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/9zmofh9keek7uwp9gim5bbswb
+  iteration_3:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/fsz7wgqlbwwcu3apemwlig8fv
+  iteration_4:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/t0buq3hchqg79h4zh658giq8z
+  iteration_5:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/30kz0a8kacx33tuja8lkhf0cv
+  iteration_6:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/2bgrlniai7c4z78rf70n7mrkm
+  iteration_7:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/s06xa7s7xy2jsxrnqsds0508o
+  iteration_8:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qox7namesujxaycvad3cy72ng
+  iteration_9:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/bvnfjcncdltmjljjwkftl7mf8
+  iteration_10:
+    - python_module: {'corefoundation': '15.1.0', 'foundation': '0.1.0a0.dev1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ud4ouczzpccf5frgt94bavu58
+end_time: 1772680220.940341
+total_time: 3.7811219692230225

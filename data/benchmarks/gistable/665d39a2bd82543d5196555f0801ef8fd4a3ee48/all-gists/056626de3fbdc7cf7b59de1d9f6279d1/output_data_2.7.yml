@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772678766.4696589
+iterations:
+  iteration_1:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/japalg9eah6wqw8m0ok4coc9g
+  iteration_2:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/kijh8se7l1avz70nmnqkyg65j
+  iteration_3:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u67bzfro91end8jp0z8i2vlrv
+  iteration_4:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vd8zv4crqds8256sygf6k9s8e
+  iteration_5:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vjifz4cx4lc6tpvmy9hh28t9s
+  iteration_6:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/tt0y25lwtx0x5ch632jeb966i
+  iteration_7:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/patq784m45bh1gke2zstdkwt0
+  iteration_8:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/a1tdbx7ct3ksnckdq9fzjhrux
+  iteration_9:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/rwthaazvmw0heijrgg0mv6ws3
+  iteration_10:
+    - python_module: {'imutils': '4.5.0', 'dlib': '19.23.1', 'opencv-python': '4.2.0.32'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/2b6v02w25rzvr3eq70mn6psp8
+end_time: 1772678775.9357939
+total_time: 9.466135025024414

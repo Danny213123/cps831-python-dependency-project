@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772679223.640128
+iterations:
+  iteration_1:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to run Build function: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/x7u5g36wnwp94kudo5nwbnyjr
+  iteration_2:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mu3ejsoqv5k2z7c0rw7md3ob3
+  iteration_3:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/j4raudaudqa99y4hejzdelvt4
+  iteration_4:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/llnmimmoewp1ah5hzfvpoh416
+  iteration_5:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/nnnf52r17g1pa7adtzhnf9dt1
+  iteration_6:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/j7g1zd4at13k0mlpcu8eoataq
+  iteration_7:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/k5e35jez8me5sutc016r4a85x
+  iteration_8:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/3qoa35fvwwwv0psxgczu0kxto
+  iteration_9:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/m0lam1hvnhrh9gpwah5xhfptm
+  iteration_10:
+    - python_module: {'airflow': '2.8.1', 'slackclient': '2.9.3', 'titan': '1.3.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ifaufx3sx94ah1c1ymqyxlssq
+end_time: 1772679228.974795
+total_time: 5.334667205810547

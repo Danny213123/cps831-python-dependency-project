@@ -1,0 +1,21 @@
+---
+python_version: 3.8
+start_time: 1772682006.967586
+iterations:
+  iteration_1:
+    - python_module: {'redis': None, 'python-memcached': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+  iteration_2:
+    - python_module: {'redis': None, 'python-memcached': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+  iteration_3:
+    - python_module: {'redis': None, 'python-memcached': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+end_time: 1772682007.564884
+total_time: 0.5972979068756104

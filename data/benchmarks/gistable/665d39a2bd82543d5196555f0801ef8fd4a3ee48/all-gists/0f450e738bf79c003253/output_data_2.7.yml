@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772679385.696147
+iterations:
+  iteration_1:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/94wanw22mmipsunok0ouijsup
+  iteration_2:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/zhdh36k2fcz91jqjwgeu8jpnr
+  iteration_3:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/d3inx760dzbsc2fw2q2ek6vvk
+  iteration_4:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/icuz4pisvq3pb2immocafbk9a
+  iteration_5:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qi4xxgdd13b0y37p0z9i4kniy
+  iteration_6:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ekww6q6zkfnfbmdr14byxwxnl
+  iteration_7:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/6y3pknunvk4v8gjgkt6lfxar9
+  iteration_8:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uwn86qir3r6crhvrzjoxw7rlm
+  iteration_9:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xxr8s3sjmqtly6b6nfyog1d1k
+  iteration_10:
+    - python_module: {'kivy': '1.11.1', 'pyjnius': '1.7.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ejr6xjh5e25mmunhrtzgly9ea
+end_time: 1772679390.16869
+total_time: 4.472543001174927

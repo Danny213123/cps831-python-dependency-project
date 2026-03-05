@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772679112.761416
+iterations:
+  iteration_1:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mniwp9rozi4eol8ry3vf9szgu
+  iteration_2:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/taijkdbocnmt3u2fjl7951mwd
+  iteration_3:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/q44pucp7qjzipbigugdxkrek9
+  iteration_4:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/hq40u1dkfdanzmms0ju08xrud
+  iteration_5:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/pomsa5arn1oftks1b8f1377cy
+  iteration_6:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vqem8u5si9b8l9aif3ccwlqyt
+  iteration_7:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/k2vxvvuvtolix3x8qisbb4te9
+  iteration_8:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/erq8x37tc7ocl9v69v4rz712r
+  iteration_9:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/keggsyylycw9dg99oifatcsp7
+  iteration_10:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/b7wne7kazzpeyut5374q0zauo
+end_time: 1772679114.923145
+total_time: 2.161729097366333

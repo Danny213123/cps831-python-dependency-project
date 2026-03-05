@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772679000.32391
+iterations:
+  iteration_1:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/1j0gcjac7dufk4wezmlltv9ef
+  iteration_2:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/knu962hatonowdf0z2qtr036m
+  iteration_3:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/im1io9mdbsniwfd7yijnbhjn2
+  iteration_4:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jbr3ww96kqhb6j9xcq4n0y64q
+  iteration_5:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ks4spx0t9ncqq7bzcg7mlpjb0
+  iteration_6:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ldbvgu9vizf76i57jy5hqmtaz
+  iteration_7:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lh0exfoli16f5fnvyl1dcaajc
+  iteration_8:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/y4c0r1h0kkeaq96z8hlu5u2a0
+  iteration_9:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/maz1vustf58hwioxf3z07rynp
+  iteration_10:
+    - python_module: {'appindicator': '1.13.0', 'gtk': '4.0.3', 'urllib2': '1.26.19'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jal9hhvyoyyx7vt6z4mclz2ck
+end_time: 1772679005.438402
+total_time: 5.114491939544678

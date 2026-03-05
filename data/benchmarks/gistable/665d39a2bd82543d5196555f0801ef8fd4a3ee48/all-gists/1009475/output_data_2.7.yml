@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772679473.0665011
+iterations:
+  iteration_1:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qwxb4wxxuru4t14i5lp4n7mfz
+  iteration_2:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/dzf07zgcfov4u51b6xml36tef
+  iteration_3:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/3roxkfv3opvcj2enzrw48y3pt
+  iteration_4:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xx994h9dhysipabzvcbyu2rfz
+  iteration_5:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/pitgdu68x2ty1u55dzkzvgvoa
+  iteration_6:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/l06jqdabqdo7iuqnjjpqqna2j
+  iteration_7:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/g4xe8bgyo83apw3fhfxyy3aoj
+  iteration_8:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qqd8ga565xvxhipr0q9x7kv73
+  iteration_9:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/f0x1trvbcnwaisl20a3fjifhk
+  iteration_10:
+    - python_module: {'win32api': '10.0.30306', 'win32security': '10.0.19041.3639', '_winreg': '3.0.7'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/n5kbcu0cls3hl5yixsqi5fgo4
+end_time: 1772679478.5038002
+total_time: 5.437299013137817

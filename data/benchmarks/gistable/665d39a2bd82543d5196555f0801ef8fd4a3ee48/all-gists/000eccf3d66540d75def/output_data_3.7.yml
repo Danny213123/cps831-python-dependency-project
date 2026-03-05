@@ -1,0 +1,23 @@
+---
+python_version: 3.7
+start_time: 1772682415.8772109
+iterations:
+  iteration_1:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        /app/snippet.py:16: size=78.1 MiB (+78.1 MiB), count=3 (+3), average=26.0 MiB
+        /app/snippet.py:20: size=353 MiB (+353 MiB), count=9999746 (+9999746), average=37 B
+end_time: 1772682455.4746938
+total_time: 39.59748291969299---
+python_version: 3.7
+start_time: 1772682688.71396
+iterations:
+  iteration_1:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        /app/snippet.py:16: size=78.1 MiB (+78.1 MiB), count=3 (+3), average=26.0 MiB
+        /app/snippet.py:20: size=353 MiB (+353 MiB), count=9999746 (+9999746), average=37 B
+end_time: 1772682706.2679691
+total_time: 17.554009199142456

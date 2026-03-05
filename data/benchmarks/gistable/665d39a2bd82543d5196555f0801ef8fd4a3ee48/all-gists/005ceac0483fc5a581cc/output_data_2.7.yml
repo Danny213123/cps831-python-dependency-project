@@ -1,0 +1,316 @@
+---
+python_version: 2.7
+start_time: 1772676208.7568698
+iterations:
+  iteration_1:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jnywih1nvw5uap38yz5ra8syu
+  iteration_2:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/stl2zdhp5ksjb786u15efw26k
+  iteration_3:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/o2hjl5rp9g8ln5gkersh4ngq6
+  iteration_4:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/pebzev8970djn6s2ftd5nae8t
+  iteration_5:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/1l84c6pa3z981mz1azqjqcmqn
+  iteration_6:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/8b1or4d5m60d46fxlmazx5zc7
+  iteration_7:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/cuc81ib7srj9m12qao858pu0e
+  iteration_8:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qdeycr10q9eqvd84sq7dxujyo
+  iteration_9:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wfih00dp3hgqvyr8dpz1ebayb
+  iteration_10:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/h5gzjwt6neubz4bdszge3q0wq
+end_time: 1772676216.13028
+total_time: 7.373410224914551---
+python_version: 2.7
+start_time: 1772676937.212543
+iterations:
+  iteration_1:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/tv3w68ui4lodf3p4ecljwb96r
+  iteration_2:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/8mbizqhhbp2xp4gghm3lepbou
+  iteration_3:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/h100v75wr7iucgmxusoeq7sy7
+  iteration_4:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/khjsdjstvub5wmx7e0al2h3if
+  iteration_5:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qeii8qy3xn8tq6mn335dus1yt
+  iteration_6:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/hgnom9frbmwudxomddhe5nawc
+  iteration_7:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/fgp67slqvh7g2fohaunv76m1u
+  iteration_8:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/gqp86i83bp4l8alfgvcpxx11q
+  iteration_9:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ietajr9ggq7qz9g2mmbpuozhn
+  iteration_10:
+    - python_module: {'tensorflow': '2.1.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/l7xgykhfcmf8nusb6eil66z9d
+end_time: 1772676944.379051
+total_time: 7.166507959365845---
+python_version: 2.7
+start_time: 1772680102.1349518
+iterations:
+  iteration_1:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ctye7o9jw9sogkhnl5oxdvmeg
+  iteration_2:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to run Build function: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/o6ldrg50v3ixklqnm1tb7dkx9
+  iteration_3:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uhbye24w8dosfibpwicf52g73
+  iteration_4:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/o0268zabjm0wdzq4qlwk5e04j
+  iteration_5:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lms05qd8pv2klmcoqm8bwbi3a
+  iteration_6:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sqq1hisohed9lgylbd06t2pzt
+  iteration_7:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/5ckdcx1nw6l6b4p7fdsxdzzgr
+  iteration_8:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yp39xh6ge9g2pqzq77iopwx20
+  iteration_9:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xzz8a4mdzvv9n6rmg3gc5200a
+  iteration_10:
+    - python_module: {'tensorflow': '2.16.0', 'input_data': 'latest', 'image': '1.5.27', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/nvxw6hsbmcplbwlsyb3gqc2tj
+end_time: 1772680108.754619
+total_time: 6.619667053222656

@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772678757.4095109
+iterations:
+  iteration_1:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/5m4r76pnav8kl60xq3lb2m13h
+  iteration_2:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qzz3ary8fg1ybfz756cwz5e8i
+  iteration_3:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/p03mt3eo5vyx41mi1ml12p0iw
+  iteration_4:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/o4mffn4q3i5lhr246vyf6h63t
+  iteration_5:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/p5nlh66oswoon2fjswbfajovi
+  iteration_6:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xkvi1bub79r8xov117ayv9h8v
+  iteration_7:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/32lctzh5uwyofvi1krjl8elaq
+  iteration_8:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/7lk498uwda81lm4b5c2qljwza
+  iteration_9:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/pgxsfehzyjnzz57tr1pu3ql3u
+  iteration_10:
+    - python_module: {'idaapi': '3.2.10', 'idautils': '2.0.1', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lnbdeikf5wz9ir7spfyqeame8
+end_time: 1772678762.788594
+total_time: 5.379083156585693

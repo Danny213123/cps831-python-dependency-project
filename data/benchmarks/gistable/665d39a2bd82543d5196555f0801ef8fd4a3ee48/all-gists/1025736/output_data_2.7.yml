@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772679534.72349
+iterations:
+  iteration_1:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xnnuumlp0814htf6sow459ohh
+  iteration_2:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/kf2z18ji2vfxhhhm2bzoj3h74
+  iteration_3:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qrzdt0two0fcdwyrprna96pxe
+  iteration_4:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/gjwodp73vnaw8e1joq9cfgh3q
+  iteration_5:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/g6hgmn40zdi1k3si6f2ln1igb
+  iteration_6:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.1s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/hlirvnwhyh3z55glrzps467ew
+  iteration_7:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/6ud4ofpf2mgaqc7nnmxco14a7
+  iteration_8:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/1nzvf6bsrr735m3wd8kql8hlf
+  iteration_9:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/l254zrta3zfmzugiamx70cato
+  iteration_10:
+    - python_module: {'cgi': '2.0.6', 'google': '3.0.0', 'ndb': '1.0.13b1', 'tipfy': '1.0b3', 'tipfyext': '1.2.3', 'cgif': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jidr9vek1mg0j8bmfzb0ovg65
+end_time: 1772679544.5293188
+total_time: 9.80582880973816

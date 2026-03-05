@@ -1,0 +1,841 @@
+---
+python_version: 2.7
+start_time: 1772675255.163985
+iterations:
+  iteration_1:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ippeetfbzhb5466s24cpqe98b
+  iteration_2:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/c99nf8ymwga7r5t4hgtf2g9hp
+  iteration_3:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xoy5xfty3nwlynq7927x10hba
+  iteration_4:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wj9cxyvpkb9xcjr1f9xrd8mh4
+  iteration_5:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/z3fe4kg0m70s10wd91a48t04l
+  iteration_6:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/zpis8pyzh6ckroy4efn315ehl
+  iteration_7:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/h0ox9xjdg1cxm4yarwt42g1hr
+  iteration_8:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/cp4gygvdf9ui971wjn3cbmmvr
+  iteration_9:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jxbmrmi2t4beua2xnpgc0s2nw
+  iteration_10:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vtq3fwswakysvlyxydd831mb7
+end_time: 1772675262.944422
+total_time: 7.780436992645264---
+python_version: 2.7
+start_time: 1772675995.569095
+iterations:
+  iteration_1:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/pcanvjljtn8vkt3knymrasw06
+  iteration_2:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qlmj9r1kd8ju9znbkngxqm9wp
+  iteration_3:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/rv5sijh1ey7fildh9u24wvt07
+  iteration_4:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/rbejljgsxydu2pncnwcqqqy2x
+  iteration_5:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/fk8dwsczpqudno7fib0225qnx
+  iteration_6:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/oti3c495lm2qi4pel1pj4804e
+  iteration_7:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yw8bi5myx6o4zgbrm5jrh7x2j
+  iteration_8:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/myiaw791bedeft6cupe8kmg6x
+  iteration_9:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u23z9ydg4qaf02x8drpb5b8sg
+  iteration_10:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uzr1jxeivhwas538pd3idz4lb
+end_time: 1772676002.558701
+total_time: 6.989606142044067---
+python_version: 2.7
+start_time: 1772676484.285901
+iterations:
+  iteration_1:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xd9pwz9mitm2y4rdxs8n0d4tp
+  iteration_2:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/p3fmravvglzxinyr31442zy2k
+  iteration_3:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wpcq8yawlz2bj00s5i6e43e42
+  iteration_4:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lqm1y521ycqyn9729zfka2vi4
+  iteration_5:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/s4fn5aqi6suskgb1v0vqz8hex
+  iteration_6:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xq5811tiya2qw32hhnunpj6hp
+  iteration_7:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/gzqgcqb0n9jycfkdolgq266dr
+  iteration_8:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sp4em53y7ekdsou875f2hsa06
+  iteration_9:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/awl7r75c7dsnvby6214xb3xxt
+  iteration_10:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sag5a2kdospl3zgjvtf3cfpwn
+end_time: 1772676491.604457
+total_time: 7.31855583190918---
+python_version: 2.7
+start_time: 1772677209.733369
+iterations:
+  iteration_1:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/r1vb4w1qpfs6agn9gfvwxclib
+  iteration_2:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uoq0a4dp4xk47c50uoznvec6t
+  iteration_3:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yl6nelkuohxb10jm6smhyx6in
+  iteration_4:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/kjm0660j22otgv2n8yu0gcbbm
+  iteration_5:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/6p24rvaala5xzjs6tdwcv2igk
+  iteration_6:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/s9g5i5537a106afv09qcpnpqh
+  iteration_7:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/w5vmh151p5ei87wut5w18u9k5
+  iteration_8:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qlydh3xjszbcm4h0z2g3el5qo
+  iteration_9:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/csy28uynnl4ofwfqcu2m19z86
+  iteration_10:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/irj1e0j7azmxbmcf9aek1wr7e
+end_time: 1772677216.829228
+total_time: 7.095858812332153---
+python_version: 2.7
+start_time: 1772677895.637464
+iterations:
+  iteration_1:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lnpl27xm6d341foc7a2q3w6a7
+  iteration_2:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/0s2u90bgyom6iiwbx1ebyunu5
+  iteration_3:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/3f82mcjkfx73a02gmxazemdok
+  iteration_4:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jg7h5i3qlkt0igjptqz9j9at0
+  iteration_5:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/bfmav8hzz7nvmei1mnt4stjun
+  iteration_6:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vo2rifq4hb9y6el87pivj2e8n
+  iteration_7:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/j7u4dorzj77w2m3e6bpawbgn6
+  iteration_8:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/nxvmbeddurvh7bjawkl6gv7ac
+  iteration_9:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wkecu0k5aos2eip8566s38zg9
+  iteration_10:
+    - python_module: {'urllib2': '1.26.18', 'urllib.parse': '3.4.1', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wbbu88r1xknheud238bz9os48
+end_time: 1772677903.544311
+total_time: 7.90684700012207---
+python_version: 2.7
+start_time: 1772678387.880276
+iterations:
+  iteration_1:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qu8eywkscxta01di22tv7h20t
+  iteration_2:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/4c3sgvxdrmuzkihih26b3362h
+  iteration_3:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xt7lzczfjspz32z4enf7fdo1r
+  iteration_4:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/rwd8h3cb6ass8qo6eox9koq93
+  iteration_5:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/s3505vde5l5msk5ag0pt1nrej
+  iteration_6:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/k1rzh5ogdyb48cyurwu2i13np
+  iteration_7:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/r1de3flypblk0tr9d33tsj4zl
+  iteration_8:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/kflrhuo2c9587yzfzp9khgo7o
+  iteration_9:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/99wm2mkt8qc7ynll48k0dj5dg
+  iteration_10:
+    - python_module: {'urllib2': '1.26.19', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/d07r16dvxwhq239hf3rwk89ck
+end_time: 1772678394.8055182
+total_time: 6.925242185592651---
+python_version: 2.7
+start_time: 1772678710.0221188
+iterations:
+  iteration_1:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xcrgmwc72btgp90ne6bgis07g
+  iteration_2:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/oj21j2k4p91cf096plrnbg289
+  iteration_3:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u1v8zvggmzj4kz5fmm3swkotk
+  iteration_4:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/g7o1d52acbb05hua8f62011s5
+  iteration_5:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/6rul78xe1qtltyqckpnkdebmv
+  iteration_6:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/5qqiictjjwnf4he5v4a31nt62
+  iteration_7:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vmj03nm026ngrxb27xwdgoheh
+  iteration_8:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yvaop4z9znpvklkguca7je7ip
+  iteration_9:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sd8s37r7gc38d76gqqboumr0f
+  iteration_10:
+    - python_module: {'urllib2': '1.26.17', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/bbxyis57nndwamptwpwl89w1z
+end_time: 1772678717.216448
+total_time: 7.194329261779785---
+python_version: 2.7
+start_time: 1772680366.4964118
+iterations:
+  iteration_1:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/rp2d4rjev6pr56hfoyzzpxftk
+  iteration_2:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/udbin2jgk9t5g3kiwiwfxak7o
+  iteration_3:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/br3q37w7b70uu7psakmjktcsk
+  iteration_4:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yf1p3nge769vq69p9vfz5uesd
+  iteration_5:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/0fcm4nlbyk6ia548jlgt61mg6
+  iteration_6:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/2855kkkzydw6i5cukg2xrj6m3
+  iteration_7:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/n08y67feqr264ca1ugo2p1kq5
+  iteration_8:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/egjupddr0r0jvoe5v2jyx5ujv
+  iteration_9:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/a7el8cari2v6dwdtjrpvovmbn
+  iteration_10:
+    - python_module: {'urllib2': '1.26.16', 'urllib.parse': '3.4', 'webvirtmgr': '4.8.9', 'python-editor': '1.0.4', 'clipboard': '0.0.4'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/9elfalbpaxgevgpo7ba9cwubj
+end_time: 1772680375.046643
+total_time: 8.550231218338013

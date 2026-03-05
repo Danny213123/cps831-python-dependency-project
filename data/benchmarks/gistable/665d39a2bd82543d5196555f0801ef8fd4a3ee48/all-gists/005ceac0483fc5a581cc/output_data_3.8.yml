@@ -1,0 +1,1748 @@
+---
+python_version: 3.8
+start_time: 1772682008.626153
+iterations:
+  iteration_1:
+    - python_module: {'tensorflow': None, 'input_data': None, 'image': None, 'util': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+  iteration_2:
+    - python_module: {'tensorflow': None, 'input_data': None, 'image': None, 'util': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+  iteration_3:
+    - python_module: {'tensorflow': None, 'input_data': None, 'image': None, 'util': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+end_time: 1772682009.2140229
+total_time: 0.5878698825836182---
+python_version: 3.8
+start_time: 1772683043.8833568
+iterations:
+  iteration_1:
+    - python_module: {'tensorflow': '2.13.1', 'input_data': 'latest', 'image': '1.5.31', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 770B done
+        #1 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 DONE 0.2s
+        #3 [internal] load .dockerignore
+        #3 transferring context: 2B done
+        #3 DONE 0.0s
+        #4 [internal] load build context
+        #4 transferring context: 2.70kB done
+        #4 DONE 0.0s
+        #5 [1/8] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #5 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c 0.0s done
+        #5 DONE 0.0s
+        #6 [2/8] WORKDIR /app
+        #6 CACHED
+        #7 [3/8] RUN ["pip","install","--upgrade","pip"]
+        #7 CACHED
+        #8 [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+        #8 0.606 Collecting tensorflow==2.13.1
+        #8 0.715   Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (2.6 kB)
+        #8 0.757 Collecting tensorflow-cpu-aws==2.13.1 (from tensorflow==2.13.1)
+        #8 0.796   Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.2 kB)
+        #8 0.826 Collecting absl-py>=1.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.854   Downloading absl_py-2.3.1-py3-none-any.whl.metadata (3.3 kB)
+        #8 0.878 Collecting astunparse>=1.6.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.905   Downloading astunparse-1.6.3-py2.py3-none-any.whl.metadata (4.4 kB)
+        #8 0.937 Collecting flatbuffers>=23.1.21 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.965   Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+        #8 0.991 Collecting gast<=0.4.0,>=0.2.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 1.017   Downloading gast-0.4.0-py3-none-any.whl.metadata (1.1 kB)
+        #8 1.038 Collecting google-pasta>=0.1.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 1.064   Downloading google_pasta-0.2.0-py3-none-any.whl.metadata (814 bytes)
+        #8 1.103 Collecting h5py>=2.9.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 1.130   Downloading h5py-3.11.0.tar.gz (406 kB)
+        #8 1.285   Installing build dependencies: started
+        #8 4.556   Installing build dependencies: finished with status 'done'
+        #8 4.557   Getting requirements to build wheel: started
+        #8 4.766   Getting requirements to build wheel: finished with status 'done'
+        #8 4.767   Preparing metadata (pyproject.toml): started
+        #8 4.914   Preparing metadata (pyproject.toml): finished with status 'done'
+        #8 4.941 Collecting libclang>=13.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.967   Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl.metadata (5.2 kB)
+        #8 5.064 Collecting numpy<=1.24.3,>=1.22 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.113   Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.6 kB)
+        #8 5.135 Collecting opt-einsum>=2.3.2 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.164   Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
+        #8 5.189 Collecting packaging (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.216   Downloading packaging-26.0-py3-none-any.whl.metadata (3.3 kB)
+        #8 5.357 Collecting protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<5.0.0dev,>=3.20.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.384   Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl.metadata (541 bytes)
+        #8 5.390 Requirement already satisfied: setuptools in /usr/local/lib/python3.8/site-packages (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (57.5.0)
+        #8 5.410 Collecting six>=1.12.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.439   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+        #8 5.461 Collecting termcolor>=1.1.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.490   Downloading termcolor-2.4.0-py3-none-any.whl.metadata (6.1 kB)
+        #8 5.515 Collecting typing-extensions<4.6.0,>=3.6.6 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.543   Downloading typing_extensions-4.5.0-py3-none-any.whl.metadata (8.5 kB)
+        #8 5.641 Collecting wrapt>=1.11.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.669   Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (9.0 kB)
+        #8 5.951 Collecting grpcio<2.0,>=1.24.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.979   Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl.metadata (3.9 kB)
+        #8 6.004 Collecting tensorboard<2.14,>=2.13 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.032   Downloading tensorboard-2.13.0-py3-none-any.whl.metadata (1.8 kB)
+        #8 6.057 Collecting tensorflow-estimator<2.14,>=2.13.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.083   Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl.metadata (1.3 kB)
+        #8 6.124 Collecting keras<2.14,>=2.13.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.150   Downloading keras-2.13.1-py3-none-any.whl.metadata (2.4 kB)
+        #8 6.186 Collecting tensorflow-io-gcs-filesystem>=0.23.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.228   Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (14 kB)
+        #8 6.235 Requirement already satisfied: wheel<1.0,>=0.23.0 in /usr/local/lib/python3.8/site-packages (from astunparse>=1.6.0->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (0.44.0)
+        #8 6.298 Collecting google-auth<3,>=1.6.3 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.324   Downloading google_auth-2.48.0-py3-none-any.whl.metadata (6.2 kB)
+        #8 6.356 Collecting google-auth-oauthlib<1.1,>=0.5 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.382   Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl.metadata (2.7 kB)
+        #8 6.414 Collecting markdown>=2.6.8 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.443   Downloading Markdown-3.7-py3-none-any.whl.metadata (7.0 kB)
+        #8 6.510 Collecting requests<3,>=2.21.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.537   Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+        #8 6.566 Collecting tensorboard-data-server<0.8.0,>=0.7.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.592   Downloading tensorboard_data_server-0.7.2-py3-none-any.whl.metadata (1.1 kB)
+        #8 6.634 Collecting werkzeug>=1.0.1 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.664   Downloading werkzeug-3.0.6-py3-none-any.whl.metadata (3.7 kB)
+        #8 6.748 Collecting pyasn1-modules>=0.2.1 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.778   Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+        #8 6.895 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.922   Downloading cryptography-46.0.5-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 6.950 Collecting rsa<5,>=3.1.4 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.977   Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+        #8 7.010 Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.038   Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+        #8 7.078 Collecting importlib-metadata>=4.4 (from markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.106   Downloading importlib_metadata-8.5.0-py3-none-any.whl.metadata (4.8 kB)
+        #8 7.173 Collecting charset_normalizer<4,>=2 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.201   Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (37 kB)
+        #8 7.226 Collecting idna<4,>=2.5 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.253   Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+        #8 7.285 Collecting urllib3<3,>=1.21.1 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.317   Downloading urllib3-2.2.3-py3-none-any.whl.metadata (6.5 kB)
+        #8 7.348 Collecting certifi>=2017.4.17 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.374   Downloading certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+        #8 7.426 Collecting MarkupSafe>=2.1.1 (from werkzeug>=1.0.1->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.452   Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.0 kB)
+        #8 7.565 Collecting cffi>=1.14 (from cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.592   Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (1.5 kB)
+        #8 7.597 INFO: pip is looking at multiple versions of cryptography to determine which version is compatible with other requirements. This could take a while.
+        #8 7.597 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.626   Downloading cryptography-46.0.4-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.662   Downloading cryptography-46.0.3-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.695   Downloading cryptography-46.0.2-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.728   Downloading cryptography-46.0.1-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.763   Downloading cryptography-46.0.0-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.798   Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.861 Collecting zipp>=3.20 (from importlib-metadata>=4.4->markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.889   Downloading zipp-3.20.2-py3-none-any.whl.metadata (3.7 kB)
+        #8 7.925 Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.953   Downloading pyasn1-0.6.2-py3-none-any.whl.metadata (8.4 kB)
+        #8 7.980 Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.008   Downloading oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+        #8 8.043 Collecting pycparser (from cffi>=1.14->cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.069   Downloading pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+        #8 8.116 Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (2.0 kB)
+        #8 8.166 Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (248.7 MB)
+        #8 62.06    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 248.7/248.7 MB 3.9 MB/s eta 0:00:00
+        #8 62.09 Downloading absl_py-2.3.1-py3-none-any.whl (135 kB)
+        #8 62.15 Downloading astunparse-1.6.3-py2.py3-none-any.whl (12 kB)
+        #8 62.18 Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+        #8 62.22 Downloading gast-0.4.0-py3-none-any.whl (9.8 kB)
+        #8 62.25 Downloading google_pasta-0.2.0-py3-none-any.whl (57 kB)
+        #8 62.29 Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl (5.7 MB)
+        #8 63.50    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.7/5.7 MB 4.7 MB/s eta 0:00:00
+        #8 63.53 Downloading keras-2.13.1-py3-none-any.whl (1.7 MB)
+        #8 63.87    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 5.1 MB/s eta 0:00:00
+        #8 63.90 Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl (23.8 MB)
+        #8 69.56    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.8/23.8 MB 4.2 MB/s eta 0:00:00
+        #8 69.61 Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (14.0 MB)
+        #8 73.01    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.0/14.0 MB 4.1 MB/s eta 0:00:00
+        #8 73.04 Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
+        #8 73.07 Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl (294 kB)
+        #8 73.16 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+        #8 73.20 Downloading tensorboard-2.13.0-py3-none-any.whl (5.6 MB)
+        #8 74.44    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.6/5.6 MB 4.5 MB/s eta 0:00:00
+        #8 74.47 Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl (440 kB)
+        #8 74.61 Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (3.0 MB)
+        #8 75.18    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 5.2 MB/s eta 0:00:00
+        #8 75.21 Downloading termcolor-2.4.0-py3-none-any.whl (7.7 kB)
+        #8 75.24 Downloading typing_extensions-4.5.0-py3-none-any.whl (27 kB)
+        #8 75.28 Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (120 kB)
+        #8 75.33 Downloading packaging-26.0-py3-none-any.whl (74 kB)
+        #8 75.38 Downloading google_auth-2.48.0-py3-none-any.whl (236 kB)
+        #8 75.46 Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl (18 kB)
+        #8 75.49 Downloading Markdown-3.7-py3-none-any.whl (106 kB)
+        #8 75.54 Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+        #8 75.57 Downloading tensorboard_data_server-0.7.2-py3-none-any.whl (2.4 kB)
+        #8 75.60 Downloading werkzeug-3.0.6-py3-none-any.whl (227 kB)
+        #8 75.67 Downloading certifi-2026.2.25-py3-none-any.whl (153 kB)
+        #8 75.73 Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (143 kB)
+        #8 75.78 Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl (4.2 MB)
+        #8 76.53    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.2/4.2 MB 5.6 MB/s eta 0:00:00
+        #8 76.56 Downloading idna-3.11-py3-none-any.whl (71 kB)
+        #8 76.60 Downloading importlib_metadata-8.5.0-py3-none-any.whl (26 kB)
+        #8 76.63 Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (26 kB)
+        #8 76.67 Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+        #8 76.74 Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+        #8 76.78 Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+        #8 76.81 Downloading urllib3-2.2.3-py3-none-any.whl (126 kB)
+        #8 76.88 Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (448 kB)
+        #8 77.00 Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
+        #8 77.07 Downloading pyasn1-0.6.2-py3-none-any.whl (83 kB)
+        #8 77.11 Downloading zipp-3.20.2-py3-none-any.whl (9.2 kB)
+        #8 77.15 Downloading pycparser-2.23-py3-none-any.whl (118 kB)
+        #8 77.53 Building wheels for collected packages: h5py
+        #8 77.53   Building wheel for h5py (pyproject.toml): started
+        #8 77.96   Building wheel for h5py (pyproject.toml): finished with status 'error'
+        #8 77.96   error: subprocess-exited-with-error
+        #8 77.96   
+        #8 77.96   × Building wheel for h5py (pyproject.toml) did not run successfully.
+        #8 77.96   │ exit code: 1
+        #8 77.96   ╰─> [73 lines of output]
+        #8 77.96       running bdist_wheel
+        #8 77.96       running build
+        #8 77.96       running build_py
+        #8 77.96       creating build/lib.linux-aarch64-cpython-38/h5py
+        #8 77.96       copying h5py/version.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 77.96       copying h5py/h5py_warnings.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 77.96       copying h5py/ipy_completer.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 77.96       copying h5py/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 77.96       creating build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/vds.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/selections2.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/compat.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/filters.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/group.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/selections.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/base.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/dims.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       copying h5py/_hl/files.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 77.96       creating build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_slicing.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_h5.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_h5pl.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/common.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_dims_dimensionproxy.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_big_endian_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_group.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_dtype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_h5t.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_h5p.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/conftest.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_h5d_direct_chunk.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_h5o.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_attrs_data.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_file_alignment.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_h5z.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_dataset_getitem.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_dimension_scales.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_file_image.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_completions.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_base.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_errors.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_h5f.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_ros3.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_dataset_swmr.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_file2.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_filters.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_objects.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_selections.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       copying h5py/tests/test_attribute_create.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 77.96       creating build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 77.96       copying h5py/tests/data_files/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 77.96       creating build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 77.96       copying h5py/tests/test_vds/test_virtual_source.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 77.96       copying h5py/tests/test_vds/test_highlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 77.96       copying h5py/tests/test_vds/test_lowlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 77.96       copying h5py/tests/test_vds/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 77.96       copying h5py/tests/data_files/vlen_string_s390x.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 77.96       copying h5py/tests/data_files/vlen_string_dset_utc.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 77.96       copying h5py/tests/data_files/vlen_string_dset.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 77.96       running build_ext
+        #8 77.96       Loading library to get build settings and version: libhdf5.so
+        #8 77.96       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        #8 77.96       Library dirs checked: []
+        #8 77.96       error: libhdf5.so: cannot open shared object file: No such file or directory
+        #8 77.96       [end of output]
+        #8 77.96   
+        #8 77.96   note: This error originates from a subprocess, and is likely not a problem with pip.
+        #8 77.96   ERROR: Failed building wheel for h5py
+        #8 77.96 Failed to build h5py
+        #8 77.96 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        #8 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        ------
+         > [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]:
+        77.96       Loading library to get build settings and version: libhdf5.so
+        77.96       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        77.96       Library dirs checked: []
+        77.96       error: libhdf5.so: cannot open shared object file: No such file or directory
+        77.96       [end of output]
+        77.96   
+        77.96   note: This error originates from a subprocess, and is likely not a problem with pip.
+        77.96   ERROR: Failed building wheel for h5py
+        77.96 Failed to build h5py
+        77.96 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+           8 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","input_data==latest"]
+           9 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","image==1.5.31"]
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/blewc4fwcltftld9l25lgial5
+  iteration_2:
+    - python_module: {'tensorflow': '2.13.1', 'input_data': 'latest', 'image': '1.5.31', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 770B done
+        #1 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 DONE 0.3s
+        #3 [internal] load .dockerignore
+        #3 transferring context: 2B done
+        #3 DONE 0.0s
+        #4 [internal] load build context
+        #4 transferring context: 32B done
+        #4 DONE 0.0s
+        #5 [1/8] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #5 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c 0.0s done
+        #5 DONE 0.0s
+        #6 [2/8] WORKDIR /app
+        #6 CACHED
+        #7 [3/8] RUN ["pip","install","--upgrade","pip"]
+        #7 CACHED
+        #8 [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+        #8 0.510 Collecting tensorflow==2.13.1
+        #8 0.615   Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (2.6 kB)
+        #8 0.642 Collecting tensorflow-cpu-aws==2.13.1 (from tensorflow==2.13.1)
+        #8 0.675   Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.2 kB)
+        #8 0.708 Collecting absl-py>=1.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.750   Downloading absl_py-2.3.1-py3-none-any.whl.metadata (3.3 kB)
+        #8 0.778 Collecting astunparse>=1.6.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.808   Downloading astunparse-1.6.3-py2.py3-none-any.whl.metadata (4.4 kB)
+        #8 0.832 Collecting flatbuffers>=23.1.21 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.861   Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+        #8 0.884 Collecting gast<=0.4.0,>=0.2.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.913   Downloading gast-0.4.0-py3-none-any.whl.metadata (1.1 kB)
+        #8 0.938 Collecting google-pasta>=0.1.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.966   Downloading google_pasta-0.2.0-py3-none-any.whl.metadata (814 bytes)
+        #8 1.002 Collecting h5py>=2.9.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 1.032   Downloading h5py-3.11.0.tar.gz (406 kB)
+        #8 1.180   Installing build dependencies: started
+        #8 4.078   Installing build dependencies: finished with status 'done'
+        #8 4.080   Getting requirements to build wheel: started
+        #8 4.239   Getting requirements to build wheel: finished with status 'done'
+        #8 4.241   Preparing metadata (pyproject.toml): started
+        #8 4.372   Preparing metadata (pyproject.toml): finished with status 'done'
+        #8 4.403 Collecting libclang>=13.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.434   Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl.metadata (5.2 kB)
+        #8 4.534 Collecting numpy<=1.24.3,>=1.22 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.565   Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.6 kB)
+        #8 4.589 Collecting opt-einsum>=2.3.2 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.620   Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
+        #8 4.647 Collecting packaging (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.677   Downloading packaging-26.0-py3-none-any.whl.metadata (3.3 kB)
+        #8 4.811 Collecting protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<5.0.0dev,>=3.20.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.840   Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl.metadata (541 bytes)
+        #8 4.843 Requirement already satisfied: setuptools in /usr/local/lib/python3.8/site-packages (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (57.5.0)
+        #8 4.863 Collecting six>=1.12.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.892   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+        #8 4.917 Collecting termcolor>=1.1.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.949   Downloading termcolor-2.4.0-py3-none-any.whl.metadata (6.1 kB)
+        #8 4.979 Collecting typing-extensions<4.6.0,>=3.6.6 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.010   Downloading typing_extensions-4.5.0-py3-none-any.whl.metadata (8.5 kB)
+        #8 5.112 Collecting wrapt>=1.11.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.141   Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (9.0 kB)
+        #8 5.735 Collecting grpcio<2.0,>=1.24.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.765   Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl.metadata (3.9 kB)
+        #8 5.794 Collecting tensorboard<2.14,>=2.13 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.825   Downloading tensorboard-2.13.0-py3-none-any.whl.metadata (1.8 kB)
+        #8 5.848 Collecting tensorflow-estimator<2.14,>=2.13.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.877   Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl.metadata (1.3 kB)
+        #8 5.906 Collecting keras<2.14,>=2.13.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.936   Downloading keras-2.13.1-py3-none-any.whl.metadata (2.4 kB)
+        #8 5.975 Collecting tensorflow-io-gcs-filesystem>=0.23.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.007   Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (14 kB)
+        #8 6.013 Requirement already satisfied: wheel<1.0,>=0.23.0 in /usr/local/lib/python3.8/site-packages (from astunparse>=1.6.0->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (0.44.0)
+        #8 6.072 Collecting google-auth<3,>=1.6.3 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.102   Downloading google_auth-2.48.0-py3-none-any.whl.metadata (6.2 kB)
+        #8 6.134 Collecting google-auth-oauthlib<1.1,>=0.5 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.164   Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl.metadata (2.7 kB)
+        #8 6.192 Collecting markdown>=2.6.8 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.223   Downloading Markdown-3.7-py3-none-any.whl.metadata (7.0 kB)
+        #8 6.291 Collecting requests<3,>=2.21.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.320   Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+        #8 6.345 Collecting tensorboard-data-server<0.8.0,>=0.7.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.375   Downloading tensorboard_data_server-0.7.2-py3-none-any.whl.metadata (1.1 kB)
+        #8 6.414 Collecting werkzeug>=1.0.1 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.458   Downloading werkzeug-3.0.6-py3-none-any.whl.metadata (3.7 kB)
+        #8 6.513 Collecting pyasn1-modules>=0.2.1 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.544   Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+        #8 6.672 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.704   Downloading cryptography-46.0.5-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 6.730 Collecting rsa<5,>=3.1.4 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.761   Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+        #8 6.794 Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.824   Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+        #8 6.865 Collecting importlib-metadata>=4.4 (from markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.896   Downloading importlib_metadata-8.5.0-py3-none-any.whl.metadata (4.8 kB)
+        #8 6.974 Collecting charset_normalizer<4,>=2 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.008   Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (37 kB)
+        #8 7.035 Collecting idna<4,>=2.5 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.067   Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+        #8 7.102 Collecting urllib3<3,>=1.21.1 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.133   Downloading urllib3-2.2.3-py3-none-any.whl.metadata (6.5 kB)
+        #8 7.166 Collecting certifi>=2017.4.17 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.195   Downloading certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+        #8 7.252 Collecting MarkupSafe>=2.1.1 (from werkzeug>=1.0.1->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.281   Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.0 kB)
+        #8 7.382 Collecting cffi>=1.14 (from cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.412   Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (1.5 kB)
+        #8 7.419 INFO: pip is looking at multiple versions of cryptography to determine which version is compatible with other requirements. This could take a while.
+        #8 7.419 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.449   Downloading cryptography-46.0.4-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.490   Downloading cryptography-46.0.3-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.528   Downloading cryptography-46.0.2-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.568   Downloading cryptography-46.0.1-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.608   Downloading cryptography-46.0.0-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.649   Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.686 Collecting zipp>=3.20 (from importlib-metadata>=4.4->markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.717   Downloading zipp-3.20.2-py3-none-any.whl.metadata (3.7 kB)
+        #8 7.764 Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.796   Downloading pyasn1-0.6.2-py3-none-any.whl.metadata (8.4 kB)
+        #8 7.831 Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.862   Downloading oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+        #8 7.903 Collecting pycparser (from cffi>=1.14->cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.934   Downloading pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+        #8 7.975 Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (2.0 kB)
+        #8 8.010 Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (248.7 MB)
+        #8 80.17    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 248.7/248.7 MB 2.2 MB/s eta 0:00:00
+        #8 80.22 Downloading absl_py-2.3.1-py3-none-any.whl (135 kB)
+        #8 80.31 Downloading astunparse-1.6.3-py2.py3-none-any.whl (12 kB)
+        #8 80.35 Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+        #8 80.40 Downloading gast-0.4.0-py3-none-any.whl (9.8 kB)
+        #8 80.44 Downloading google_pasta-0.2.0-py3-none-any.whl (57 kB)
+        #8 80.49 Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl (5.7 MB)
+        #8 82.62    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.7/5.7 MB 2.7 MB/s eta 0:00:00
+        #8 82.65 Downloading keras-2.13.1-py3-none-any.whl (1.7 MB)
+        #8 83.23    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 3.0 MB/s eta 0:00:00
+        #8 83.27 Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl (23.8 MB)
+        #8 89.75    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.8/23.8 MB 3.7 MB/s eta 0:00:00
+        #8 89.79 Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (14.0 MB)
+        #8 92.81    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.0/14.0 MB 4.6 MB/s eta 0:00:00
+        #8 92.84 Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
+        #8 92.90 Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl (294 kB)
+        #8 93.02 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+        #8 93.06 Downloading tensorboard-2.13.0-py3-none-any.whl (5.6 MB)
+        #8 94.89    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.6/5.6 MB 3.1 MB/s eta 0:00:00
+        #8 94.92 Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl (440 kB)
+        #8 95.09 Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (3.0 MB)
+        #8 96.21    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 2.7 MB/s eta 0:00:00
+        #8 96.24 Downloading termcolor-2.4.0-py3-none-any.whl (7.7 kB)
+        #8 96.28 Downloading typing_extensions-4.5.0-py3-none-any.whl (27 kB)
+        #8 96.32 Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (120 kB)
+        #8 96.40 Downloading packaging-26.0-py3-none-any.whl (74 kB)
+        #8 96.46 Downloading google_auth-2.48.0-py3-none-any.whl (236 kB)
+        #8 96.57 Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl (18 kB)
+        #8 96.61 Downloading Markdown-3.7-py3-none-any.whl (106 kB)
+        #8 96.69 Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+        #8 96.74 Downloading tensorboard_data_server-0.7.2-py3-none-any.whl (2.4 kB)
+        #8 96.77 Downloading werkzeug-3.0.6-py3-none-any.whl (227 kB)
+        #8 96.88 Downloading certifi-2026.2.25-py3-none-any.whl (153 kB)
+        #8 96.96 Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (143 kB)
+        #8 97.04 Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl (4.2 MB)
+        #8 98.38    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.2/4.2 MB 3.2 MB/s eta 0:00:00
+        #8 98.41 Downloading idna-3.11-py3-none-any.whl (71 kB)
+        #8 98.46 Downloading importlib_metadata-8.5.0-py3-none-any.whl (26 kB)
+        #8 98.50 Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (26 kB)
+        #8 98.54 Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+        #8 98.63 Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+        #8 98.67 Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+        #8 98.71 Downloading urllib3-2.2.3-py3-none-any.whl (126 kB)
+        #8 98.78 Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (448 kB)
+        #8 98.95 Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
+        #8 99.03 Downloading pyasn1-0.6.2-py3-none-any.whl (83 kB)
+        #8 99.08 Downloading zipp-3.20.2-py3-none-any.whl (9.2 kB)
+        #8 99.12 Downloading pycparser-2.23-py3-none-any.whl (118 kB)
+        #8 99.60 Building wheels for collected packages: h5py
+        #8 99.60   Building wheel for h5py (pyproject.toml): started
+        #8 99.99   Building wheel for h5py (pyproject.toml): finished with status 'error'
+        #8 100.00   error: subprocess-exited-with-error
+        #8 100.00   
+        #8 100.00   × Building wheel for h5py (pyproject.toml) did not run successfully.
+        #8 100.00   │ exit code: 1
+        #8 100.00   ╰─> [73 lines of output]
+        #8 100.00       running bdist_wheel
+        #8 100.00       running build
+        #8 100.00       running build_py
+        #8 100.00       creating build/lib.linux-aarch64-cpython-38/h5py
+        #8 100.00       copying h5py/version.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 100.00       copying h5py/h5py_warnings.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 100.00       copying h5py/ipy_completer.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 100.00       copying h5py/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 100.00       creating build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/vds.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/selections2.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/compat.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/filters.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/group.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/selections.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/base.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/dims.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       copying h5py/_hl/files.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 100.00       creating build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_slicing.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_h5.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_h5pl.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/common.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_dims_dimensionproxy.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_big_endian_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_group.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_dtype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_h5t.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_h5p.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/conftest.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_h5d_direct_chunk.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_h5o.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_attrs_data.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_file_alignment.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_h5z.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_dataset_getitem.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_dimension_scales.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_file_image.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_completions.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_base.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_errors.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_h5f.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_ros3.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_dataset_swmr.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_file2.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_filters.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_objects.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_selections.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       copying h5py/tests/test_attribute_create.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 100.00       creating build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 100.00       copying h5py/tests/data_files/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 100.00       creating build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 100.00       copying h5py/tests/test_vds/test_virtual_source.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 100.00       copying h5py/tests/test_vds/test_highlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 100.00       copying h5py/tests/test_vds/test_lowlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 100.00       copying h5py/tests/test_vds/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 100.00       copying h5py/tests/data_files/vlen_string_s390x.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 100.00       copying h5py/tests/data_files/vlen_string_dset_utc.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 100.00       copying h5py/tests/data_files/vlen_string_dset.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 100.00       running build_ext
+        #8 100.00       Loading library to get build settings and version: libhdf5.so
+        #8 100.00       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        #8 100.00       Library dirs checked: []
+        #8 100.00       error: libhdf5.so: cannot open shared object file: No such file or directory
+        #8 100.00       [end of output]
+        #8 100.00   
+        #8 100.00   note: This error originates from a subprocess, and is likely not a problem with pip.
+        #8 100.00   ERROR: Failed building wheel for h5py
+        #8 100.00 Failed to build h5py
+        #8 100.0 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        #8 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        ------
+         > [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]:
+        100.00       Loading library to get build settings and version: libhdf5.so
+        100.00       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        100.00       Library dirs checked: []
+        100.00       error: libhdf5.so: cannot open shared object file: No such file or directory
+        100.00       [end of output]
+        100.00   
+        100.00   note: This error originates from a subprocess, and is likely not a problem with pip.
+        100.00   ERROR: Failed building wheel for h5py
+        100.00 Failed to build h5py
+        100.0 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+           8 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","input_data==latest"]
+           9 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","image==1.5.31"]
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/y1a0r4uy6ez9ta76woyxc9s1a
+  iteration_3:
+    - python_module: {'tensorflow': '2.13.1', 'input_data': 'latest', 'image': '1.5.31', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 770B done
+        #1 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 DONE 0.3s
+        #3 [internal] load .dockerignore
+        #3 transferring context: 2B done
+        #3 DONE 0.0s
+        #4 [internal] load build context
+        #4 transferring context: 32B done
+        #4 DONE 0.0s
+        #5 [1/8] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #5 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c 0.0s done
+        #5 DONE 0.0s
+        #6 [2/8] WORKDIR /app
+        #6 CACHED
+        #7 [3/8] RUN ["pip","install","--upgrade","pip"]
+        #7 CACHED
+        #8 [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+        #8 0.509 Collecting tensorflow==2.13.1
+        #8 0.629   Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (2.6 kB)
+        #8 0.654 Collecting tensorflow-cpu-aws==2.13.1 (from tensorflow==2.13.1)
+        #8 0.685   Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.2 kB)
+        #8 0.713 Collecting absl-py>=1.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.743   Downloading absl_py-2.3.1-py3-none-any.whl.metadata (3.3 kB)
+        #8 0.767 Collecting astunparse>=1.6.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.797   Downloading astunparse-1.6.3-py2.py3-none-any.whl.metadata (4.4 kB)
+        #8 0.823 Collecting flatbuffers>=23.1.21 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.852   Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+        #8 0.877 Collecting gast<=0.4.0,>=0.2.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.907   Downloading gast-0.4.0-py3-none-any.whl.metadata (1.1 kB)
+        #8 0.930 Collecting google-pasta>=0.1.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.960   Downloading google_pasta-0.2.0-py3-none-any.whl.metadata (814 bytes)
+        #8 0.995 Collecting h5py>=2.9.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 1.025   Downloading h5py-3.11.0.tar.gz (406 kB)
+        #8 1.215   Installing build dependencies: started
+        #8 4.652   Installing build dependencies: finished with status 'done'
+        #8 4.653   Getting requirements to build wheel: started
+        #8 4.809   Getting requirements to build wheel: finished with status 'done'
+        #8 4.810   Preparing metadata (pyproject.toml): started
+        #8 4.942   Preparing metadata (pyproject.toml): finished with status 'done'
+        #8 4.973 Collecting libclang>=13.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.004   Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl.metadata (5.2 kB)
+        #8 5.118 Collecting numpy<=1.24.3,>=1.22 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.151   Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.6 kB)
+        #8 5.179 Collecting opt-einsum>=2.3.2 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.209   Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
+        #8 5.236 Collecting packaging (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.270   Downloading packaging-26.0-py3-none-any.whl.metadata (3.3 kB)
+        #8 5.431 Collecting protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<5.0.0dev,>=3.20.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.461   Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl.metadata (541 bytes)
+        #8 5.464 Requirement already satisfied: setuptools in /usr/local/lib/python3.8/site-packages (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (57.5.0)
+        #8 5.484 Collecting six>=1.12.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.514   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+        #8 5.541 Collecting termcolor>=1.1.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.574   Downloading termcolor-2.4.0-py3-none-any.whl.metadata (6.1 kB)
+        #8 5.602 Collecting typing-extensions<4.6.0,>=3.6.6 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.632   Downloading typing_extensions-4.5.0-py3-none-any.whl.metadata (8.5 kB)
+        #8 5.825 Collecting wrapt>=1.11.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.857   Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (9.0 kB)
+        #8 6.148 Collecting grpcio<2.0,>=1.24.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.184   Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl.metadata (3.9 kB)
+        #8 6.218 Collecting tensorboard<2.14,>=2.13 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.247   Downloading tensorboard-2.13.0-py3-none-any.whl.metadata (1.8 kB)
+        #8 6.276 Collecting tensorflow-estimator<2.14,>=2.13.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.306   Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl.metadata (1.3 kB)
+        #8 6.334 Collecting keras<2.14,>=2.13.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.363   Downloading keras-2.13.1-py3-none-any.whl.metadata (2.4 kB)
+        #8 6.395 Collecting tensorflow-io-gcs-filesystem>=0.23.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.426   Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (14 kB)
+        #8 6.430 Requirement already satisfied: wheel<1.0,>=0.23.0 in /usr/local/lib/python3.8/site-packages (from astunparse>=1.6.0->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (0.44.0)
+        #8 6.487 Collecting google-auth<3,>=1.6.3 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.518   Downloading google_auth-2.48.0-py3-none-any.whl.metadata (6.2 kB)
+        #8 6.546 Collecting google-auth-oauthlib<1.1,>=0.5 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.576   Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl.metadata (2.7 kB)
+        #8 6.604 Collecting markdown>=2.6.8 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.637   Downloading Markdown-3.7-py3-none-any.whl.metadata (7.0 kB)
+        #8 6.717 Collecting requests<3,>=2.21.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.749   Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+        #8 6.777 Collecting tensorboard-data-server<0.8.0,>=0.7.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.809   Downloading tensorboard_data_server-0.7.2-py3-none-any.whl.metadata (1.1 kB)
+        #8 6.847 Collecting werkzeug>=1.0.1 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.876   Downloading werkzeug-3.0.6-py3-none-any.whl.metadata (3.7 kB)
+        #8 6.918 Collecting pyasn1-modules>=0.2.1 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.948   Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+        #8 7.089 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.125   Downloading cryptography-46.0.5-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.157 Collecting rsa<5,>=3.1.4 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.187   Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+        #8 7.233 Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.268   Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+        #8 7.305 Collecting importlib-metadata>=4.4 (from markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.337   Downloading importlib_metadata-8.5.0-py3-none-any.whl.metadata (4.8 kB)
+        #8 7.404 Collecting charset_normalizer<4,>=2 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.436   Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (37 kB)
+        #8 7.468 Collecting idna<4,>=2.5 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.503   Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+        #8 7.542 Collecting urllib3<3,>=1.21.1 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.572   Downloading urllib3-2.2.3-py3-none-any.whl.metadata (6.5 kB)
+        #8 7.605 Collecting certifi>=2017.4.17 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.636   Downloading certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+        #8 7.688 Collecting MarkupSafe>=2.1.1 (from werkzeug>=1.0.1->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.719   Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.0 kB)
+        #8 7.816 Collecting cffi>=1.14 (from cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.846   Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (1.5 kB)
+        #8 7.857 INFO: pip is looking at multiple versions of cryptography to determine which version is compatible with other requirements. This could take a while.
+        #8 7.857 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.889   Downloading cryptography-46.0.4-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.927   Downloading cryptography-46.0.3-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.965   Downloading cryptography-46.0.2-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 8.005   Downloading cryptography-46.0.1-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 8.046   Downloading cryptography-46.0.0-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 8.092   Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 8.127 Collecting zipp>=3.20 (from importlib-metadata>=4.4->markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.160   Downloading zipp-3.20.2-py3-none-any.whl.metadata (3.7 kB)
+        #8 8.198 Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.228   Downloading pyasn1-0.6.2-py3-none-any.whl.metadata (8.4 kB)
+        #8 8.258 Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.293   Downloading oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+        #8 8.334 Collecting pycparser (from cffi>=1.14->cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.365   Downloading pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+        #8 8.409 Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (2.0 kB)
+        #8 8.444 Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (248.7 MB)
+        #8 75.37    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 248.7/248.7 MB 3.2 MB/s eta 0:00:00
+        #8 75.42 Downloading absl_py-2.3.1-py3-none-any.whl (135 kB)
+        #8 75.49 Downloading astunparse-1.6.3-py2.py3-none-any.whl (12 kB)
+        #8 75.52 Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+        #8 75.55 Downloading gast-0.4.0-py3-none-any.whl (9.8 kB)
+        #8 75.59 Downloading google_pasta-0.2.0-py3-none-any.whl (57 kB)
+        #8 75.63 Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl (5.7 MB)
+        #8 77.00    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.7/5.7 MB 4.2 MB/s eta 0:00:00
+        #8 77.03 Downloading keras-2.13.1-py3-none-any.whl (1.7 MB)
+        #8 77.41    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 4.5 MB/s eta 0:00:00
+        #8 77.44 Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl (23.8 MB)
+        #8 83.22    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.8/23.8 MB 4.1 MB/s eta 0:00:00
+        #8 83.25 Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (14.0 MB)
+        #8 87.93    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.0/14.0 MB 3.0 MB/s eta 0:00:00
+        #8 87.96 Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
+        #8 88.02 Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl (294 kB)
+        #8 88.15 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+        #8 88.18 Downloading tensorboard-2.13.0-py3-none-any.whl (5.6 MB)
+        #8 89.71    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.6/5.6 MB 3.7 MB/s eta 0:00:00
+        #8 89.75 Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl (440 kB)
+        #8 89.88 Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (3.0 MB)
+        #8 90.60    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 4.2 MB/s eta 0:00:00
+        #8 90.63 Downloading termcolor-2.4.0-py3-none-any.whl (7.7 kB)
+        #8 90.67 Downloading typing_extensions-4.5.0-py3-none-any.whl (27 kB)
+        #8 90.71 Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (120 kB)
+        #8 90.78 Downloading packaging-26.0-py3-none-any.whl (74 kB)
+        #8 90.82 Downloading google_auth-2.48.0-py3-none-any.whl (236 kB)
+        #8 90.93 Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl (18 kB)
+        #8 90.97 Downloading Markdown-3.7-py3-none-any.whl (106 kB)
+        #8 91.03 Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+        #8 91.08 Downloading tensorboard_data_server-0.7.2-py3-none-any.whl (2.4 kB)
+        #8 91.12 Downloading werkzeug-3.0.6-py3-none-any.whl (227 kB)
+        #8 91.22 Downloading certifi-2026.2.25-py3-none-any.whl (153 kB)
+        #8 91.29 Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (143 kB)
+        #8 91.37 Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl (4.2 MB)
+        #8 92.62    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.2/4.2 MB 3.3 MB/s eta 0:00:00
+        #8 92.65 Downloading idna-3.11-py3-none-any.whl (71 kB)
+        #8 92.70 Downloading importlib_metadata-8.5.0-py3-none-any.whl (26 kB)
+        #8 92.74 Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (26 kB)
+        #8 92.78 Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+        #8 92.86 Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+        #8 92.90 Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+        #8 92.93 Downloading urllib3-2.2.3-py3-none-any.whl (126 kB)
+        #8 93.00 Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (448 kB)
+        #8 93.15 Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
+        #8 93.22 Downloading pyasn1-0.6.2-py3-none-any.whl (83 kB)
+        #8 93.28 Downloading zipp-3.20.2-py3-none-any.whl (9.2 kB)
+        #8 93.32 Downloading pycparser-2.23-py3-none-any.whl (118 kB)
+        #8 93.82 Building wheels for collected packages: h5py
+        #8 93.83   Building wheel for h5py (pyproject.toml): started
+        #8 94.23   Building wheel for h5py (pyproject.toml): finished with status 'error'
+        #8 94.24   error: subprocess-exited-with-error
+        #8 94.24   
+        #8 94.24   × Building wheel for h5py (pyproject.toml) did not run successfully.
+        #8 94.24   │ exit code: 1
+        #8 94.24   ╰─> [73 lines of output]
+        #8 94.24       running bdist_wheel
+        #8 94.24       running build
+        #8 94.24       running build_py
+        #8 94.24       creating build/lib.linux-aarch64-cpython-38/h5py
+        #8 94.24       copying h5py/version.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 94.24       copying h5py/h5py_warnings.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 94.24       copying h5py/ipy_completer.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 94.24       copying h5py/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 94.24       creating build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/vds.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/selections2.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/compat.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/filters.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/group.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/selections.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/base.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/dims.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       copying h5py/_hl/files.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 94.24       creating build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_slicing.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_h5.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_h5pl.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/common.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_dims_dimensionproxy.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_big_endian_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_group.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_dtype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_h5t.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_h5p.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/conftest.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_h5d_direct_chunk.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_h5o.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_attrs_data.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_file_alignment.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_h5z.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_dataset_getitem.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_dimension_scales.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_file_image.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_completions.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_base.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_errors.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_h5f.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_ros3.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_dataset_swmr.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_file2.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_filters.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_objects.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_selections.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       copying h5py/tests/test_attribute_create.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 94.24       creating build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 94.24       copying h5py/tests/data_files/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 94.24       creating build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 94.24       copying h5py/tests/test_vds/test_virtual_source.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 94.24       copying h5py/tests/test_vds/test_highlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 94.24       copying h5py/tests/test_vds/test_lowlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 94.24       copying h5py/tests/test_vds/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 94.24       copying h5py/tests/data_files/vlen_string_s390x.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 94.24       copying h5py/tests/data_files/vlen_string_dset_utc.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 94.24       copying h5py/tests/data_files/vlen_string_dset.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 94.24       running build_ext
+        #8 94.24       Loading library to get build settings and version: libhdf5.so
+        #8 94.24       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        #8 94.24       Library dirs checked: []
+        #8 94.24       error: libhdf5.so: cannot open shared object file: No such file or directory
+        #8 94.24       [end of output]
+        #8 94.24   
+        #8 94.24   note: This error originates from a subprocess, and is likely not a problem with pip.
+        #8 94.24   ERROR: Failed building wheel for h5py
+        #8 94.24 Failed to build h5py
+        #8 94.24 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        #8 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        ------
+         > [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]:
+        94.24       Loading library to get build settings and version: libhdf5.so
+        94.24       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        94.24       Library dirs checked: []
+        94.24       error: libhdf5.so: cannot open shared object file: No such file or directory
+        94.24       [end of output]
+        94.24   
+        94.24   note: This error originates from a subprocess, and is likely not a problem with pip.
+        94.24   ERROR: Failed building wheel for h5py
+        94.24 Failed to build h5py
+        94.24 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+           8 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","input_data==latest"]
+           9 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","image==1.5.31"]
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/k7o305wzwhaipqz2ubzf0s5mj
+  iteration_4:
+    - python_module: {'tensorflow': '2.13.1', 'input_data': 'latest', 'image': '1.5.31', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 770B done
+        #1 DONE 0.0s
+        #2 [auth] library/python:pull token for registry-1.docker.io
+        #2 DONE 0.0s
+        #3 [internal] load metadata for docker.io/library/python:3.8
+        #3 DONE 0.9s
+        #4 [internal] load .dockerignore
+        #4 transferring context: 2B done
+        #4 DONE 0.0s
+        #5 [internal] load build context
+        #5 transferring context: 32B done
+        #5 DONE 0.0s
+        #6 [1/8] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #6 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c 0.0s done
+        #6 DONE 0.0s
+        #7 [2/8] WORKDIR /app
+        #7 CACHED
+        #8 [3/8] RUN ["pip","install","--upgrade","pip"]
+        #8 CACHED
+        #9 [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+        #9 0.680 Collecting tensorflow==2.13.1
+        #9 0.814   Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (2.6 kB)
+        #9 0.844 Collecting tensorflow-cpu-aws==2.13.1 (from tensorflow==2.13.1)
+        #9 0.875   Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.2 kB)
+        #9 0.909 Collecting absl-py>=1.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 0.941   Downloading absl_py-2.3.1-py3-none-any.whl.metadata (3.3 kB)
+        #9 0.965 Collecting astunparse>=1.6.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 0.994   Downloading astunparse-1.6.3-py2.py3-none-any.whl.metadata (4.4 kB)
+        #9 1.024 Collecting flatbuffers>=23.1.21 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 1.053   Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+        #9 1.079 Collecting gast<=0.4.0,>=0.2.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 1.123   Downloading gast-0.4.0-py3-none-any.whl.metadata (1.1 kB)
+        #9 1.147 Collecting google-pasta>=0.1.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 1.175   Downloading google_pasta-0.2.0-py3-none-any.whl.metadata (814 bytes)
+        #9 1.214 Collecting h5py>=2.9.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 1.244   Downloading h5py-3.11.0.tar.gz (406 kB)
+        #9 1.421   Installing build dependencies: started
+        #9 4.464   Installing build dependencies: finished with status 'done'
+        #9 4.466   Getting requirements to build wheel: started
+        #9 4.626   Getting requirements to build wheel: finished with status 'done'
+        #9 4.629   Preparing metadata (pyproject.toml): started
+        #9 4.758   Preparing metadata (pyproject.toml): finished with status 'done'
+        #9 4.789 Collecting libclang>=13.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 4.820   Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl.metadata (5.2 kB)
+        #9 4.925 Collecting numpy<=1.24.3,>=1.22 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 4.956   Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.6 kB)
+        #9 4.979 Collecting opt-einsum>=2.3.2 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.010   Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
+        #9 5.037 Collecting packaging (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.067   Downloading packaging-26.0-py3-none-any.whl.metadata (3.3 kB)
+        #9 5.234 Collecting protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<5.0.0dev,>=3.20.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.263   Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl.metadata (541 bytes)
+        #9 5.267 Requirement already satisfied: setuptools in /usr/local/lib/python3.8/site-packages (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (57.5.0)
+        #9 5.289 Collecting six>=1.12.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.318   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+        #9 5.343 Collecting termcolor>=1.1.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.373   Downloading termcolor-2.4.0-py3-none-any.whl.metadata (6.1 kB)
+        #9 5.406 Collecting typing-extensions<4.6.0,>=3.6.6 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.439   Downloading typing_extensions-4.5.0-py3-none-any.whl.metadata (8.5 kB)
+        #9 5.535 Collecting wrapt>=1.11.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.566   Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (9.0 kB)
+        #9 5.852 Collecting grpcio<2.0,>=1.24.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.884   Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl.metadata (3.9 kB)
+        #9 5.913 Collecting tensorboard<2.14,>=2.13 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.942   Downloading tensorboard-2.13.0-py3-none-any.whl.metadata (1.8 kB)
+        #9 5.968 Collecting tensorflow-estimator<2.14,>=2.13.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 5.997   Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl.metadata (1.3 kB)
+        #9 6.026 Collecting keras<2.14,>=2.13.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.056   Downloading keras-2.13.1-py3-none-any.whl.metadata (2.4 kB)
+        #9 6.090 Collecting tensorflow-io-gcs-filesystem>=0.23.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.122   Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (14 kB)
+        #9 6.127 Requirement already satisfied: wheel<1.0,>=0.23.0 in /usr/local/lib/python3.8/site-packages (from astunparse>=1.6.0->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (0.44.0)
+        #9 6.198 Collecting google-auth<3,>=1.6.3 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.228   Downloading google_auth-2.48.0-py3-none-any.whl.metadata (6.2 kB)
+        #9 6.258 Collecting google-auth-oauthlib<1.1,>=0.5 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.290   Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl.metadata (2.7 kB)
+        #9 6.319 Collecting markdown>=2.6.8 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.349   Downloading Markdown-3.7-py3-none-any.whl.metadata (7.0 kB)
+        #9 6.421 Collecting requests<3,>=2.21.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.452   Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+        #9 6.479 Collecting tensorboard-data-server<0.8.0,>=0.7.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.510   Downloading tensorboard_data_server-0.7.2-py3-none-any.whl.metadata (1.1 kB)
+        #9 6.541 Collecting werkzeug>=1.0.1 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.571   Downloading werkzeug-3.0.6-py3-none-any.whl.metadata (3.7 kB)
+        #9 6.609 Collecting pyasn1-modules>=0.2.1 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.639   Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+        #9 6.767 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.797   Downloading cryptography-46.0.5-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #9 6.827 Collecting rsa<5,>=3.1.4 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.856   Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+        #9 6.895 Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.925   Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+        #9 6.962 Collecting importlib-metadata>=4.4 (from markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 6.993   Downloading importlib_metadata-8.5.0-py3-none-any.whl.metadata (4.8 kB)
+        #9 7.060 Collecting charset_normalizer<4,>=2 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.091   Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (37 kB)
+        #9 7.119 Collecting idna<4,>=2.5 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.149   Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+        #9 7.182 Collecting urllib3<3,>=1.21.1 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.214   Downloading urllib3-2.2.3-py3-none-any.whl.metadata (6.5 kB)
+        #9 7.244 Collecting certifi>=2017.4.17 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.273   Downloading certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+        #9 7.323 Collecting MarkupSafe>=2.1.1 (from werkzeug>=1.0.1->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.353   Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.0 kB)
+        #9 7.444 Collecting cffi>=1.14 (from cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.477   Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (1.5 kB)
+        #9 7.482 INFO: pip is looking at multiple versions of cryptography to determine which version is compatible with other requirements. This could take a while.
+        #9 7.483 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.514   Downloading cryptography-46.0.4-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #9 7.552   Downloading cryptography-46.0.3-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #9 7.598   Downloading cryptography-46.0.2-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #9 7.639   Downloading cryptography-46.0.1-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #9 7.679   Downloading cryptography-46.0.0-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #9 7.719   Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #9 7.760 Collecting zipp>=3.20 (from importlib-metadata>=4.4->markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.792   Downloading zipp-3.20.2-py3-none-any.whl.metadata (3.7 kB)
+        #9 7.835 Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.865   Downloading pyasn1-0.6.2-py3-none-any.whl.metadata (8.4 kB)
+        #9 7.892 Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.922   Downloading oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+        #9 7.959 Collecting pycparser (from cffi>=1.14->cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #9 7.988   Downloading pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+        #9 8.025 Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (2.0 kB)
+        #9 8.058 Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (248.7 MB)
+        #9 60.94    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 248.7/248.7 MB 3.8 MB/s eta 0:00:00
+        #9 60.98 Downloading absl_py-2.3.1-py3-none-any.whl (135 kB)
+        #9 61.04 Downloading astunparse-1.6.3-py2.py3-none-any.whl (12 kB)
+        #9 61.08 Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+        #9 61.11 Downloading gast-0.4.0-py3-none-any.whl (9.8 kB)
+        #9 61.15 Downloading google_pasta-0.2.0-py3-none-any.whl (57 kB)
+        #9 61.19 Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl (5.7 MB)
+        #9 62.32    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.7/5.7 MB 5.1 MB/s eta 0:00:00
+        #9 62.35 Downloading keras-2.13.1-py3-none-any.whl (1.7 MB)
+        #9 62.73    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 4.5 MB/s eta 0:00:00
+        #9 62.77 Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl (23.8 MB)
+        #9 69.21    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.8/23.8 MB 3.7 MB/s eta 0:00:00
+        #9 69.24 Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (14.0 MB)
+        #9 72.36    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.0/14.0 MB 4.5 MB/s eta 0:00:00
+        #9 72.39 Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
+        #9 72.43 Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl (294 kB)
+        #9 72.54 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+        #9 72.57 Downloading tensorboard-2.13.0-py3-none-any.whl (5.6 MB)
+        #9 73.74    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.6/5.6 MB 4.8 MB/s eta 0:00:00
+        #9 73.77 Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl (440 kB)
+        #9 73.89 Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (3.0 MB)
+        #9 74.43    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 5.5 MB/s eta 0:00:00
+        #9 74.46 Downloading termcolor-2.4.0-py3-none-any.whl (7.7 kB)
+        #9 74.50 Downloading typing_extensions-4.5.0-py3-none-any.whl (27 kB)
+        #9 74.54 Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (120 kB)
+        #9 74.59 Downloading packaging-26.0-py3-none-any.whl (74 kB)
+        #9 74.63 Downloading google_auth-2.48.0-py3-none-any.whl (236 kB)
+        #9 74.70 Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl (18 kB)
+        #9 74.73 Downloading Markdown-3.7-py3-none-any.whl (106 kB)
+        #9 74.78 Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+        #9 74.82 Downloading tensorboard_data_server-0.7.2-py3-none-any.whl (2.4 kB)
+        #9 74.85 Downloading werkzeug-3.0.6-py3-none-any.whl (227 kB)
+        #9 74.93 Downloading certifi-2026.2.25-py3-none-any.whl (153 kB)
+        #9 74.98 Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (143 kB)
+        #9 75.04 Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl (4.2 MB)
+        #9 75.96    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.2/4.2 MB 4.5 MB/s eta 0:00:00
+        #9 75.99 Downloading idna-3.11-py3-none-any.whl (71 kB)
+        #9 76.05 Downloading importlib_metadata-8.5.0-py3-none-any.whl (26 kB)
+        #9 76.09 Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (26 kB)
+        #9 76.13 Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+        #9 76.24 Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+        #9 76.28 Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+        #9 76.32 Downloading urllib3-2.2.3-py3-none-any.whl (126 kB)
+        #9 76.41 Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (448 kB)
+        #9 76.65 Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
+        #9 76.76 Downloading pyasn1-0.6.2-py3-none-any.whl (83 kB)
+        #9 76.84 Downloading zipp-3.20.2-py3-none-any.whl (9.2 kB)
+        #9 76.88 Downloading pycparser-2.23-py3-none-any.whl (118 kB)
+        #9 77.20 Building wheels for collected packages: h5py
+        #9 77.20   Building wheel for h5py (pyproject.toml): started
+        #9 77.51   Building wheel for h5py (pyproject.toml): finished with status 'error'
+        #9 77.51   error: subprocess-exited-with-error
+        #9 77.51   
+        #9 77.51   × Building wheel for h5py (pyproject.toml) did not run successfully.
+        #9 77.51   │ exit code: 1
+        #9 77.51   ╰─> [73 lines of output]
+        #9 77.51       running bdist_wheel
+        #9 77.51       running build
+        #9 77.51       running build_py
+        #9 77.51       creating build/lib.linux-aarch64-cpython-38/h5py
+        #9 77.51       copying h5py/version.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #9 77.51       copying h5py/h5py_warnings.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #9 77.51       copying h5py/ipy_completer.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #9 77.51       copying h5py/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #9 77.51       creating build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/vds.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/selections2.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/compat.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/filters.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/group.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/selections.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/base.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/dims.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       copying h5py/_hl/files.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #9 77.51       creating build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_slicing.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_h5.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_h5pl.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/common.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_dims_dimensionproxy.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_big_endian_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_group.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_dtype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_h5t.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_h5p.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/conftest.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_h5d_direct_chunk.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_h5o.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_attrs_data.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_file_alignment.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_h5z.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_dataset_getitem.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_dimension_scales.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_file_image.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_completions.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_base.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_errors.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_h5f.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_ros3.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_dataset_swmr.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_file2.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_filters.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_objects.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_selections.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       copying h5py/tests/test_attribute_create.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #9 77.51       creating build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #9 77.51       copying h5py/tests/data_files/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #9 77.51       creating build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #9 77.51       copying h5py/tests/test_vds/test_virtual_source.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #9 77.51       copying h5py/tests/test_vds/test_highlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #9 77.51       copying h5py/tests/test_vds/test_lowlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #9 77.51       copying h5py/tests/test_vds/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #9 77.51       copying h5py/tests/data_files/vlen_string_s390x.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #9 77.51       copying h5py/tests/data_files/vlen_string_dset_utc.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #9 77.51       copying h5py/tests/data_files/vlen_string_dset.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #9 77.51       running build_ext
+        #9 77.51       Loading library to get build settings and version: libhdf5.so
+        #9 77.51       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        #9 77.51       Library dirs checked: []
+        #9 77.51       error: libhdf5.so: cannot open shared object file: No such file or directory
+        #9 77.51       [end of output]
+        #9 77.51   
+        #9 77.51   note: This error originates from a subprocess, and is likely not a problem with pip.
+        #9 77.51   ERROR: Failed building wheel for h5py
+        #9 77.51 Failed to build h5py
+        #9 77.52 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        #9 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        ------
+         > [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]:
+        77.51       Loading library to get build settings and version: libhdf5.so
+        77.51       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        77.51       Library dirs checked: []
+        77.51       error: libhdf5.so: cannot open shared object file: No such file or directory
+        77.51       [end of output]
+        77.51   
+        77.51   note: This error originates from a subprocess, and is likely not a problem with pip.
+        77.51   ERROR: Failed building wheel for h5py
+        77.51 Failed to build h5py
+        77.52 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+           8 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","input_data==latest"]
+           9 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","image==1.5.31"]
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/f4oh0sy0mg5s177bwsirs5xgv
+  iteration_5:
+    - python_module: {'tensorflow': '2.13.1', 'input_data': 'latest', 'image': '1.5.31', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 770B done
+        #1 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 DONE 0.3s
+        #3 [internal] load .dockerignore
+        #3 transferring context: 2B done
+        #3 DONE 0.0s
+        #4 [internal] load build context
+        #4 transferring context: 32B done
+        #4 DONE 0.0s
+        #5 [1/8] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #5 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c 0.0s done
+        #5 DONE 0.0s
+        #6 [2/8] WORKDIR /app
+        #6 CACHED
+        #7 [3/8] RUN ["pip","install","--upgrade","pip"]
+        #7 CACHED
+        #8 [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+        #8 0.491 Collecting tensorflow==2.13.1
+        #8 0.611   Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (2.6 kB)
+        #8 0.640 Collecting tensorflow-cpu-aws==2.13.1 (from tensorflow==2.13.1)
+        #8 0.673   Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.2 kB)
+        #8 0.698 Collecting absl-py>=1.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.729   Downloading absl_py-2.3.1-py3-none-any.whl.metadata (3.3 kB)
+        #8 0.752 Collecting astunparse>=1.6.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.783   Downloading astunparse-1.6.3-py2.py3-none-any.whl.metadata (4.4 kB)
+        #8 0.807 Collecting flatbuffers>=23.1.21 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.839   Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+        #8 0.870 Collecting gast<=0.4.0,>=0.2.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.903   Downloading gast-0.4.0-py3-none-any.whl.metadata (1.1 kB)
+        #8 0.927 Collecting google-pasta>=0.1.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.960   Downloading google_pasta-0.2.0-py3-none-any.whl.metadata (814 bytes)
+        #8 1.006 Collecting h5py>=2.9.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 1.038   Downloading h5py-3.11.0.tar.gz (406 kB)
+        #8 1.234   Installing build dependencies: started
+        #8 4.248   Installing build dependencies: finished with status 'done'
+        #8 4.249   Getting requirements to build wheel: started
+        #8 4.399   Getting requirements to build wheel: finished with status 'done'
+        #8 4.400   Preparing metadata (pyproject.toml): started
+        #8 4.530   Preparing metadata (pyproject.toml): finished with status 'done'
+        #8 4.555 Collecting libclang>=13.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.589   Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl.metadata (5.2 kB)
+        #8 4.695 Collecting numpy<=1.24.3,>=1.22 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.727   Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.6 kB)
+        #8 4.751 Collecting opt-einsum>=2.3.2 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.782   Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
+        #8 4.809 Collecting packaging (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.840   Downloading packaging-26.0-py3-none-any.whl.metadata (3.3 kB)
+        #8 4.978 Collecting protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<5.0.0dev,>=3.20.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.009   Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl.metadata (541 bytes)
+        #8 5.012 Requirement already satisfied: setuptools in /usr/local/lib/python3.8/site-packages (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (57.5.0)
+        #8 5.032 Collecting six>=1.12.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.064   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+        #8 5.089 Collecting termcolor>=1.1.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.122   Downloading termcolor-2.4.0-py3-none-any.whl.metadata (6.1 kB)
+        #8 5.150 Collecting typing-extensions<4.6.0,>=3.6.6 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.187   Downloading typing_extensions-4.5.0-py3-none-any.whl.metadata (8.5 kB)
+        #8 5.296 Collecting wrapt>=1.11.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.331   Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (9.0 kB)
+        #8 5.625 Collecting grpcio<2.0,>=1.24.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.660   Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl.metadata (3.9 kB)
+        #8 5.686 Collecting tensorboard<2.14,>=2.13 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.720   Downloading tensorboard-2.13.0-py3-none-any.whl.metadata (1.8 kB)
+        #8 5.746 Collecting tensorflow-estimator<2.14,>=2.13.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.777   Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl.metadata (1.3 kB)
+        #8 5.812 Collecting keras<2.14,>=2.13.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.847   Downloading keras-2.13.1-py3-none-any.whl.metadata (2.4 kB)
+        #8 5.881 Collecting tensorflow-io-gcs-filesystem>=0.23.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.915   Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (14 kB)
+        #8 5.923 Requirement already satisfied: wheel<1.0,>=0.23.0 in /usr/local/lib/python3.8/site-packages (from astunparse>=1.6.0->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (0.44.0)
+        #8 5.986 Collecting google-auth<3,>=1.6.3 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.018   Downloading google_auth-2.48.0-py3-none-any.whl.metadata (6.2 kB)
+        #8 6.046 Collecting google-auth-oauthlib<1.1,>=0.5 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.078   Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl.metadata (2.7 kB)
+        #8 6.107 Collecting markdown>=2.6.8 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.142   Downloading Markdown-3.7-py3-none-any.whl.metadata (7.0 kB)
+        #8 6.212 Collecting requests<3,>=2.21.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.246   Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+        #8 6.270 Collecting tensorboard-data-server<0.8.0,>=0.7.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.301   Downloading tensorboard_data_server-0.7.2-py3-none-any.whl.metadata (1.1 kB)
+        #8 6.331 Collecting werkzeug>=1.0.1 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.364   Downloading werkzeug-3.0.6-py3-none-any.whl.metadata (3.7 kB)
+        #8 6.402 Collecting pyasn1-modules>=0.2.1 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.434   Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+        #8 6.564 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.596   Downloading cryptography-46.0.5-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 6.627 Collecting rsa<5,>=3.1.4 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.658   Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+        #8 6.694 Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.726   Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+        #8 6.763 Collecting importlib-metadata>=4.4 (from markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.795   Downloading importlib_metadata-8.5.0-py3-none-any.whl.metadata (4.8 kB)
+        #8 6.865 Collecting charset_normalizer<4,>=2 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.897   Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (37 kB)
+        #8 6.930 Collecting idna<4,>=2.5 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.962   Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+        #8 6.996 Collecting urllib3<3,>=1.21.1 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.029   Downloading urllib3-2.2.3-py3-none-any.whl.metadata (6.5 kB)
+        #8 7.059 Collecting certifi>=2017.4.17 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.092   Downloading certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+        #8 7.144 Collecting MarkupSafe>=2.1.1 (from werkzeug>=1.0.1->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.177   Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.0 kB)
+        #8 7.277 Collecting cffi>=1.14 (from cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.310   Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (1.5 kB)
+        #8 7.314 INFO: pip is looking at multiple versions of cryptography to determine which version is compatible with other requirements. This could take a while.
+        #8 7.314 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.347   Downloading cryptography-46.0.4-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.388   Downloading cryptography-46.0.3-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.431   Downloading cryptography-46.0.2-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.472   Downloading cryptography-46.0.1-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.513   Downloading cryptography-46.0.0-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.556   Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.592 Collecting zipp>=3.20 (from importlib-metadata>=4.4->markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.623   Downloading zipp-3.20.2-py3-none-any.whl.metadata (3.7 kB)
+        #8 7.660 Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.696   Downloading pyasn1-0.6.2-py3-none-any.whl.metadata (8.4 kB)
+        #8 7.724 Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.756   Downloading oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+        #8 7.793 Collecting pycparser (from cffi>=1.14->cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.826   Downloading pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+        #8 7.866 Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (2.0 kB)
+        #8 7.902 Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (248.7 MB)
+        #8 73.84    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 248.7/248.7 MB 4.2 MB/s eta 0:00:00
+        #8 73.88 Downloading absl_py-2.3.1-py3-none-any.whl (135 kB)
+        #8 73.97 Downloading astunparse-1.6.3-py2.py3-none-any.whl (12 kB)
+        #8 74.01 Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+        #8 74.06 Downloading gast-0.4.0-py3-none-any.whl (9.8 kB)
+        #8 74.10 Downloading google_pasta-0.2.0-py3-none-any.whl (57 kB)
+        #8 74.14 Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl (5.7 MB)
+        #8 75.40    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.7/5.7 MB 4.6 MB/s eta 0:00:00
+        #8 75.43 Downloading keras-2.13.1-py3-none-any.whl (1.7 MB)
+        #8 75.77    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 5.0 MB/s eta 0:00:00
+        #8 75.80 Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl (23.8 MB)
+        #8 79.84    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.8/23.8 MB 5.9 MB/s eta 0:00:00
+        #8 79.87 Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (14.0 MB)
+        #8 82.97    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.0/14.0 MB 4.5 MB/s eta 0:00:00
+        #8 83.00 Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
+        #8 83.05 Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl (294 kB)
+        #8 83.14 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+        #8 83.18 Downloading tensorboard-2.13.0-py3-none-any.whl (5.6 MB)
+        #8 84.33    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.6/5.6 MB 4.8 MB/s eta 0:00:00
+        #8 84.36 Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl (440 kB)
+        #8 84.50 Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (3.0 MB)
+        #8 85.12    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 4.8 MB/s eta 0:00:00
+        #8 85.16 Downloading termcolor-2.4.0-py3-none-any.whl (7.7 kB)
+        #8 85.21 Downloading typing_extensions-4.5.0-py3-none-any.whl (27 kB)
+        #8 85.24 Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (120 kB)
+        #8 85.30 Downloading packaging-26.0-py3-none-any.whl (74 kB)
+        #8 85.35 Downloading google_auth-2.48.0-py3-none-any.whl (236 kB)
+        #8 85.44 Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl (18 kB)
+        #8 85.48 Downloading Markdown-3.7-py3-none-any.whl (106 kB)
+        #8 85.54 Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+        #8 85.58 Downloading tensorboard_data_server-0.7.2-py3-none-any.whl (2.4 kB)
+        #8 85.62 Downloading werkzeug-3.0.6-py3-none-any.whl (227 kB)
+        #8 85.71 Downloading certifi-2026.2.25-py3-none-any.whl (153 kB)
+        #8 85.77 Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (143 kB)
+        #8 85.83 Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl (4.2 MB)
+        #8 86.63    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.2/4.2 MB 5.2 MB/s eta 0:00:00
+        #8 86.66 Downloading idna-3.11-py3-none-any.whl (71 kB)
+        #8 86.71 Downloading importlib_metadata-8.5.0-py3-none-any.whl (26 kB)
+        #8 86.75 Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (26 kB)
+        #8 86.79 Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+        #8 86.87 Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+        #8 86.91 Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+        #8 86.95 Downloading urllib3-2.2.3-py3-none-any.whl (126 kB)
+        #8 87.01 Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (448 kB)
+        #8 87.13 Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
+        #8 87.19 Downloading pyasn1-0.6.2-py3-none-any.whl (83 kB)
+        #8 87.24 Downloading zipp-3.20.2-py3-none-any.whl (9.2 kB)
+        #8 87.29 Downloading pycparser-2.23-py3-none-any.whl (118 kB)
+        #8 87.53 Building wheels for collected packages: h5py
+        #8 87.53   Building wheel for h5py (pyproject.toml): started
+        #8 87.74   Building wheel for h5py (pyproject.toml): finished with status 'error'
+        #8 87.74   error: subprocess-exited-with-error
+        #8 87.74   
+        #8 87.74   × Building wheel for h5py (pyproject.toml) did not run successfully.
+        #8 87.74   │ exit code: 1
+        #8 87.74   ╰─> [73 lines of output]
+        #8 87.74       running bdist_wheel
+        #8 87.74       running build
+        #8 87.74       running build_py
+        #8 87.74       creating build/lib.linux-aarch64-cpython-38/h5py
+        #8 87.74       copying h5py/version.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 87.74       copying h5py/h5py_warnings.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 87.74       copying h5py/ipy_completer.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 87.74       copying h5py/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 87.74       creating build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/vds.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/selections2.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/compat.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/filters.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/group.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/selections.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/base.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/dims.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       copying h5py/_hl/files.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 87.74       creating build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_slicing.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_h5.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_h5pl.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/common.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_dims_dimensionproxy.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_big_endian_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_group.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_dtype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_h5t.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_h5p.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/conftest.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_h5d_direct_chunk.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_h5o.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_attrs_data.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_file_alignment.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_h5z.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_dataset_getitem.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_dimension_scales.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_file_image.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_completions.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_base.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_errors.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_h5f.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_ros3.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_dataset_swmr.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_file2.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_filters.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_objects.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_selections.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       copying h5py/tests/test_attribute_create.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 87.74       creating build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 87.74       copying h5py/tests/data_files/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 87.74       creating build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 87.74       copying h5py/tests/test_vds/test_virtual_source.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 87.74       copying h5py/tests/test_vds/test_highlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 87.74       copying h5py/tests/test_vds/test_lowlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 87.74       copying h5py/tests/test_vds/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 87.74       copying h5py/tests/data_files/vlen_string_s390x.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 87.74       copying h5py/tests/data_files/vlen_string_dset_utc.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 87.74       copying h5py/tests/data_files/vlen_string_dset.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 87.74       running build_ext
+        #8 87.74       Loading library to get build settings and version: libhdf5.so
+        #8 87.74       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        #8 87.74       Library dirs checked: []
+        #8 87.74       error: libhdf5.so: cannot open shared object file: No such file or directory
+        #8 87.74       [end of output]
+        #8 87.74   
+        #8 87.74   note: This error originates from a subprocess, and is likely not a problem with pip.
+        #8 87.74   ERROR: Failed building wheel for h5py
+        #8 87.74 Failed to build h5py
+        #8 87.74 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        #8 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        ------
+         > [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]:
+        87.74       Loading library to get build settings and version: libhdf5.so
+        87.74       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        87.74       Library dirs checked: []
+        87.74       error: libhdf5.so: cannot open shared object file: No such file or directory
+        87.74       [end of output]
+        87.74   
+        87.74   note: This error originates from a subprocess, and is likely not a problem with pip.
+        87.74   ERROR: Failed building wheel for h5py
+        87.74 Failed to build h5py
+        87.74 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+           8 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","input_data==latest"]
+           9 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","image==1.5.31"]
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mz845uhh1al1ynuxvx3yo21yw
+  iteration_6:
+    - python_module: {'tensorflow': '2.13.1', 'input_data': 'latest', 'image': '1.5.31', 'util': '0.0.1'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 770B done
+        #1 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 DONE 0.3s
+        #3 [internal] load .dockerignore
+        #3 transferring context: 2B done
+        #3 DONE 0.0s
+        #4 [internal] load build context
+        #4 transferring context: 32B done
+        #4 DONE 0.0s
+        #5 [1/8] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #5 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c done
+        #5 DONE 0.0s
+        #6 [2/8] WORKDIR /app
+        #6 CACHED
+        #7 [3/8] RUN ["pip","install","--upgrade","pip"]
+        #7 CACHED
+        #8 [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+        #8 0.433 Collecting tensorflow==2.13.1
+        #8 0.557   Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (2.6 kB)
+        #8 0.585 Collecting tensorflow-cpu-aws==2.13.1 (from tensorflow==2.13.1)
+        #8 0.621   Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.2 kB)
+        #8 0.655 Collecting absl-py>=1.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.702   Downloading absl_py-2.3.1-py3-none-any.whl.metadata (3.3 kB)
+        #8 0.736 Collecting astunparse>=1.6.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.769   Downloading astunparse-1.6.3-py2.py3-none-any.whl.metadata (4.4 kB)
+        #8 0.793 Collecting flatbuffers>=23.1.21 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.826   Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+        #8 0.849 Collecting gast<=0.4.0,>=0.2.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.884   Downloading gast-0.4.0-py3-none-any.whl.metadata (1.1 kB)
+        #8 0.905 Collecting google-pasta>=0.1.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 0.939   Downloading google_pasta-0.2.0-py3-none-any.whl.metadata (814 bytes)
+        #8 0.987 Collecting h5py>=2.9.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 1.021   Downloading h5py-3.11.0.tar.gz (406 kB)
+        #8 1.178   Installing build dependencies: started
+        #8 4.538   Installing build dependencies: finished with status 'done'
+        #8 4.540   Getting requirements to build wheel: started
+        #8 4.676   Getting requirements to build wheel: finished with status 'done'
+        #8 4.678   Preparing metadata (pyproject.toml): started
+        #8 4.793   Preparing metadata (pyproject.toml): finished with status 'done'
+        #8 4.820 Collecting libclang>=13.0.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.856   Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl.metadata (5.2 kB)
+        #8 4.954 Collecting numpy<=1.24.3,>=1.22 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 4.992   Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.6 kB)
+        #8 5.014 Collecting opt-einsum>=2.3.2 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.049   Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
+        #8 5.076 Collecting packaging (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.110   Downloading packaging-26.0-py3-none-any.whl.metadata (3.3 kB)
+        #8 5.240 Collecting protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<5.0.0dev,>=3.20.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.273   Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl.metadata (541 bytes)
+        #8 5.277 Requirement already satisfied: setuptools in /usr/local/lib/python3.8/site-packages (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (57.5.0)
+        #8 5.297 Collecting six>=1.12.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.330   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+        #8 5.351 Collecting termcolor>=1.1.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.387   Downloading termcolor-2.4.0-py3-none-any.whl.metadata (6.1 kB)
+        #8 5.414 Collecting typing-extensions<4.6.0,>=3.6.6 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.450   Downloading typing_extensions-4.5.0-py3-none-any.whl.metadata (8.5 kB)
+        #8 5.564 Collecting wrapt>=1.11.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.601   Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (9.0 kB)
+        #8 5.947 Collecting grpcio<2.0,>=1.24.3 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 5.985   Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl.metadata (3.9 kB)
+        #8 6.009 Collecting tensorboard<2.14,>=2.13 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.043   Downloading tensorboard-2.13.0-py3-none-any.whl.metadata (1.8 kB)
+        #8 6.067 Collecting tensorflow-estimator<2.14,>=2.13.0 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.101   Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl.metadata (1.3 kB)
+        #8 6.130 Collecting keras<2.14,>=2.13.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.165   Downloading keras-2.13.1-py3-none-any.whl.metadata (2.4 kB)
+        #8 6.201 Collecting tensorflow-io-gcs-filesystem>=0.23.1 (from tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.237   Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (14 kB)
+        #8 6.242 Requirement already satisfied: wheel<1.0,>=0.23.0 in /usr/local/lib/python3.8/site-packages (from astunparse>=1.6.0->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1) (0.44.0)
+        #8 6.301 Collecting google-auth<3,>=1.6.3 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.336   Downloading google_auth-2.48.0-py3-none-any.whl.metadata (6.2 kB)
+        #8 6.365 Collecting google-auth-oauthlib<1.1,>=0.5 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.399   Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl.metadata (2.7 kB)
+        #8 6.426 Collecting markdown>=2.6.8 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.462   Downloading Markdown-3.7-py3-none-any.whl.metadata (7.0 kB)
+        #8 6.523 Collecting requests<3,>=2.21.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.560   Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+        #8 6.584 Collecting tensorboard-data-server<0.8.0,>=0.7.0 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.617   Downloading tensorboard_data_server-0.7.2-py3-none-any.whl.metadata (1.1 kB)
+        #8 6.649 Collecting werkzeug>=1.0.1 (from tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.684   Downloading werkzeug-3.0.6-py3-none-any.whl.metadata (3.7 kB)
+        #8 6.722 Collecting pyasn1-modules>=0.2.1 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.757   Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+        #8 6.907 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 6.942   Downloading cryptography-46.0.5-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 6.969 Collecting rsa<5,>=3.1.4 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.004   Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+        #8 7.036 Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.071   Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+        #8 7.107 Collecting importlib-metadata>=4.4 (from markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.142   Downloading importlib_metadata-8.5.0-py3-none-any.whl.metadata (4.8 kB)
+        #8 7.215 Collecting charset_normalizer<4,>=2 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.254   Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (37 kB)
+        #8 7.277 Collecting idna<4,>=2.5 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.312   Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+        #8 7.344 Collecting urllib3<3,>=1.21.1 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.379   Downloading urllib3-2.2.3-py3-none-any.whl.metadata (6.5 kB)
+        #8 7.409 Collecting certifi>=2017.4.17 (from requests<3,>=2.21.0->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.443   Downloading certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+        #8 7.494 Collecting MarkupSafe>=2.1.1 (from werkzeug>=1.0.1->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.528   Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (3.0 kB)
+        #8 7.694 Collecting cffi>=1.14 (from cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.728   Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (1.5 kB)
+        #8 7.734 INFO: pip is looking at multiple versions of cryptography to determine which version is compatible with other requirements. This could take a while.
+        #8 7.734 Collecting cryptography>=38.0.3 (from google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 7.772   Downloading cryptography-46.0.4-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.818   Downloading cryptography-46.0.3-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.867   Downloading cryptography-46.0.2-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.910   Downloading cryptography-46.0.1-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 7.968   Downloading cryptography-46.0.0-cp38-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 8.019   Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+        #8 8.056 Collecting zipp>=3.20 (from importlib-metadata>=4.4->markdown>=2.6.8->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.091   Downloading zipp-3.20.2-py3-none-any.whl.metadata (3.7 kB)
+        #8 8.127 Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.161   Downloading pyasn1-0.6.2-py3-none-any.whl.metadata (8.4 kB)
+        #8 8.204 Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib<1.1,>=0.5->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.239   Downloading oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+        #8 8.276 Collecting pycparser (from cffi>=1.14->cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.14,>=2.13->tensorflow-cpu-aws==2.13.1->tensorflow==2.13.1)
+        #8 8.309   Downloading pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+        #8 8.352 Downloading tensorflow-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (2.0 kB)
+        #8 8.391 Downloading tensorflow_cpu_aws-2.13.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (248.7 MB)
+        #8 80.99    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 248.7/248.7 MB 3.6 MB/s eta 0:00:00
+        #8 81.04 Downloading absl_py-2.3.1-py3-none-any.whl (135 kB)
+        #8 81.12 Downloading astunparse-1.6.3-py2.py3-none-any.whl (12 kB)
+        #8 81.16 Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+        #8 81.21 Downloading gast-0.4.0-py3-none-any.whl (9.8 kB)
+        #8 81.26 Downloading google_pasta-0.2.0-py3-none-any.whl (57 kB)
+        #8 81.31 Downloading grpcio-1.70.0-cp38-cp38-manylinux_2_17_aarch64.whl (5.7 MB)
+        #8 83.97    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.7/5.7 MB 2.1 MB/s eta 0:00:00
+        #8 84.01 Downloading keras-2.13.1-py3-none-any.whl (1.7 MB)
+        #8 84.70    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 2.5 MB/s eta 0:00:00
+        #8 84.76 Downloading libclang-18.1.1-py2.py3-none-manylinux2014_aarch64.whl (23.8 MB)
+        #8 94.63    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.8/23.8 MB 2.4 MB/s eta 0:00:00
+        #8 94.67 Downloading numpy-1.24.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (14.0 MB)
+        #8 99.41    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.0/14.0 MB 3.0 MB/s eta 0:00:00
+        #8 99.45 Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
+        #8 99.50 Downloading protobuf-4.25.8-cp37-abi3-manylinux2014_aarch64.whl (294 kB)
+        #8 99.62 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+        #8 99.66 Downloading tensorboard-2.13.0-py3-none-any.whl (5.6 MB)
+        #8 101.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.6/5.6 MB 3.7 MB/s eta 0:00:00
+        #8 101.2 Downloading tensorflow_estimator-2.13.0-py2.py3-none-any.whl (440 kB)
+        #8 101.4 Downloading tensorflow_io_gcs_filesystem-0.35.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (3.0 MB)
+        #8 102.4    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 3.0 MB/s eta 0:00:00
+        #8 102.4 Downloading termcolor-2.4.0-py3-none-any.whl (7.7 kB)
+        #8 102.4 Downloading typing_extensions-4.5.0-py3-none-any.whl (27 kB)
+        #8 102.5 Downloading wrapt-2.0.1-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (120 kB)
+        #8 102.6 Downloading packaging-26.0-py3-none-any.whl (74 kB)
+        #8 102.6 Downloading google_auth-2.48.0-py3-none-any.whl (236 kB)
+        #8 102.8 Downloading google_auth_oauthlib-1.0.0-py2.py3-none-any.whl (18 kB)
+        #8 102.8 Downloading Markdown-3.7-py3-none-any.whl (106 kB)
+        #8 102.9 Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+        #8 102.9 Downloading tensorboard_data_server-0.7.2-py3-none-any.whl (2.4 kB)
+        #8 103.0 Downloading werkzeug-3.0.6-py3-none-any.whl (227 kB)
+        #8 103.1 Downloading certifi-2026.2.25-py3-none-any.whl (153 kB)
+        #8 103.1 Downloading charset_normalizer-3.4.4-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (143 kB)
+        #8 103.2 Downloading cryptography-45.0.7-cp37-abi3-manylinux_2_34_aarch64.whl (4.2 MB)
+        #8 104.4    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.2/4.2 MB 3.7 MB/s eta 0:00:00
+        #8 104.4 Downloading idna-3.11-py3-none-any.whl (71 kB)
+        #8 104.5 Downloading importlib_metadata-8.5.0-py3-none-any.whl (26 kB)
+        #8 104.5 Downloading MarkupSafe-2.1.5-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (26 kB)
+        #8 104.5 Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+        #8 104.6 Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+        #8 104.7 Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+        #8 104.7 Downloading urllib3-2.2.3-py3-none-any.whl (126 kB)
+        #8 104.8 Downloading cffi-1.17.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (448 kB)
+        #8 104.9 Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
+        #8 105.0 Downloading pyasn1-0.6.2-py3-none-any.whl (83 kB)
+        #8 105.1 Downloading zipp-3.20.2-py3-none-any.whl (9.2 kB)
+        #8 105.1 Downloading pycparser-2.23-py3-none-any.whl (118 kB)
+        #8 105.4 Building wheels for collected packages: h5py
+        #8 105.4   Building wheel for h5py (pyproject.toml): started
+        #8 105.6   Building wheel for h5py (pyproject.toml): finished with status 'error'
+        #8 105.6   error: subprocess-exited-with-error
+        #8 105.6   
+        #8 105.6   × Building wheel for h5py (pyproject.toml) did not run successfully.
+        #8 105.6   │ exit code: 1
+        #8 105.6   ╰─> [73 lines of output]
+        #8 105.6       running bdist_wheel
+        #8 105.6       running build
+        #8 105.6       running build_py
+        #8 105.6       creating build/lib.linux-aarch64-cpython-38/h5py
+        #8 105.6       copying h5py/version.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 105.6       copying h5py/h5py_warnings.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 105.6       copying h5py/ipy_completer.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 105.6       copying h5py/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py
+        #8 105.6       creating build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/vds.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/selections2.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/compat.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/filters.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/group.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/selections.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/base.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/dims.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       copying h5py/_hl/files.py -> build/lib.linux-aarch64-cpython-38/h5py/_hl
+        #8 105.6       creating build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_slicing.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_h5.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_h5pl.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/common.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_dims_dimensionproxy.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_attrs.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_big_endian_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_group.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_datatype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_dtype.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_h5t.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_h5p.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/conftest.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_h5d_direct_chunk.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_h5o.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_attrs_data.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_dataset.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_file_alignment.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_h5z.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_dataset_getitem.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_dimension_scales.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_file_image.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_completions.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_file.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_base.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_errors.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_h5f.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_ros3.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_dataset_swmr.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_file2.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_filters.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_objects.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_selections.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       copying h5py/tests/test_attribute_create.py -> build/lib.linux-aarch64-cpython-38/h5py/tests
+        #8 105.6       creating build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 105.6       copying h5py/tests/data_files/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 105.6       creating build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 105.6       copying h5py/tests/test_vds/test_virtual_source.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 105.6       copying h5py/tests/test_vds/test_highlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 105.6       copying h5py/tests/test_vds/test_lowlevel_vds.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 105.6       copying h5py/tests/test_vds/__init__.py -> build/lib.linux-aarch64-cpython-38/h5py/tests/test_vds
+        #8 105.6       copying h5py/tests/data_files/vlen_string_s390x.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 105.6       copying h5py/tests/data_files/vlen_string_dset_utc.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 105.6       copying h5py/tests/data_files/vlen_string_dset.h5 -> build/lib.linux-aarch64-cpython-38/h5py/tests/data_files
+        #8 105.6       running build_ext
+        #8 105.6       Loading library to get build settings and version: libhdf5.so
+        #8 105.6       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        #8 105.6       Library dirs checked: []
+        #8 105.6       error: libhdf5.so: cannot open shared object file: No such file or directory
+        #8 105.6       [end of output]
+        #8 105.6   
+        #8 105.6   note: This error originates from a subprocess, and is likely not a problem with pip.
+        #8 105.6   ERROR: Failed building wheel for h5py
+        #8 105.6 Failed to build h5py
+        #8 105.6 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        #8 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        ------
+         > [4/8] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]:
+        105.6       Loading library to get build settings and version: libhdf5.so
+        105.6       error: Unable to load dependency HDF5, make sure HDF5 is installed properly
+        105.6       Library dirs checked: []
+        105.6       error: libhdf5.so: cannot open shared object file: No such file or directory
+        105.6       [end of output]
+        105.6   
+        105.6   note: This error originates from a subprocess, and is likely not a problem with pip.
+        105.6   ERROR: Failed building wheel for h5py
+        105.6 Failed to build h5py
+        105.6 ERROR: Failed to build installable wheels for some pyproject.toml based projects (h5py)
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","tensorflow==2.13.1"]
+           8 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","input_data==latest"]
+           9 |     RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","image==1.5.31"]
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 tensorflow==2.13.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/30gu937d0ytykm2jntzec61tm

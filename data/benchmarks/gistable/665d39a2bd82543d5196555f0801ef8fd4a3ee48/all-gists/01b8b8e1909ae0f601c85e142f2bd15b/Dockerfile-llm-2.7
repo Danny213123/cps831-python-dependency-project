@@ -1,0 +1,15 @@
+# FROM is the found expected Python version
+FROM python:2.7
+# Set the working directory to /app
+WORKDIR /app
+# Add install commands for all of the python modules
+RUN ["pip","install","--upgrade","pip"]
+RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","codecs==3.0.1"]
+RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","pushbullet==9.13.1"]
+RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","weibo==0.2.2"]
+RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","xtls==3.1.0"]
+RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","beautifulsoup==3.2.2"]
+# Copy the specified directory to /app
+COPY snippet.py /app
+# Run the specified python file
+CMD ["python", "/app/snippet.py"]

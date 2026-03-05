@@ -1,0 +1,32 @@
+---
+python_version: 3.8
+start_time: 1772682003.671416
+iterations:
+  iteration_1:
+    - python_module: {}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+  iteration_2:
+    - python_module: {}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+  iteration_3:
+    - python_module: {}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+end_time: 1772682004.266813
+total_time: 0.5953969955444336---
+python_version: 3.8
+start_time: 1772682136.1101172
+iterations:
+  iteration_1:
+    - python_module: {}
+    - error_type: None
+    - error: |
+        /app/snippet.py:16: size=78.1 MiB (+78.1 MiB), count=3 (+3), average=26.0 MiB
+        /app/snippet.py:20: size=343 MiB (+343 MiB), count=9999747 (+9999747), average=36 B
+end_time: 1772682179.233002
+total_time: 43.12288475036621

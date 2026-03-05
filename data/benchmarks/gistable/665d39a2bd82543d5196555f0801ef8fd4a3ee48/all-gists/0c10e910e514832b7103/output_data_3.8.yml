@@ -1,0 +1,106 @@
+---
+python_version: 3.8
+start_time: 1772679173.638726
+iterations:
+  iteration_1:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jyxxh9xpvsy6eiqummrgd26rn
+  iteration_2:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/kkbadps5tazrj9hc3ban0pba3
+  iteration_3:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/h0rl3nvi27tdwir43gdkvcrzb
+  iteration_4:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/fnluwqx57n21wpv4p4r52i4mb
+  iteration_5:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/7rwujtlz1dpvre83r7m5mwb5m
+  iteration_6:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/e1tzgncf6ixkydoeashxzxi3e
+  iteration_7:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yihbf95c2vktxnkfghci33ifr
+  iteration_8:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/bcbl0bbhs3q39xkz1axpezbiv
+  iteration_9:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/tnf7khxit43747e5o59vmk55r
+  iteration_10:
+    - python_module: {'google': '3.0.0', 'httplib': '0.11.0'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-3.8: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sb8jbi55kzbb9btnewso26ekz
+end_time: 1772679177.435922
+total_time: 3.7971959114074707

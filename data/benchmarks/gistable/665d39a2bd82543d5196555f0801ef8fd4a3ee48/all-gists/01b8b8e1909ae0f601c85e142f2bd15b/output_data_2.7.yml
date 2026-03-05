@@ -1,0 +1,841 @@
+---
+python_version: 2.7
+start_time: 1772675100.802502
+iterations:
+  iteration_1:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/m52pnw2fp790l3ukilgrm9ky1
+  iteration_2:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/59wtukr0i84vsi14lkx7ruo9r
+  iteration_3:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/oewk0hmsc02kkt98wrp7d382d
+  iteration_4:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/i5j09ng50zhavdcub2xav3l4d
+  iteration_5:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/i0tlf5656oksv9ynag0swntit
+  iteration_6:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/fv8xibasji8k33k5x8qhr0215
+  iteration_7:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yoprl2ah51mkbsghbi6nral6o
+  iteration_8:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/6pge6i39uuhz4b1o9tdpyqaaj
+  iteration_9:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/33cdfpklhu9hxdy56owzkwy3n
+  iteration_10:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.2', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/v8xj87dswi4v5dotscyeffimj
+end_time: 1772675107.917234
+total_time: 7.114732027053833---
+python_version: 2.7
+start_time: 1772675830.247228
+iterations:
+  iteration_1:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wgkry5kbjrqj7727ony4ga4sj
+  iteration_2:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ozlghwxjvhxal7gglatsme2hi
+  iteration_3:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/tyt8w20t6xslseg7w1omhx0jc
+  iteration_4:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/hd87120kgbrklsqn5a9c92iqm
+  iteration_5:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ja6y5p5mc3kg6vrmuhizlzgx9
+  iteration_6:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ko4c7k8tuv1r3qhun87mzfnko
+  iteration_7:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xjt51klwofoxkxskb89yxes2i
+  iteration_8:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/gchag4kzpwer9wsftl2dy7aok
+  iteration_9:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ohjf1zpv8bshpup6nsmfrnqzu
+  iteration_10:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.13.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/edioujqiwq45xp5gdgh5ey9zl
+end_time: 1772675837.483027
+total_time: 7.235799074172974---
+python_version: 2.7
+start_time: 1772676312.668035
+iterations:
+  iteration_1:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/azkyyc3gvoffpm81pe9vxcqm0
+  iteration_2:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/mew7lfvkn491g94l1joh0a7vr
+  iteration_3:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/kwzc784190ea5oqxet88gogs1
+  iteration_4:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ht0ge79rb3h1rvztpxvy632nx
+  iteration_5:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/pqsl6sx6l2tdqmq21j401tq76
+  iteration_6:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/rx9vm01szh1bqdp8zp5638lp8
+  iteration_7:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xps7on5nw1wfl2hq1xcyisss2
+  iteration_8:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/erz0m6glqdf1lmkouxxqr76hp
+  iteration_9:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/22yk9ahy4cqget6xasgvyza6i
+  iteration_10:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.3', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/s8a385zxq3erwrf40xltk1dnv
+end_time: 1772676319.980528
+total_time: 7.312493085861206---
+python_version: 2.7
+start_time: 1772677040.1320949
+iterations:
+  iteration_1:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/oxt0v0182lfjf6bch4gwi7qel
+  iteration_2:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/9qzn0765hn4z6l7ddct44hyt3
+  iteration_3:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/59jghlkjrc5z9cxgitwbw4nho
+  iteration_4:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lclbd3jfrtr9su01xu6m88rbu
+  iteration_5:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xj7afnjhcc9v3nbsyvwezn4sd
+  iteration_6:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/l9ocglbtjoi2vixhxj540424p
+  iteration_7:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u58et8k7joz6l1i4l0t3r2cb9
+  iteration_8:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/aj53s3sh0sqaexjs4o8jdp2mm
+  iteration_9:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/dy66227xjlct1yqgsrtrzdnxg
+  iteration_10:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '12.1.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/7pkxqm78sgca001ueysg6ga75
+end_time: 1772677048.5553532
+total_time: 8.423258304595947---
+python_version: 2.7
+start_time: 1772677727.6325371
+iterations:
+  iteration_1:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/97drlq74ephtdqfzldw59cy6q
+  iteration_2:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/z4kiefg2ewd92hdconbzv6wcb
+  iteration_3:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uc8z042erqbkx1z2tdqjhkmnv
+  iteration_4:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/q3r1dz4090yg99k6pkvdb4jte
+  iteration_5:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/y30vu88zbsgokyus2wp2dh9qa
+  iteration_6:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/0l6sedlndjh4u5604tjszwkei
+  iteration_7:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lxbid26r1uhsnazhzevkoc019
+  iteration_8:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/83fu9cd0lefk78dsvql8y7lcs
+  iteration_9:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/grin1vggarafqc3zp2zbzgtzj
+  iteration_10:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '4.3.1', 'weibo': '0.2.2', 'xtls': '3.3.2', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vgvdx37sqnqeoc63scmwzom3i
+end_time: 1772677736.01397
+total_time: 8.38143277168274---
+python_version: 2.7
+start_time: 1772678235.179359
+iterations:
+  iteration_1:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/phpkgat2xl2tdjjfpe1a97g8a
+  iteration_2:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/72t8qx385b7anc4zgqz0fciw5
+  iteration_3:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/hcmbzsfh13b7jwllik6fd5zd4
+  iteration_4:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/rg5gedjain0c7v5iji5prujdh
+  iteration_5:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/xh4bl2s7b2tc8y5599vouj6po
+  iteration_6:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/m1idfj9qycqbvg0kza9in1mbs
+  iteration_7:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yx8dd4fpo5w7qbossxf23vl68
+  iteration_8:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yvhp30bqmn4c05srto5irm977
+  iteration_9:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/w6wunp103f936kuxtl7ao6j3j
+  iteration_10:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.5.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/s1vti0psu1tpi85urjcy2giva
+end_time: 1772678242.371027
+total_time: 7.1916680335998535---
+python_version: 2.7
+start_time: 1772678547.868139
+iterations:
+  iteration_1:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/2d371rx8famszspxft51hdf88
+  iteration_2:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/j03geflj9a7oe0q6v2dr3bo2u
+  iteration_3:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/fpsfso1itcaps6f5dktlg1ihb
+  iteration_4:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lwuv7lzkbmwununya3491rdmh
+  iteration_5:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uilneo5u94tqz768907xpdpym
+  iteration_6:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ra6gaa18njycl0yfv8wg48npf
+  iteration_7:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ir1zyqw39w4efhsvgrlfwotgk
+  iteration_8:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qywvs5xkj10k3zzwgn61yfygn
+  iteration_9:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/99wfkw616zlg0krn6qg9f2ek9
+  iteration_10:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '1.15.1', 'weibo': '0.2.2', 'xtls': '1.2.3', 'beautifulsoup': '3.2.2'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/w64qziuysq7ba6mt8se187fxu
+end_time: 1772678556.022974
+total_time: 8.154834985733032---
+python_version: 2.7
+start_time: 1772680200.47013
+iterations:
+  iteration_1:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/1mxn0ow9olh8huard268xrpt7
+  iteration_2:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sr1b3f2m5emn6xrjlcv1pf5ph
+  iteration_3:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/y4y7h7dr0hl4sv9vwjdn1liiv
+  iteration_4:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/t3bgct2cwcm00zcz1n0avkjaw
+  iteration_5:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/lkkmi2mxqifeoykoni3f2zhlu
+  iteration_6:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wod0p8gpewcwopdwptvn2ykt9
+  iteration_7:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/612n2iormvg0irosnwvhx3teq
+  iteration_8:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/iw0szriln213elqqvfb52cw0k
+  iteration_9:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jiwifyi4on6qh97s89rzy6e5b
+  iteration_10:
+    - python_module: {'codecs': '3.0.1', 'pushbullet': '9.13.1', 'weibo': '0.2.2', 'xtls': '3.1.0', 'beautifulsoup': '3.2.2'}
+    - error_type: DockerError
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/fa8c9wonzd0fm1ozp0tn39fr0
+end_time: 1772680207.394621
+total_time: 6.924490928649902

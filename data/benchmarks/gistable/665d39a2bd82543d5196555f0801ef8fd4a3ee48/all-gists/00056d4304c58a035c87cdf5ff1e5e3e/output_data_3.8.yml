@@ -1,0 +1,267 @@
+---
+python_version: 3.8
+start_time: 1772682001.676532
+iterations:
+  iteration_1:
+    - python_module: {'scrapy': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+  iteration_2:
+    - python_module: {'scrapy': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+  iteration_3:
+    - python_module: {'scrapy': None}
+    - error_type: BuildFailure
+    - error: |
+        ERROR: permission denied while trying to connect to the docker API at unix:///Users/dannyguan/.docker/run/docker.sock
+end_time: 1772682002.6015959
+total_time: 0.9250638484954834---
+python_version: 3.8
+start_time: 1772682069.477022
+iterations:
+  iteration_1:
+    - python_module: {'scrapy': '2.14.1'}
+    - error_type: VersionNotFound
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 472B done
+        #1 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 ...
+        #3 [auth] library/python:pull token for registry-1.docker.io
+        #3 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 DONE 1.9s
+        #4 [internal] load .dockerignore
+        #4 transferring context: 2B done
+        #4 DONE 0.0s
+        #5 [internal] load build context
+        #5 transferring context: 922B done
+        #5 DONE 0.0s
+        #6 [1/5] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #6 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c 0.0s done
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 0B / 17.83MB 0.2s
+        #6 sha256:7564b53997996f1a4a69792090b694e9e7d3ea38f8970756b6e8c761c98b8d73 249B / 249B 0.3s done
+        #6 sha256:66d992156d02900e3e9b3a86877cba5b4e759b6c14a78da7bf223a2588bb4474 0B / 6.24MB 0.2s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 0B / 202.65MB 0.2s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 0B / 64.35MB 0.2s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 2.10MB / 17.83MB 0.5s
+        #6 sha256:66d992156d02900e3e9b3a86877cba5b4e759b6c14a78da7bf223a2588bb4474 2.10MB / 6.24MB 0.5s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 3.15MB / 17.83MB 0.6s
+        #6 sha256:66d992156d02900e3e9b3a86877cba5b4e759b6c14a78da7bf223a2588bb4474 6.24MB / 6.24MB 0.6s done
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 4.19MB / 64.35MB 0.5s
+        #6 sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c 0B / 23.59MB 0.2s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 4.19MB / 17.83MB 0.9s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 10.49MB / 64.35MB 0.8s
+        #6 sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c 6.29MB / 23.59MB 0.3s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 5.24MB / 17.83MB 1.1s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 17.83MB / 64.35MB 0.9s
+        #6 sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c 8.39MB / 23.59MB 0.5s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 7.14MB / 17.83MB 1.2s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 29.36MB / 64.35MB 1.1s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 8.39MB / 17.83MB 1.4s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 34.60MB / 64.35MB 1.2s
+        #6 sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c 14.68MB / 23.59MB 0.8s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 10.49MB / 17.83MB 1.5s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 40.89MB / 64.35MB 1.4s
+        #6 sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c 16.78MB / 23.59MB 0.9s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 13.63MB / 17.83MB 1.7s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 10.49MB / 202.65MB 1.7s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 49.28MB / 64.35MB 1.5s
+        #6 sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c 19.92MB / 23.59MB 1.1s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 15.73MB / 17.83MB 1.8s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 59.77MB / 64.35MB 1.7s
+        #6 sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c 23.59MB / 23.59MB 1.2s done
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 17.83MB / 17.83MB 2.0s
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 64.35MB / 64.35MB 1.8s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 0B / 49.58MB 0.2s
+        #6 sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 17.83MB / 17.83MB 2.1s done
+        #6 sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 64.35MB / 64.35MB 1.8s done
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 3.15MB / 49.58MB 0.5s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 23.07MB / 202.65MB 2.7s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 6.29MB / 49.58MB 0.8s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 14.68MB / 49.58MB 0.9s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 18.87MB / 49.58MB 1.1s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 25.17MB / 49.58MB 1.4s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 32.51MB / 49.58MB 1.5s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 33.55MB / 202.65MB 3.6s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 35.65MB / 49.58MB 1.7s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 40.89MB / 49.58MB 1.8s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 46.14MB / 49.58MB 2.0s
+        #6 sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 49.58MB / 49.58MB 2.1s done
+        #6 extracting sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 45.09MB / 202.65MB 4.2s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 56.62MB / 202.65MB 4.8s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 69.21MB / 202.65MB 5.9s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 83.89MB / 202.65MB 6.6s
+        #6 extracting sha256:6d11c181ebb38ef30f2681a42f02030bc6fdcfbe9d5248270ee065eb7302b500 2.7s done
+        #6 extracting sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 95.42MB / 202.65MB 6.9s
+        #6 extracting sha256:2b238499ec52e0d6be479f948c76ba0bc3cc282f612d5a6a4b5ef52ff45f6b2c 0.5s done
+        #6 extracting sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 105.91MB / 202.65MB 7.8s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 117.44MB / 202.65MB 8.9s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 130.02MB / 202.65MB 9.3s
+        #6 extracting sha256:41b754d079e82fafdf15447cfc188868092eaf1cf4a3f96c9d90ab1b7db91230 2.4s done
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 142.61MB / 202.65MB 9.8s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 157.29MB / 202.65MB 10.4s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 174.06MB / 202.65MB 10.7s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 188.74MB / 202.65MB 11.0s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 199.23MB / 202.65MB 11.1s
+        #6 sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 202.65MB / 202.65MB 11.3s done
+        #6 extracting sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729
+        #6 extracting sha256:d71ace0e8bbdcfcf795b836e24a37a6ed0054100e14d6aa6e5a63f7e162ba729 12.9s done
+        #6 DONE 24.3s
+        #6 [1/5] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #6 extracting sha256:66d992156d02900e3e9b3a86877cba5b4e759b6c14a78da7bf223a2588bb4474
+        #6 extracting sha256:66d992156d02900e3e9b3a86877cba5b4e759b6c14a78da7bf223a2588bb4474 0.2s done
+        #6 DONE 24.5s
+        #6 [1/5] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #6 extracting sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71
+        #6 extracting sha256:b5ab5cf667cdf79c78f3d26b9d47ea4f5c6b73ed4095c4a012a3ddc8fc0b2f71 0.5s done
+        #6 DONE 24.9s
+        #6 [1/5] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #6 extracting sha256:7564b53997996f1a4a69792090b694e9e7d3ea38f8970756b6e8c761c98b8d73 0.0s done
+        #6 DONE 25.0s
+        #7 [2/5] WORKDIR /app
+        #7 DONE 0.5s
+        #8 [3/5] RUN ["pip","install","--upgrade","pip"]
+        #8 2.589 Requirement already satisfied: pip in /usr/local/lib/python3.8/site-packages (23.0.1)
+        #8 2.730 Collecting pip
+        #8 2.872   Downloading pip-25.0.1-py3-none-any.whl (1.8 MB)
+        #8 3.400      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 59.0 MB/s eta 0:00:00
+        #8 3.425 Installing collected packages: pip
+        #8 3.425   Attempting uninstall: pip
+        #8 3.426     Found existing installation: pip 23.0.1
+        #8 3.675     Uninstalling pip-23.0.1:
+        #8 4.087       Successfully uninstalled pip-23.0.1
+        #8 4.669 Successfully installed pip-25.0.1
+        #8 4.669 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+        #8 DONE 4.9s
+        #9 [4/5] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]
+        #9 0.701 ERROR: Could not find a version that satisfies the requirement scrapy==2.14.1 (from versions: 0.7, 0.8, 0.9, 0.10.4.2364, 0.12.0.2550, 0.14.1, 0.14.2, 0.14.3, 0.14.4, 0.16.0, 0.16.1, 0.16.2, 0.16.3, 0.16.4, 0.16.5, 0.18.0, 0.18.1, 0.18.2, 0.18.3, 0.18.4, 0.20.0, 0.20.1, 0.20.2, 0.22.0, 0.22.1, 0.22.2, 0.24.0, 0.24.1, 0.24.2, 0.24.3, 0.24.4, 0.24.5, 0.24.6, 1.0.0rc1, 1.0.0rc2, 1.0.0rc3, 1.0.0, 1.0.1, 1.0.2, 1.0.3, 1.0.4, 1.0.5, 1.0.6, 1.0.7, 1.1.0rc1, 1.1.0rc2, 1.1.0rc3, 1.1.0rc4, 1.1.0, 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.3.0, 1.3.1, 1.3.2, 1.3.3, 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.6.0, 1.7.0, 1.7.1, 1.7.2, 1.7.3, 1.7.4, 1.8.0, 1.8.1, 1.8.2, 1.8.3, 1.8.4, 2.0.0, 2.0.1, 2.1.0, 2.2.0, 2.2.1, 2.3.0, 2.4.0, 2.4.1, 2.5.0, 2.5.1, 2.6.0, 2.6.1, 2.6.2, 2.6.3, 2.7.0, 2.7.1, 2.8.0, 2.9.0, 2.10.0, 2.10.1, 2.11.0, 2.11.1, 2.11.2)
+        #9 0.702 ERROR: No matching distribution found for scrapy==2.14.1
+        #9 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 scrapy==2.14.1" did not complete successfully: exit code: 1
+        ------
+         > [4/5] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]:
+        0.701 ERROR: Could not find a version that satisfies the requirement scrapy==2.14.1 (from versions: 0.7, 0.8, 0.9, 0.10.4.2364, 0.12.0.2550, 0.14.1, 0.14.2, 0.14.3, 0.14.4, 0.16.0, 0.16.1, 0.16.2, 0.16.3, 0.16.4, 0.16.5, 0.18.0, 0.18.1, 0.18.2, 0.18.3, 0.18.4, 0.20.0, 0.20.1, 0.20.2, 0.22.0, 0.22.1, 0.22.2, 0.24.0, 0.24.1, 0.24.2, 0.24.3, 0.24.4, 0.24.5, 0.24.6, 1.0.0rc1, 1.0.0rc2, 1.0.0rc3, 1.0.0, 1.0.1, 1.0.2, 1.0.3, 1.0.4, 1.0.5, 1.0.6, 1.0.7, 1.1.0rc1, 1.1.0rc2, 1.1.0rc3, 1.1.0rc4, 1.1.0, 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.3.0, 1.3.1, 1.3.2, 1.3.3, 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.6.0, 1.7.0, 1.7.1, 1.7.2, 1.7.3, 1.7.4, 1.8.0, 1.8.1, 1.8.2, 1.8.3, 1.8.4, 2.0.0, 2.0.1, 2.1.0, 2.2.0, 2.2.1, 2.3.0, 2.4.0, 2.4.1, 2.5.0, 2.5.1, 2.6.0, 2.6.1, 2.6.2, 2.6.3, 2.7.0, 2.7.1, 2.8.0, 2.9.0, 2.10.0, 2.10.1, 2.11.0, 2.11.1, 2.11.2)
+        0.702 ERROR: No matching distribution found for scrapy==2.14.1
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]
+           8 |     # Copy the specified directory to /app
+           9 |     COPY snippet.py /app
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 scrapy==2.14.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/goq9ehl52qcx1t2qa63i2dwv5
+end_time: 1772682133.836273
+total_time: 64.35925102233887---
+python_version: 3.8
+start_time: 1772682305.9020429
+iterations:
+  iteration_1:
+    - python_module: {'scrapy': '2.14.1'}
+    - error_type: VersionNotFound
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 472B done
+        #1 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 DONE 0.3s
+        #3 [internal] load .dockerignore
+        #3 transferring context: 2B done
+        #3 DONE 0.0s
+        #4 [internal] load build context
+        #4 transferring context: 32B done
+        #4 DONE 0.0s
+        #5 [1/5] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #5 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c 0.0s done
+        #5 DONE 0.0s
+        #6 [2/5] WORKDIR /app
+        #6 CACHED
+        #7 [3/5] RUN ["pip","install","--upgrade","pip"]
+        #7 CACHED
+        #8 [4/5] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]
+        #8 0.536 ERROR: Could not find a version that satisfies the requirement scrapy==2.14.1 (from versions: 0.7, 0.8, 0.9, 0.10.4.2364, 0.12.0.2550, 0.14.1, 0.14.2, 0.14.3, 0.14.4, 0.16.0, 0.16.1, 0.16.2, 0.16.3, 0.16.4, 0.16.5, 0.18.0, 0.18.1, 0.18.2, 0.18.3, 0.18.4, 0.20.0, 0.20.1, 0.20.2, 0.22.0, 0.22.1, 0.22.2, 0.24.0, 0.24.1, 0.24.2, 0.24.3, 0.24.4, 0.24.5, 0.24.6, 1.0.0rc1, 1.0.0rc2, 1.0.0rc3, 1.0.0, 1.0.1, 1.0.2, 1.0.3, 1.0.4, 1.0.5, 1.0.6, 1.0.7, 1.1.0rc1, 1.1.0rc2, 1.1.0rc3, 1.1.0rc4, 1.1.0, 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.3.0, 1.3.1, 1.3.2, 1.3.3, 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.6.0, 1.7.0, 1.7.1, 1.7.2, 1.7.3, 1.7.4, 1.8.0, 1.8.1, 1.8.2, 1.8.3, 1.8.4, 2.0.0, 2.0.1, 2.1.0, 2.2.0, 2.2.1, 2.3.0, 2.4.0, 2.4.1, 2.5.0, 2.5.1, 2.6.0, 2.6.1, 2.6.2, 2.6.3, 2.7.0, 2.7.1, 2.8.0, 2.9.0, 2.10.0, 2.10.1, 2.11.0, 2.11.1, 2.11.2)
+        #8 0.537 ERROR: No matching distribution found for scrapy==2.14.1
+        #8 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 scrapy==2.14.1" did not complete successfully: exit code: 1
+        ------
+         > [4/5] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]:
+        0.536 ERROR: Could not find a version that satisfies the requirement scrapy==2.14.1 (from versions: 0.7, 0.8, 0.9, 0.10.4.2364, 0.12.0.2550, 0.14.1, 0.14.2, 0.14.3, 0.14.4, 0.16.0, 0.16.1, 0.16.2, 0.16.3, 0.16.4, 0.16.5, 0.18.0, 0.18.1, 0.18.2, 0.18.3, 0.18.4, 0.20.0, 0.20.1, 0.20.2, 0.22.0, 0.22.1, 0.22.2, 0.24.0, 0.24.1, 0.24.2, 0.24.3, 0.24.4, 0.24.5, 0.24.6, 1.0.0rc1, 1.0.0rc2, 1.0.0rc3, 1.0.0, 1.0.1, 1.0.2, 1.0.3, 1.0.4, 1.0.5, 1.0.6, 1.0.7, 1.1.0rc1, 1.1.0rc2, 1.1.0rc3, 1.1.0rc4, 1.1.0, 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.3.0, 1.3.1, 1.3.2, 1.3.3, 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.6.0, 1.7.0, 1.7.1, 1.7.2, 1.7.3, 1.7.4, 1.8.0, 1.8.1, 1.8.2, 1.8.3, 1.8.4, 2.0.0, 2.0.1, 2.1.0, 2.2.0, 2.2.1, 2.3.0, 2.4.0, 2.4.1, 2.5.0, 2.5.1, 2.6.0, 2.6.1, 2.6.2, 2.6.3, 2.7.0, 2.7.1, 2.8.0, 2.9.0, 2.10.0, 2.10.1, 2.11.0, 2.11.1, 2.11.2)
+        0.537 ERROR: No matching distribution found for scrapy==2.14.1
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]
+           8 |     # Copy the specified directory to /app
+           9 |     COPY snippet.py /app
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 scrapy==2.14.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/pehd8xtad3vrwan00wikhwl0y
+  iteration_2:
+    - python_module: {'scrapy': '2.11.0'}
+    - error_type: None
+    - error: |
+end_time: 1772682410.684117
+total_time: 104.78207421302795---
+python_version: 3.8
+start_time: 1772682669.021896
+iterations:
+  iteration_1:
+    - python_module: {'scrapy': '2.14.1'}
+    - error_type: VersionNotFound
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-3.8
+        #1 transferring dockerfile: 472B done
+        #1 DONE 0.0s
+        #2 [internal] load metadata for docker.io/library/python:3.8
+        #2 DONE 0.3s
+        #3 [internal] load .dockerignore
+        #3 transferring context: 2B done
+        #3 DONE 0.0s
+        #4 [internal] load build context
+        #4 transferring context: 32B done
+        #4 DONE 0.0s
+        #5 [1/5] FROM docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c
+        #5 resolve docker.io/library/python:3.8@sha256:d411270700143fa2683cc8264d9fa5d3279fd3b6afff62ae81ea2f9d070e390c 0.0s done
+        #5 DONE 0.0s
+        #6 [2/5] WORKDIR /app
+        #6 CACHED
+        #7 [3/5] RUN ["pip","install","--upgrade","pip"]
+        #7 CACHED
+        #8 [4/5] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]
+        #8 0.409 ERROR: Could not find a version that satisfies the requirement scrapy==2.14.1 (from versions: 0.7, 0.8, 0.9, 0.10.4.2364, 0.12.0.2550, 0.14.1, 0.14.2, 0.14.3, 0.14.4, 0.16.0, 0.16.1, 0.16.2, 0.16.3, 0.16.4, 0.16.5, 0.18.0, 0.18.1, 0.18.2, 0.18.3, 0.18.4, 0.20.0, 0.20.1, 0.20.2, 0.22.0, 0.22.1, 0.22.2, 0.24.0, 0.24.1, 0.24.2, 0.24.3, 0.24.4, 0.24.5, 0.24.6, 1.0.0rc1, 1.0.0rc2, 1.0.0rc3, 1.0.0, 1.0.1, 1.0.2, 1.0.3, 1.0.4, 1.0.5, 1.0.6, 1.0.7, 1.1.0rc1, 1.1.0rc2, 1.1.0rc3, 1.1.0rc4, 1.1.0, 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.3.0, 1.3.1, 1.3.2, 1.3.3, 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.6.0, 1.7.0, 1.7.1, 1.7.2, 1.7.3, 1.7.4, 1.8.0, 1.8.1, 1.8.2, 1.8.3, 1.8.4, 2.0.0, 2.0.1, 2.1.0, 2.2.0, 2.2.1, 2.3.0, 2.4.0, 2.4.1, 2.5.0, 2.5.1, 2.6.0, 2.6.1, 2.6.2, 2.6.3, 2.7.0, 2.7.1, 2.8.0, 2.9.0, 2.10.0, 2.10.1, 2.11.0, 2.11.1, 2.11.2)
+        #8 0.410 ERROR: No matching distribution found for scrapy==2.14.1
+        #8 ERROR: process "pip install --trusted-host pypi.python.org --default-timeout=100 scrapy==2.14.1" did not complete successfully: exit code: 1
+        ------
+         > [4/5] RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]:
+        0.409 ERROR: Could not find a version that satisfies the requirement scrapy==2.14.1 (from versions: 0.7, 0.8, 0.9, 0.10.4.2364, 0.12.0.2550, 0.14.1, 0.14.2, 0.14.3, 0.14.4, 0.16.0, 0.16.1, 0.16.2, 0.16.3, 0.16.4, 0.16.5, 0.18.0, 0.18.1, 0.18.2, 0.18.3, 0.18.4, 0.20.0, 0.20.1, 0.20.2, 0.22.0, 0.22.1, 0.22.2, 0.24.0, 0.24.1, 0.24.2, 0.24.3, 0.24.4, 0.24.5, 0.24.6, 1.0.0rc1, 1.0.0rc2, 1.0.0rc3, 1.0.0, 1.0.1, 1.0.2, 1.0.3, 1.0.4, 1.0.5, 1.0.6, 1.0.7, 1.1.0rc1, 1.1.0rc2, 1.1.0rc3, 1.1.0rc4, 1.1.0, 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.3.0, 1.3.1, 1.3.2, 1.3.3, 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.6.0, 1.7.0, 1.7.1, 1.7.2, 1.7.3, 1.7.4, 1.8.0, 1.8.1, 1.8.2, 1.8.3, 1.8.4, 2.0.0, 2.0.1, 2.1.0, 2.2.0, 2.2.1, 2.3.0, 2.4.0, 2.4.1, 2.5.0, 2.5.1, 2.6.0, 2.6.1, 2.6.2, 2.6.3, 2.7.0, 2.7.1, 2.8.0, 2.9.0, 2.10.0, 2.10.1, 2.11.0, 2.11.1, 2.11.2)
+        0.410 ERROR: No matching distribution found for scrapy==2.14.1
+        ------
+        Dockerfile-llm-3.8:7
+        --------------------
+           5 |     # Add install commands for all of the python modules
+           6 |     RUN ["pip","install","--upgrade","pip"]
+           7 | >>> RUN ["pip","install","--trusted-host","pypi.python.org","--default-timeout=100","scrapy==2.14.1"]
+           8 |     # Copy the specified directory to /app
+           9 |     COPY snippet.py /app
+        --------------------
+        ERROR: failed to build: failed to solve: process "pip install --trusted-host pypi.python.org --default-timeout=100 scrapy==2.14.1" did not complete successfully: exit code: 1
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/nx2nx2mdafy0av5o3f9gbmo8u
+  iteration_2:
+    - python_module: {'scrapy': '2.11.0'}
+    - error_type: None
+    - error: |
+end_time: 1772682685.0449102
+total_time: 16.023014307022095

@@ -1,0 +1,106 @@
+---
+python_version: 2.7
+start_time: 1772679164.54108
+iterations:
+  iteration_1:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/zu3rceh6z0rs512ru6ewzosn1
+  iteration_2:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sm47kxe4963catb5wwz6ip3pl
+  iteration_3:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/t30369du06ayxtmo42m6uh1sq
+  iteration_4:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/up567vi0jd9wadyjk778nbgjv
+  iteration_5:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/slki1gmxqnel4t6h1th13al35
+  iteration_6:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/eeucb0rbd5gbbma1o46sbaies
+  iteration_7:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/8yzea4x73soo8d8hn7oppnkay
+  iteration_8:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/v1kzcis2lsr101mzvm3lfwazy
+  iteration_9:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u7m83we6uhte7cg5sma91jli5
+  iteration_10:
+    - python_module: {'objc_util': '5.1.0', 'cfurl': '2.1.1', 'nsuserdefaults': 'recent'}
+    - error_type: None
+    - error: |
+        #0 building with "desktop-linux" instance using docker driver
+        #1 [internal] load build definition from Dockerfile-llm-2.7
+        #1 transferring dockerfile: 2B done
+        #1 DONE 0.0s
+        ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile-llm-2.7: no such file or directory
+        View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/h4ozrhtqunwim987itqykmsvq
+end_time: 1772679169.8036091
+total_time: 5.262529134750366

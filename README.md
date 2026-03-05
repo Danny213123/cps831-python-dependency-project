@@ -167,11 +167,13 @@ Run benchmark cases from the competition-filtered source:
 python3 cli/pllm_cli.py benchmark run --source competition-run --limit 100
 ```
 Each benchmark run now writes report artifacts to:
-`artifacts/pllm-benchmark/<run_id>/` with:
+`artifacts/runs/<run_id>/` with live updates during runtime:
 - `summary.json`
 - `results.csv`
 - `results.json`
 - `report.md`
+- `run-state.json`
+- `<case_id>/result.json`
 
 Run benchmark with the active dashboard screen (TTY):
 ```bash

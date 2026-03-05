@@ -123,6 +123,44 @@ The docker compose should bring up the 'pllm-test' docker container. To use the 
 - **-r | --range** - The search range. Defaults to 0 where it only runs against one python version. If 1 is given then the range is 1 either side of the LLMs found version. For example: If the LLM chooses 3.6 and we have a range of 1 then we will have test runs on python [3.5, 3.6, 3.7].
 - **-v | Verbose** logging of information.
 
+### PLLM CLI UI (outside tools/)
+To support additional tool interfaces in the future, the new PLLM command center lives in the top-level `cli/` folder.
+
+Run environment checks:
+```bash
+python3 cli/pllm_cli.py doctor
+```
+
+Launch the interactive command center (prompt-toolkit UI):
+```bash
+python3 cli/pllm_cli.py ui
+```
+
+Run a snippet directly from CLI:
+```bash
+python3 cli/pllm_cli.py run --file /absolute/path/to/snippet.py --model gemma2 --base http://localhost:11434 --loop 10 --range 0
+```
+
+Run a copied Gistable case by case id:
+```bash
+python3 cli/pllm_cli.py run --case-id 00056d4304c58a035c87cdf5ff1e5e3e --benchmark-source all-gists --dashboard
+```
+
+Show benchmark source breakdowns:
+```bash
+python3 cli/pllm_cli.py benchmark breakdown --source all-gists
+```
+
+Rebuild the competition gist-id filter from project CSVs:
+```bash
+python3 cli/pllm_cli.py benchmark rebuild-filter
+```
+
+Run with live dashboard:
+```bash
+python3 cli/pllm_cli.py run --file /absolute/path/to/snippet.py --dashboard
+```
+
 ## Q&A
 Use [GitHub Discussions](https://github.com/checkdgt/fse-aiware-python-dependencies/discussions) for any kind of questions related to the tool competition.
 

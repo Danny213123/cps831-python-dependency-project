@@ -86,6 +86,7 @@ apdr --model-profile gemma-moe-lite smoke --jobs 1
 apdr --model-profile qwen35-9b smoke --jobs 1
 apdr --model-profile qwen35-moe-lite smoke --jobs 1
 apdr --model-profile gpt-oss-20b smoke --jobs 1
+apdr --model-profile mistral-nemo-12b smoke --jobs 1
 ```
 
 Runtime behavior is selectable too:
@@ -126,7 +127,7 @@ apdr benchmark make-subsets
 apdr benchmark save-competition-filter
 apdr benchmark run --subset smoke30
 apdr --benchmark-source competition-run benchmark run --subset smoke30
-apdr --benchmark-source competition-run --competition-csv /abs/path/pyego_results.csv --competition-csv /abs/path/summary-all-runs.csv benchmark run --subset smoke30
+apdr --benchmark-source competition-run --competition-csv /abs/path/hard-gists-l10-r1-10-final.csv benchmark run --subset smoke30
 apdr --preset optimized benchmark run --subset smoke30
 apdr --fresh-run --model-profile gpt-oss-20b benchmark run --subset smoke30
 apdr case run --case-id 000769db6848429c9b3eac30361d9140
@@ -244,8 +245,8 @@ APDR reads CSV IDs from:
 - `--competition-csv` (repeatable)
 - `APDR_COMPETITION_RESULT_CSVS` (comma-separated absolute paths)
 - default detected files:
-  - `~/Downloads/pyego_results.csv`
-  - `~/Downloads/summary-all-runs.csv`
+  - `data/benchmarks/gistable/competition/hard-gists-l10-r1-10-final.csv`
+  - `~/Downloads/hard-gists-l10-r1-10-final.csv`
 
 APDR also supports a repo-tracked fallback filter file for cross-machine reproducibility:
 - default path: `competition/competition-case-ids.txt`

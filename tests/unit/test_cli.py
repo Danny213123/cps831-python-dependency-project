@@ -16,12 +16,16 @@ from agentic_python_dependency.cli import (
     gist_match_row_from_runtime_row,
     load_official_csv_lookup,
     load_run_state,
+    probe_docker_daemon,
     redirect_runtime_warnings,
     resolve_trace_path,
     main,
+    run_benchmark,
     run_case_batch,
 )
 from agentic_python_dependency.config import Settings
+from agentic_python_dependency.router import OllamaInvocationStats
+from agentic_python_dependency.state import BenchmarkCase
 
 
 def test_benchmark_run_parser_accepts_jobs_flag() -> None:
@@ -68,9 +72,11 @@ def test_benchmark_run_parser_accepts_new_moe_model_profiles() -> None:
 
     gemma_args = parser.parse_args(["--model-profile", "gemma-moe-lite", "smoke"])
     qwen_args = parser.parse_args(["--model-profile", "qwen35-moe-lite", "smoke"])
+    mistral_args = parser.parse_args(["--model-profile", "mistral-nemo-12b", "smoke"])
 
     assert gemma_args.model_profile == "gemma-moe-lite"
     assert qwen_args.model_profile == "qwen35-moe-lite"
+    assert mistral_args.model_profile == "mistral-nemo-12b"
 
 
 def test_benchmark_run_parser_accepts_runtime_controls() -> None:
@@ -207,6 +213,27 @@ def test_load_official_csv_lookup_reads_case_rows(tmp_path: Path) -> None:
     assert "official.csv" in row["official_csv_sources"]
 
 
+def test_load_official_csv_lookup_reads_pllm_style_rows(tmp_path: Path) -> None:
+    csv_path = tmp_path / "hard-gists-l10-r1-10-final.csv"
+    csv_path.write_text(
+        "id,name,file,result,python_modules,duration,passed\n"
+        "10,00a4835bf36513ca58a3,output_data_2.7.yml,ImportError,c4d,12.3,False\n",
+        encoding="utf-8",
+    )
+    settings = Settings.from_env(project_root=tmp_path, competition_result_csvs_override=[str(csv_path)])
+
+    lookup = load_official_csv_lookup(settings)
+
+    assert "00a4835bf36513ca58a3" in lookup
+    row = lookup["00a4835bf36513ca58a3"]
+    assert row["official_result"] == "ImportError"
+    assert row["official_duration"] == "12.3"
+    assert row["official_passed"] == "False"
+    assert row["official_python_modules"] == "c4d"
+    assert row["official_file"] == "output_data_2.7.yml"
+    assert "hard-gists-l10-r1-10-final.csv" in row["official_csv_sources"]
+
+
 def test_build_runtime_comparison_row_includes_official_values() -> None:
     official_lookup = {
         "abc123": {
@@ -238,9 +265,58 @@ def test_build_runtime_comparison_row_includes_official_values() -> None:
     assert row["run_wall_clock_seconds"] == 7.5
     assert row["official_in_csv"] is True
     assert row["official_result"] == "ModuleNotFound"
+    assert row["result_matches_csv"] == "PASS"
     assert row["official_passed"] == "False"
     assert row["official_duration"] == "14.48"
     assert row["official_csv_sources"] == "pyego_results.csv"
+
+
+def test_build_runtime_comparison_row_marks_result_mismatches_as_fail() -> None:
+    official_lookup = {
+        "abc123": {
+            "official_result": "OtherPass",
+            "official_passed": "True",
+            "official_duration": "14.48",
+            "official_python_modules": "requests",
+            "official_file": "output.yml",
+            "official_csv_sources": "hard-gists-l10-r1-10-final.csv",
+        }
+    }
+    result = {
+        "case_id": "abc123",
+        "success": False,
+        "final_error_category": "UnknownError",
+        "attempts": 1,
+        "wall_clock_seconds": 7.5,
+    }
+
+    row = build_runtime_comparison_row(result, official_lookup, case_number=3)
+
+    assert row["result_matches_csv"] == "FAIL"
+
+
+def test_build_runtime_comparison_row_treats_any_failure_as_match_when_pllm_failed() -> None:
+    official_lookup = {
+        "abc123": {
+            "official_result": "ImportError",
+            "official_passed": "False",
+            "official_duration": "14.48",
+            "official_python_modules": "requests",
+            "official_file": "output.yml",
+            "official_csv_sources": "hard-gists-l10-r1-10-final.csv",
+        }
+    }
+    result = {
+        "case_id": "abc123",
+        "success": False,
+        "final_error_category": "ModuleNotFoundError",
+        "attempts": 1,
+        "wall_clock_seconds": 7.5,
+    }
+
+    row = build_runtime_comparison_row(result, official_lookup, case_number=3)
+
+    assert row["result_matches_csv"] == "PASS"
 
 
 def test_gist_match_row_from_runtime_row_compares_success_and_official_flag() -> None:
@@ -410,11 +486,8 @@ def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, m
     settings = Settings.from_env(project_root=tmp_path)
 
     monkeypatch.setattr("agentic_python_dependency.cli.shutil.which", lambda _: None)
-
-    def fake_urlopen(*args, **kwargs):
-        raise OSError("offline")
-
-    monkeypatch.setattr("agentic_python_dependency.cli.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("agentic_python_dependency.cli.probe_docker_daemon", lambda _settings: (False, "docker not found on PATH"))
+    monkeypatch.setattr("agentic_python_dependency.cli.urllib.request.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("offline")))
 
     report = collect_doctor_report(settings)
 
@@ -422,8 +495,27 @@ def test_collect_doctor_report_marks_missing_tools_and_dataset(tmp_path: Path, m
     assert report["resolver"] == "apdr"
     names = {check["name"]: check for check in report["checks"]}
     assert names["docker_cli"]["status"] == "missing"
+    assert names["docker_daemon"]["status"] == "missing"
     assert names["ollama_server"]["status"] == "warning"
     assert names["gistable_dataset"]["status"] == "warning"
+
+
+def test_collect_doctor_report_marks_unhealthy_docker_daemon(tmp_path: Path, monkeypatch) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+
+    monkeypatch.setattr("agentic_python_dependency.cli.shutil.which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(
+        "agentic_python_dependency.cli.probe_docker_daemon",
+        lambda _settings: (False, "Error response from daemon: Docker Desktop is unable to start"),
+    )
+    monkeypatch.setattr("agentic_python_dependency.cli.urllib.request.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("offline")))
+
+    report = collect_doctor_report(settings)
+
+    names = {check["name"]: check for check in report["checks"]}
+    assert names["docker_cli"]["status"] == "ok"
+    assert names["docker_daemon"]["status"] == "warning"
+    assert "unable to start" in names["docker_daemon"]["detail"]
 
 
 def test_run_case_batch_fails_when_no_cases_are_selected(tmp_path: Path, monkeypatch) -> None:
@@ -439,6 +531,7 @@ def test_run_case_batch_fails_when_no_cases_are_selected(tmp_path: Path, monkeyp
 
     monkeypatch.setattr("agentic_python_dependency.cli.GistableDataset", DummyDataset)
     monkeypatch.setattr("agentic_python_dependency.cli.load_official_csv_lookup", lambda _settings: {})
+    monkeypatch.setattr("agentic_python_dependency.cli.probe_docker_daemon", lambda _settings: (True, "25.0.0"))
 
     exit_code = run_case_batch(
         settings,
@@ -456,6 +549,405 @@ def test_run_case_batch_fails_when_no_cases_are_selected(tmp_path: Path, monkeyp
     assert summary_payload["preset"] == "research"
     state_payload = load_run_state(run_dir)
     assert state_payload["status"] == "empty"
+
+
+def test_run_case_batch_fails_fast_on_invalid_research_full_runtime(tmp_path: Path, monkeypatch) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.research_bundle = "full"
+    settings.structured_prompting = False
+
+    class DummyDataset:
+        def __init__(self, _settings: Settings):
+            return None
+
+        def fetch(self, _ref: str | None) -> None:
+            return None
+
+    monkeypatch.setattr("agentic_python_dependency.cli.GistableDataset", DummyDataset)
+
+    exit_code = run_case_batch(
+        settings,
+        ref=None,
+        case_ids=["case-a"],
+        run_id="invalid-runtime",
+        jobs=1,
+        notify_paths=False,
+    )
+
+    assert exit_code == 2
+    warnings_text = (settings.artifacts_dir / "invalid-runtime" / "warnings.log").read_text(encoding="utf-8")
+    assert "structured_prompting=true" in warnings_text
+
+
+def test_run_case_batch_fails_fast_when_docker_preflight_fails(tmp_path: Path, monkeypatch) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+
+    class DummyDataset:
+        def __init__(self, _settings: Settings):
+            return None
+
+        def fetch(self, _ref: str | None) -> None:
+            return None
+
+    monkeypatch.setattr("agentic_python_dependency.cli.GistableDataset", DummyDataset)
+    monkeypatch.setattr(
+        "agentic_python_dependency.cli.probe_docker_daemon",
+        lambda _settings: (False, "Error response from daemon: Docker Desktop is unable to start"),
+    )
+
+    exit_code = run_case_batch(
+        settings,
+        ref=None,
+        case_ids=["case-a"],
+        run_id="docker-preflight-failed",
+        jobs=1,
+        notify_paths=False,
+    )
+
+    assert exit_code == 2
+    warnings_text = (settings.artifacts_dir / "docker-preflight-failed" / "warnings.log").read_text(encoding="utf-8")
+    assert "Docker preflight failed" in warnings_text
+    assert "unable to start" in warnings_text
+
+
+def test_run_case_batch_passes_pllm_match_to_observer(tmp_path: Path, monkeypatch) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    case_root = tmp_path / "case-1"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import rx\n", encoding="utf-8")
+    case = BenchmarkCase(case_id="case-1", root_dir=case_root, snippet_path=snippet)
+
+    class DummyDataset:
+        def load_case(self, case_id: str, ref: str | None, case_source: str = "all-gists"):
+            assert case_id == "case-1"
+            assert ref is None
+            assert case_source
+            return case
+
+    class DummyPromptRunner:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+    class FakeWorkflow:
+        def __init__(self, workflow_settings: Settings, prompt_runner=None, activity_callback=None) -> None:
+            self.workflow_settings = workflow_settings
+            self.activity_callback = activity_callback
+
+        def initial_state_for_case(self, benchmark_case: BenchmarkCase, run_id: str | None = None) -> dict[str, object]:
+            return {"case": benchmark_case, "run_id": run_id}
+
+        def run(self, state: dict[str, object]) -> dict[str, object]:
+            benchmark_case = state["case"]
+            assert isinstance(benchmark_case, BenchmarkCase)
+            artifact_dir = self.workflow_settings.artifacts_dir / str(state["run_id"]) / benchmark_case.case_id
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            result = {
+                "case_id": benchmark_case.case_id,
+                "success": False,
+                "final_error_category": "ImportError",
+                "attempts": 1,
+                "wall_clock_seconds": 1.2,
+                "target_python": "2.7.18",
+                "dependencies": ["rx==1.2.4", "twisted==19.10.0"],
+            }
+            (artifact_dir / "result.json").write_text(json.dumps(result), encoding="utf-8")
+            return {"artifact_dir": str(artifact_dir), "final_result": result}
+
+    class RecordingObserver:
+        def __init__(self) -> None:
+            self.results: list[dict[str, object]] = []
+
+        def start(self, **kwargs) -> None:
+            return None
+
+        def case_started(self, case_id: str) -> None:
+            return None
+
+        def case_event(self, case_id: str, *, attempt: int = 0, kind: str, detail: str) -> None:
+            return None
+
+        def advance(self, result: dict[str, object]) -> None:
+            self.results.append(dict(result))
+
+        def stop_requested(self) -> bool:
+            return False
+
+        def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None:
+            return None
+
+    def fake_summarize_run(run_dir: Path, **kwargs) -> dict[str, object]:
+        payload = {"total_cases": 1, "successes": 0, "failures": 1}
+        (run_dir / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    observer = RecordingObserver()
+    monkeypatch.setattr("agentic_python_dependency.cli.probe_docker_daemon", lambda _settings: (True, "25.0.0"))
+    monkeypatch.setattr(
+        "agentic_python_dependency.cli.load_official_csv_lookup",
+        lambda _settings: {
+            "case-1": {
+                "official_result": "ImportError",
+                "official_passed": "False",
+                "official_duration": "6.63",
+                "official_python_modules": "rx;twisted",
+                "official_file": "output_data_2.7.yml",
+                "official_csv_sources": "hard-gists-l10-r1-10-final.csv",
+            }
+        },
+    )
+    monkeypatch.setattr("agentic_python_dependency.cli.OllamaPromptRunner", DummyPromptRunner)
+    monkeypatch.setattr("agentic_python_dependency.cli.ResolutionWorkflow", FakeWorkflow)
+    monkeypatch.setattr("agentic_python_dependency.cli.summarize_run", fake_summarize_run)
+
+    exit_code = run_case_batch(
+        settings,
+        ref=None,
+        case_ids=["case-1"],
+        run_id="match-run",
+        dataset=DummyDataset(),
+        jobs=1,
+        observer=observer,
+        notify_paths=False,
+    )
+
+    assert exit_code == 0
+    assert observer.results
+    assert observer.results[0]["case_id"] == "case-1"
+    assert observer.results[0]["result_matches_csv"] == "PASS"
+
+
+def test_run_benchmark_restores_saved_settings_before_case_selection(tmp_path: Path, monkeypatch) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    run_id = "resume-run"
+    run_dir = settings.artifacts_dir / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run-state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "status": "interrupted",
+                "resolver": "apdr",
+                "preset": "research",
+                "prompt_profile": "research-rag",
+                "benchmark_source": "competition-run",
+                "research_bundle": "full",
+                "research_features": ["dynamic_aliases", "repair_memory"],
+                "effective_model_profile": "mistral-nemo-12b",
+                "model_profile": "mistral-nemo-12b",
+                "use_moe": True,
+                "use_rag": True,
+                "use_langchain": True,
+                "extraction_model": "mistral-nemo:12b",
+                "runner_model": "mistral-nemo:12b",
+                "version_model": "mistral-nemo:12b",
+                "repair_model": "mistral-nemo:12b",
+                "adjudication_model": "mistral-nemo:12b",
+                "rag_mode": "hybrid",
+                "effective_rag_mode": "hybrid",
+                "structured_prompting": True,
+                "effective_structured_prompting": True,
+                "candidate_plan_count": 3,
+                "allow_candidate_fallback_before_repair": True,
+                "effective_candidate_fallback_before_repair": True,
+                "repair_cycle_limit": 2,
+                "effective_repair_cycle_limit": 2,
+                "repo_evidence_enabled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    class DummyDataset:
+        def __init__(self, dataset_settings: Settings):
+            captured["init_model_profile"] = dataset_settings.model_profile
+            captured["init_preset"] = dataset_settings.preset
+            captured["init_benchmark_source"] = dataset_settings.benchmark_case_source
+
+        def fetch(self, _ref: str | None) -> None:
+            return None
+
+        def valid_case_ids(self, ref: str | None, case_source: str = "all-gists") -> list[str]:
+            captured["valid_case_ids_ref"] = ref
+            captured["valid_case_ids_source"] = case_source
+            return ["case-a"]
+
+    def fake_run_case_batch(
+        batch_settings: Settings,
+        ref: str | None,
+        case_ids: list[str],
+        batch_run_id: str | None,
+        **kwargs,
+    ) -> int:
+        captured["batch_ref"] = ref
+        captured["batch_case_ids"] = list(case_ids)
+        captured["batch_run_id"] = batch_run_id
+        captured["batch_model_profile"] = batch_settings.model_profile
+        captured["batch_preset"] = batch_settings.preset
+        captured["batch_benchmark_source"] = batch_settings.benchmark_case_source
+        return 0
+
+    monkeypatch.setattr("agentic_python_dependency.cli.GistableDataset", DummyDataset)
+    monkeypatch.setattr("agentic_python_dependency.cli.run_case_batch", fake_run_case_batch)
+
+    exit_code = run_benchmark(
+        settings,
+        ref=None,
+        subset=None,
+        full=False,
+        run_id=run_id,
+        jobs=1,
+        fresh_run=False,
+    )
+
+    assert exit_code == 0
+    assert captured["init_model_profile"] == "mistral-nemo-12b"
+    assert captured["init_preset"] == "research"
+    assert captured["init_benchmark_source"] == "competition-run"
+    assert captured["valid_case_ids_source"] == "competition-run"
+    assert captured["batch_case_ids"] == ["case-a"]
+    assert captured["batch_model_profile"] == "mistral-nemo-12b"
+    assert captured["batch_preset"] == "research"
+    assert captured["batch_benchmark_source"] == "competition-run"
+
+
+def test_run_case_batch_restores_saved_runtime_config_before_resume_validation(tmp_path: Path, monkeypatch) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    run_id = "resume-run"
+    run_dir = settings.artifacts_dir / run_id
+    case_dir = run_dir / "case-a"
+    case_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run-state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "status": "interrupted",
+                "resolver": "apdr",
+                "preset": "research",
+                "prompt_profile": "research-rag",
+                "benchmark_source": "competition-run",
+                "research_bundle": "full",
+                "research_features": ["dynamic_aliases", "repair_memory"],
+                "elapsed_seconds": 42.0,
+                "effective_model_profile": "mistral-nemo-12b",
+                "model_profile": "mistral-nemo-12b",
+                "use_moe": True,
+                "use_rag": True,
+                "use_langchain": True,
+                "extraction_model": "mistral-nemo:12b",
+                "runner_model": "mistral-nemo:12b",
+                "version_model": "mistral-nemo:12b",
+                "repair_model": "mistral-nemo:12b",
+                "adjudication_model": "mistral-nemo:12b",
+                "rag_mode": "hybrid",
+                "effective_rag_mode": "hybrid",
+                "structured_prompting": True,
+                "effective_structured_prompting": True,
+                "candidate_plan_count": 3,
+                "allow_candidate_fallback_before_repair": True,
+                "effective_candidate_fallback_before_repair": True,
+                "repair_cycle_limit": 2,
+                "effective_repair_cycle_limit": 2,
+                "repo_evidence_enabled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (case_dir / "result.json").write_text(
+        json.dumps(
+            {
+                "case_id": "case-a",
+                "success": True,
+                "final_error_category": "Success",
+                "attempts": 1,
+                "wall_clock_seconds": 1.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class DummyDataset:
+        def fetch(self, _ref: str | None) -> None:
+            return None
+
+        def load_case(self, case_id: str, ref: str | None, case_source: str = "all-gists"):
+            raise AssertionError(f"load_case should not run for completed case {case_id}")
+
+    def fake_summarize_run(run_dir: Path, **kwargs) -> dict[str, object]:
+        payload = {"total_cases": 1, "successes": 1, "failures": 0}
+        (run_dir / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    class RecordingObserver:
+        def __init__(self) -> None:
+            self.start_kwargs: dict[str, object] = {}
+
+        def start(self, **kwargs) -> None:
+            self.start_kwargs = dict(kwargs)
+
+        def case_started(self, case_id: str) -> None:
+            return None
+
+        def case_event(self, case_id: str, *, attempt: int = 0, kind: str, detail: str) -> None:
+            return None
+
+        def advance(self, result: dict[str, object]) -> None:
+            return None
+
+        def stop_requested(self) -> bool:
+            return False
+
+        def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None:
+            return None
+
+    observer = RecordingObserver()
+
+    monkeypatch.setattr(
+        "agentic_python_dependency.cli.load_official_csv_lookup",
+        lambda _settings: {
+            "case-a": {
+                "official_result": "OtherPass",
+                "official_passed": "True",
+                "official_duration": "1.0",
+                "official_python_modules": "requests",
+                "official_file": "output_data_3.12.yml",
+                "official_csv_sources": "hard-gists-l10-r1-10-final.csv",
+            }
+        },
+    )
+    monkeypatch.setattr("agentic_python_dependency.cli.probe_docker_daemon", lambda _settings: (True, "25.0.0"))
+    monkeypatch.setattr("agentic_python_dependency.cli.summarize_run", fake_summarize_run)
+
+    exit_code = run_case_batch(
+        settings,
+        ref=None,
+        case_ids=["case-a"],
+        run_id=run_id,
+        dataset=DummyDataset(),
+        jobs=1,
+        observer=observer,
+        notify_paths=False,
+    )
+
+    assert exit_code == 0
+    assert settings.preset == "research"
+    assert settings.prompt_profile == "research-rag"
+    assert settings.model_profile == "mistral-nemo-12b"
+    assert settings.benchmark_case_source == "competition-run"
+    assert observer.start_kwargs["completed_results"] == [
+        {
+            "case_id": "case-a",
+            "success": True,
+            "final_error_category": "Success",
+            "attempts": 1,
+            "wall_clock_seconds": 1.0,
+            "result_matches_csv": "PASS",
+        }
+    ]
+    warnings_path = run_dir / "warnings.log"
+    if warnings_path.exists():
+        assert "Refusing to resume run with mismatched runtime config" not in warnings_path.read_text(encoding="utf-8")
 
 
 def test_format_progress_bar_renders_partial_progress() -> None:
@@ -478,6 +970,23 @@ def test_benchmark_progress_line_contains_run_id_and_counts(monkeypatch) -> None
     assert "ok 0" in line
     assert "fail 0" in line
     assert "elapsed 00:01:05" in line
+
+
+def test_benchmark_progress_line_includes_ollama_tokens_per_second() -> None:
+    progress = BenchmarkProgress("run123", total=10, completed=4)
+    progress.ollama_stats = PersistentBenchmarkObserver(progress, Path("/tmp/run123")).ollama_stats
+    progress.ollama_stats.record(
+        OllamaInvocationStats(
+            stage="repair",
+            model="gemma3:12b",
+            eval_count=48,
+            eval_duration_ns=1_000_000_000,
+        )
+    )
+
+    line = progress._line()
+
+    assert "llm 48.0 tok/s" in line
 
 
 def test_benchmark_progress_refresh_thread_starts_and_stops(monkeypatch) -> None:
@@ -542,6 +1051,17 @@ def test_benchmark_progress_can_request_stop() -> None:
     assert progress.stop_requested() is True
 
 
+def test_benchmark_progress_can_request_hard_stop() -> None:
+    progress = BenchmarkProgress("run123", total=3)
+
+    assert progress.hard_stop_requested() is False
+
+    progress.request_hard_stop()
+
+    assert progress.stop_requested() is True
+    assert progress.hard_stop_requested() is True
+
+
 def test_persistent_benchmark_observer_writes_run_state_files(tmp_path: Path) -> None:
     inner = BenchmarkProgress("run123", total=5)
     observer = PersistentBenchmarkObserver(inner, tmp_path / "run123")
@@ -559,6 +1079,18 @@ def test_persistent_benchmark_observer_writes_run_state_files(tmp_path: Path) ->
         jobs=1,
         target="smoke30",
         artifacts_dir=tmp_path / "run123",
+        runtime_config={
+            "model_profile": "mistral-nemo-12b",
+            "effective_model_profile": "mistral-nemo-12b",
+            "rag_mode": "hybrid",
+            "effective_rag_mode": "hybrid",
+            "structured_prompting": True,
+            "effective_structured_prompting": True,
+            "repair_cycle_limit": 2,
+            "effective_repair_cycle_limit": 2,
+            "allow_candidate_fallback_before_repair": True,
+            "effective_candidate_fallback_before_repair": True,
+        },
     )
     observer.case_started("case-2")
     observer.advance({"case_id": "case-2", "success": True, "final_error_category": "Success"})
@@ -568,7 +1100,108 @@ def test_persistent_benchmark_observer_writes_run_state_files(tmp_path: Path) ->
     assert payload["status"] == "paused"
     assert payload["completed"] == 2
     assert payload["successes"] == 2
+    assert payload["effective_model_profile"] == "mistral-nemo-12b"
+    assert payload["effective_structured_prompting"] is True
     assert (tmp_path / "run123" / "run-state.md").exists()
+
+
+def test_persistent_benchmark_observer_persists_ollama_stats(tmp_path: Path) -> None:
+    inner = BenchmarkProgress("run123", total=5)
+    observer = PersistentBenchmarkObserver(inner, tmp_path / "run123")
+
+    observer.start(
+        run_id="run123",
+        total=5,
+        completed=0,
+        successes=0,
+        failures=0,
+        resolver="apdr",
+        preset="optimized",
+        prompt_profile="optimized",
+        model_summary="gemma-moe",
+        jobs=1,
+        target="smoke30",
+        artifacts_dir=tmp_path / "run123",
+    )
+    observer.ollama_stats.record(
+        OllamaInvocationStats(
+            stage="version",
+            model="gemma3:12b",
+            prompt_eval_count=12,
+            prompt_eval_duration_ns=60_000_000,
+            eval_count=30,
+            eval_duration_ns=500_000_000,
+        )
+    )
+    observer.case_started("case-1")
+
+    payload = load_run_state(tmp_path / "run123")
+    markdown = (tmp_path / "run123" / "run-state.md").read_text(encoding="utf-8")
+
+    assert payload["ollama_stats"]["eval_tokens"] == 30
+    assert payload["ollama_stats"]["last_model"] == "gemma3:12b"
+    assert "## Ollama" in markdown
+    assert "60.0 tok/s" in markdown
+
+
+def test_persistent_benchmark_observer_persists_hard_stop_state(tmp_path: Path) -> None:
+    inner = BenchmarkProgress("run123", total=5)
+    observer = PersistentBenchmarkObserver(inner, tmp_path / "run123")
+
+    observer.start(
+        run_id="run123",
+        total=5,
+        completed=0,
+        successes=0,
+        failures=0,
+        resolver="apdr",
+        preset="optimized",
+        prompt_profile="optimized",
+        model_summary="gemma-moe",
+        jobs=1,
+        target="smoke30",
+        artifacts_dir=tmp_path / "run123",
+    )
+    observer.request_hard_stop(reason="Hard quit requested.")
+
+    payload = load_run_state(tmp_path / "run123")
+
+    assert payload["status"] == "interrupted"
+    assert payload["hard_stop_requested"] is True
+    assert payload["last_error"] == "Hard quit requested."
+
+
+def test_persistent_benchmark_observer_persists_case_activity(tmp_path: Path) -> None:
+    inner = BenchmarkProgress("run123", total=5)
+    observer = PersistentBenchmarkObserver(inner, tmp_path / "run123")
+
+    observer.start(
+        run_id="run123",
+        total=5,
+        completed=0,
+        successes=0,
+        failures=0,
+        resolver="apdr",
+        preset="research",
+        prompt_profile="research-rag",
+        model_summary="mistral-nemo-12b",
+        jobs=1,
+        target="full",
+        artifacts_dir=tmp_path / "run123",
+    )
+    observer.case_started("case-1")
+    observer.case_event("case-1", attempt=1, kind="docker_build_start", detail="Starting docker build.")
+
+    payload = load_run_state(tmp_path / "run123")
+    markdown = (tmp_path / "run123" / "run-state.md").read_text(encoding="utf-8")
+    activity_log = (tmp_path / "run123" / "activity.log").read_text(encoding="utf-8")
+
+    assert payload["current_case_activity"][0]["case_id"] == "case-1"
+    assert payload["current_case_activity"][0]["kind"] == "docker_build_start"
+    assert payload["recent_case_activity"][0]["detail"] == "Starting docker build."
+    assert "## Current Activity" in markdown
+    assert "## Recent Activity" in markdown
+    assert "docker_build_start" in activity_log
 
 
 def test_persistent_benchmark_observer_restores_elapsed_seconds(monkeypatch, tmp_path: Path) -> None:
@@ -632,3 +1265,54 @@ def test_resolve_trace_path_supports_run_and_case_scope(tmp_path: Path) -> None:
 
     assert resolve_trace_path(settings, "run1") == settings.artifacts_dir / "run1" / "llm-trace.log"
     assert resolve_trace_path(settings, "run1", "case1") == settings.artifacts_dir / "run1" / "case1" / "llm-trace.log"
+
+
+def test_run_case_batch_hard_interrupt_cancels_executor_and_exits(tmp_path: Path, monkeypatch) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    shutdown_calls: list[tuple[bool, bool]] = []
+
+    class DummyDataset:
+        def fetch(self, _ref: str | None) -> None:
+            return None
+
+        def load_case(self, case_id: str, ref: str | None, case_source: str = "all-gists"):
+            raise AssertionError(f"load_case should not run for {case_id}")
+
+    class FakeExecutor:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+        def submit(self, fn, case_id: str) -> object:
+            return object()
+
+        def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
+            shutdown_calls.append((wait, cancel_futures))
+
+    monkeypatch.setattr("agentic_python_dependency.cli.load_official_csv_lookup", lambda _settings: {})
+    monkeypatch.setattr("agentic_python_dependency.cli.probe_docker_daemon", lambda _settings: (True, "25.0.0"))
+    monkeypatch.setattr("agentic_python_dependency.cli.ThreadPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(
+        "agentic_python_dependency.cli.as_completed",
+        lambda futures: (_ for _ in ()).throw(KeyboardInterrupt("hard quit")),
+    )
+    monkeypatch.setattr(
+        "agentic_python_dependency.cli._force_exit_now",
+        lambda code=130: (_ for _ in ()).throw(SystemExit(code)),
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        run_case_batch(
+            settings,
+            ref=None,
+            case_ids=["case-1"],
+            run_id="hard-exit-run",
+            dataset=DummyDataset(),
+            jobs=2,
+            notify_paths=False,
+        )
+
+    assert excinfo.value.code == 130
+    assert shutdown_calls == [(False, True)]
+    payload = load_run_state(settings.artifacts_dir / "hard-exit-run")
+    assert payload["status"] == "interrupted"
+    assert payload["hard_stop_requested"] is True

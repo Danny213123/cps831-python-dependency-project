@@ -19,17 +19,36 @@ dist/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.hypothesis/
+.tox/
+.nox/
 .coverage
 coverage.xml
+htmlcov/
+pip-wheel-metadata/
 
 # Local benchmark and run artifacts
 artifacts/
-data/benchmarks/
+data/*
+!data/benchmarks/
+data/benchmarks/*
+!data/benchmarks/gistable/
+data/benchmarks/gistable/*
+!data/benchmarks/gistable/competition/
+data/benchmarks/gistable/competition/*
+!data/benchmarks/gistable/competition/hard-gists-l10-r1-10-final.csv
+data/loadouts/
 data/llm_cache/
-data/pypi_cache/index.duckdb
-data/pypi_cache/raw/
+data/package_metadata/
+data/pypi_cache/
+data/research_memory/
+data/experimental_memory/
 
 # Editors and OS files
 .DS_Store
 .idea/
 .vscode/
+.ipynb_checkpoints/
+.python-version
+*.swp
+*.swo

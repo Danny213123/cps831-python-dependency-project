@@ -7,6 +7,26 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-08
+
+### Added
+
+- Added model-selectable runtime profiles for benchmark validation, including import-spec probing for hardware-sensitive ML stacks and richer validation context passed into research planning and repair prompts.
+- Added PLLM baseline integration to the benchmark UX, including vendored competition CSV support, live dashboard match status, run-table PASS/FAIL parity columns, and richer reporting slices for classifier origin, root-cause buckets, and deferred Python fallback usage.
+- Added package-metadata parsing/caching, loadout persistence, and expanded dashboard resume hydration so restarted benchmark sessions preserve prior completed-case rows and runtime settings.
+
+### Changed
+
+- Reworked research-mode planning so the APDR model owns candidate selection and repair direction: compatibility heuristics now flow into prompt context instead of silently hard-steering version order, and Python fallback triggers a fresh re-plan rather than deterministic pin reconstruction.
+- Separated build-log and run-log failure classification, widened retry routing to prefer fallback/repair unless a failure is categorically impossible, and allowed repair plans to merge partial dependency deltas instead of requiring complete replacement plans.
+- Updated benchmark baselines and comparison logic to treat PLLM pass/fail parity as the primary match signal for competition runs, even when exact failure labels differ.
+
+### Fixed
+
+- Fixed multiple benchmark false negatives caused by eager Python 2 downgrades, duplicate repair retries, shell-unsafe bootstrap requirements, prompt-template crashes, misclassified TensorFlow/Keras/Gym compatibility errors, and stale resume-time runtime-config checks.
+- Fixed dashboard regressions where resumed runs lost completed-case tables or crashed on missing prompt variables, and improved live benchmarking output so PLLM comparison status and restored rows stay visible after resume.
+- Fixed several build/bootstrap failure paths by surfacing concrete retry hints for missing system headers, Cython compatibility, typing on Python 2, and related native-build traps instead of collapsing them into `UnknownError`.
+
 ## [1.1.6] - 2026-03-05
 
 ### Added

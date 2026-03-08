@@ -103,6 +103,8 @@ def parse_candidate_plan_payload(
     *,
     allowed_packages: set[str],
     allowed_versions: dict[str, set[str]],
+    required_packages: set[str] | None = None,
+    allowed_runtime_profiles: set[str] | None = None,
 ) -> list[CandidatePlan]:
     payload = _load_json(raw_output)
     plans = payload.get("plans", [])
@@ -110,6 +112,7 @@ def parse_candidate_plan_payload(
         raise StructuredOutputError("'plans' must be a list")
     parsed: list[CandidatePlan] = []
     seen_ranks: set[int] = set()
+    normalized_required = {package.replace("-", "_").lower() for package in (required_packages or set())}
     for item in plans:
         if not isinstance(item, dict):
             raise StructuredOutputError("Plan entries must be objects")
@@ -120,10 +123,14 @@ def parse_candidate_plan_payload(
             raise StructuredOutputError("Plan ranks must be unique")
         seen_ranks.add(rank)
         reason = str(item.get("reason", "")).strip()
+        runtime_profile = str(item.get("runtime_profile", "") or "").strip()
+        if runtime_profile and allowed_runtime_profiles is not None and runtime_profile not in allowed_runtime_profiles:
+            raise StructuredOutputError(f"Runtime profile '{runtime_profile}' is not in the allowed runtime profile set")
         dependencies = item.get("dependencies", [])
         if not isinstance(dependencies, list):
             raise StructuredOutputError("'dependencies' must be a list")
         parsed_dependencies: list[CandidateDependency] = []
+        dependency_names: set[str] = set()
         for dependency in dependencies:
             if not isinstance(dependency, dict):
                 raise StructuredOutputError("Dependency entries must be objects")
@@ -136,8 +143,27 @@ def parse_candidate_plan_payload(
                 raise StructuredOutputError(f"Dependency '{name}' is not in the allowed package set")
             if version not in allowed_versions.get(normalized_name, set()):
                 raise StructuredOutputError(f"Version '{version}' is not allowed for package '{name}'")
+            if normalized_name in dependency_names:
+                raise StructuredOutputError(
+                    f"Dependency '{name}' duplicates another package after normalization"
+                )
             parsed_dependencies.append(CandidateDependency(name=name, version=version))
-        parsed.append(CandidatePlan(rank=rank, reason=reason, dependencies=parsed_dependencies))
+            dependency_names.add(normalized_name)
+        if normalized_required and not dependency_names:
+            raise StructuredOutputError("Plan dependencies may not be empty when packages are required")
+        missing_packages = sorted(normalized_required - dependency_names)
+        if missing_packages:
+            raise StructuredOutputError(
+                "Plan is missing required packages: " + ", ".join(missing_packages)
+            )
+        parsed.append(
+            CandidatePlan(
+                rank=rank,
+                reason=reason,
+                dependencies=parsed_dependencies,
+                runtime_profile=runtime_profile,
+            )
+        )
     return sorted(parsed, key=lambda item: item.rank)
 
 
@@ -146,15 +172,76 @@ def parse_repair_plan_payload(
     *,
     allowed_packages: set[str],
     allowed_versions: dict[str, set[str]],
+    required_packages: set[str] | None = None,
+    allowed_runtime_profiles: set[str] | None = None,
+    previous_plan: list[CandidateDependency] | None = None,
 ) -> tuple[bool, list[CandidatePlan]]:
     payload = _load_json(raw_output)
     repair_applicable = bool(payload.get("repair_applicable", False))
-    plans = parse_candidate_plan_payload(
-        json.dumps({"plans": payload.get("plans", [])}),
-        allowed_packages=allowed_packages,
-        allowed_versions=allowed_versions,
-    )
-    return repair_applicable, plans
+    plans = payload.get("plans", [])
+    if not isinstance(plans, list):
+        raise StructuredOutputError("'plans' must be a list")
+
+    previous_dependencies = {
+        dependency.name.replace("-", "_").lower(): CandidateDependency(name=dependency.name, version=dependency.version)
+        for dependency in (previous_plan or [])
+        if dependency.name and dependency.version
+    }
+    normalized_required = {package.replace("-", "_").lower() for package in (required_packages or set())}
+    parsed: list[CandidatePlan] = []
+    seen_ranks: set[int] = set()
+
+    for item in plans:
+        if not isinstance(item, dict):
+            continue
+        rank = item.get("rank")
+        if not isinstance(rank, int) or rank < 1 or rank in seen_ranks:
+            continue
+        seen_ranks.add(rank)
+        reason = str(item.get("reason", "")).strip()
+        runtime_profile = str(item.get("runtime_profile", "") or "").strip()
+        if runtime_profile and allowed_runtime_profiles is not None and runtime_profile not in allowed_runtime_profiles:
+            continue
+        dependencies = item.get("dependencies", [])
+        if not isinstance(dependencies, list):
+            continue
+
+        merged_dependencies: dict[str, CandidateDependency] = dict(previous_dependencies)
+        valid_item = True
+        explicit_dependency_count = 0
+        for dependency in dependencies:
+            if not isinstance(dependency, dict):
+                valid_item = False
+                break
+            name = str(dependency.get("name", "")).strip()
+            version = str(dependency.get("version", "")).strip()
+            if not name or not version:
+                valid_item = False
+                break
+            normalized_name = name.replace("-", "_").lower()
+            if normalized_name not in allowed_packages:
+                valid_item = False
+                break
+            if version not in allowed_versions.get(normalized_name, set()):
+                valid_item = False
+                break
+            merged_dependencies[normalized_name] = CandidateDependency(name=name, version=version)
+            explicit_dependency_count += 1
+        if not valid_item:
+            continue
+        if explicit_dependency_count == 0 and not runtime_profile:
+            continue
+        if normalized_required and any(package not in merged_dependencies for package in normalized_required):
+            continue
+        parsed.append(
+            CandidatePlan(
+                rank=rank,
+                reason=reason,
+                dependencies=sorted(merged_dependencies.values(), key=lambda dependency: dependency.name.lower()),
+                runtime_profile=runtime_profile,
+            )
+        )
+    return repair_applicable, sorted(parsed, key=lambda item: item.rank)
 
 
 def parse_version_negotiation_payload(
@@ -162,6 +249,7 @@ def parse_version_negotiation_payload(
     *,
     allowed_packages: set[str],
     allowed_versions: dict[str, set[str]],
+    required_packages: set[str] | None = None,
 ) -> list[CandidatePlan]:
     payload = _load_json(raw_output)
     bundles = payload.get("selected_bundles", [])
@@ -169,4 +257,5 @@ def parse_version_negotiation_payload(
         json.dumps({"plans": bundles}),
         allowed_packages=allowed_packages,
         allowed_versions=allowed_versions,
+        required_packages=required_packages,
     )

@@ -6,7 +6,9 @@ import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import json
+import os
 import shutil
+import subprocess
 import sys
 import time
 import threading
@@ -17,6 +19,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from agentic_python_dependency.activity import CaseActivityTracker
 from agentic_python_dependency.benchmark.gistable import GistableDataset
 from agentic_python_dependency.benchmark.subsets import build_smoke30
 from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
@@ -26,6 +29,7 @@ from agentic_python_dependency.presets import (
     PRESET_CONFIGS,
 )
 from agentic_python_dependency.graph import ResolutionWorkflow
+from agentic_python_dependency.router import OllamaPromptRunner, OllamaStatsSnapshot, OllamaStatsTracker
 from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, build_timeline_view, summarize_run
 from agentic_python_dependency.terminal_ui import launch_terminal_ui
 from agentic_python_dependency.tools.official_baselines import validate_pyego_runtime
@@ -42,6 +46,7 @@ RUNTIME_COMPARISON_COLUMNS = [
     "run_finished_at",
     "official_in_csv",
     "official_result",
+    "result_matches_csv",
     "official_passed",
     "official_duration",
     "official_python_modules",
@@ -57,6 +62,7 @@ RUNTIME_COMPARISON_MD_COLUMNS = [
     "run_wall_clock_seconds",
     "official_in_csv",
     "official_result",
+    "result_matches_csv",
     "official_passed",
     "official_duration",
     "official_csv_sources",
@@ -79,6 +85,10 @@ def _notify_path(label: str, path: Path) -> None:
     print(f"{label}: {path}", file=sys.stderr)
 
 
+def format_tokens_per_second(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.1f} tok/s"
+
+
 def format_model_summary(settings: Settings) -> str:
     stage_models = settings.active_stage_models()
     routing = "moe" if settings.use_moe else "single"
@@ -95,25 +105,66 @@ def format_model_summary(settings: Settings) -> str:
 
 
 def summary_defaults_from_settings(settings: Settings) -> dict[str, object]:
-    stage_models = settings.active_stage_models()
-    return {
-        "resolver": settings.resolver,
-        "preset": settings.preset,
-        "prompt_profile": settings.prompt_profile,
-        "model_profile": settings.model_profile,
-        "use_moe": settings.use_moe,
-        "use_rag": settings.use_rag,
-        "use_langchain": settings.use_langchain,
-        "rag_mode": settings.rag_mode,
-        "structured_prompting": settings.structured_prompting,
-        "research_bundle": settings.research_bundle,
-        "research_features": list(settings.research_features),
-        "extraction_model": stage_models["extract"],
-        "runner_model": stage_models["runner"],
-        "version_model": stage_models["version"],
-        "repair_model": stage_models["repair"],
-        "adjudication_model": stage_models["adjudicate"],
-    }
+    defaults = settings.effective_runtime_config()
+    defaults.update(
+        {
+            "resolver": settings.resolver,
+            "preset": settings.preset,
+            "prompt_profile": settings.prompt_profile,
+            "benchmark_source": settings.benchmark_case_source,
+            "research_bundle": settings.research_bundle,
+            "research_features": list(settings.research_features),
+        }
+    )
+    return defaults
+
+
+def apply_preset_config(settings: Settings, preset: str, *, prompt_profile_override: str | None = None) -> None:
+    preset_config = PRESET_CONFIGS[preset]
+    settings.preset = preset
+    settings.prompt_profile = prompt_profile_override or preset_config.prompt_profile
+    settings.max_attempts = preset_config.max_attempts
+    settings.default_module_grouping = preset_config.reporting_grouping
+    settings.rag_mode = preset_config.rag_mode
+    settings.structured_prompting = preset_config.structured_prompting
+    settings.candidate_plan_count = preset_config.candidate_plan_count
+    settings.allow_candidate_fallback_before_repair = preset_config.allow_candidate_fallback_before_repair
+    settings.repair_cycle_limit = preset_config.repair_cycle_limit
+    settings.repo_evidence_enabled = preset_config.repo_evidence_enabled
+
+
+def apply_saved_run_settings(settings: Settings, payload: dict[str, object]) -> None:
+    saved_resolver = str(payload.get("resolver", "") or "").strip().lower()
+    if saved_resolver in {"apdr", "pyego", "readpye"}:
+        settings.resolver = saved_resolver  # type: ignore[assignment]
+
+    saved_preset = str(payload.get("preset", "") or "").strip().lower()
+    if saved_preset in PRESET_CONFIGS:
+        saved_prompt_profile = str(payload.get("prompt_profile", "") or "").strip() or None
+        apply_preset_config(settings, saved_preset, prompt_profile_override=saved_prompt_profile)
+
+    saved_bundle = str(payload.get("research_bundle", "") or "").strip().lower()
+    if saved_bundle in RESEARCH_BUNDLE_DEFAULTS:
+        settings.research_bundle = saved_bundle  # type: ignore[assignment]
+
+    saved_features = payload.get("research_features", [])
+    if isinstance(saved_features, list):
+        settings.research_features = tuple(
+            feature for feature in saved_features if isinstance(feature, str) and feature in RESEARCH_FEATURES
+        )
+
+    saved_benchmark_source = str(
+        payload.get("benchmark_source", payload.get("benchmark_case_source", "")) or ""
+    ).strip().lower()
+    if saved_benchmark_source in {"all-gists", "dockerized-gists", "competition-run"}:
+        settings.benchmark_case_source = saved_benchmark_source  # type: ignore[assignment]
+
+    settings.apply_runtime_config(payload)
+    if settings.research_bundle not in RESEARCH_BUNDLE_DEFAULTS:
+        settings.research_bundle = "baseline"
+    settings.research_features = tuple(
+        feature for feature in settings.research_features if feature in RESEARCH_FEATURES
+    )
 
 
 class BenchmarkObserver(Protocol):
@@ -136,9 +187,14 @@ class BenchmarkObserver(Protocol):
         target: str,
         artifacts_dir: Path,
         elapsed_seconds: float = 0.0,
+        ollama_stats: OllamaStatsTracker | None = None,
+        runtime_config: dict[str, object] | None = None,
+        completed_results: list[dict[str, object]] | None = None,
     ) -> None: ...
 
     def case_started(self, case_id: str) -> None: ...
+
+    def case_event(self, case_id: str, *, attempt: int = 0, kind: str, detail: str) -> None: ...
 
     def advance(self, result: dict[str, object]) -> None: ...
 
@@ -190,6 +246,12 @@ def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
     active_cases = payload.get("current_cases", [])
     if not isinstance(active_cases, list):
         active_cases = []
+    current_case_activity = payload.get("current_case_activity", [])
+    if not isinstance(current_case_activity, list):
+        current_case_activity = []
+    recent_case_activity = payload.get("recent_case_activity", [])
+    if not isinstance(recent_case_activity, list):
+        recent_case_activity = []
     lines = [
         "# Run Status",
         "",
@@ -201,6 +263,16 @@ def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
         f"- Prompt profile: `{payload.get('prompt_profile', 'optimized')}`",
         f"- Research bundle: `{payload.get('research_bundle', 'baseline')}`",
         f"- Research features: `{', '.join(payload.get('research_features', [])) if isinstance(payload.get('research_features', []), list) and payload.get('research_features', []) else 'none'}`",
+        f"- Model profile: `{payload.get('model_profile', 'gemma-moe')}`",
+        f"- Effective model profile: `{payload.get('effective_model_profile', payload.get('model_profile', 'gemma-moe'))}`",
+        f"- RAG mode: `{payload.get('rag_mode', 'pypi')}`",
+        f"- Effective RAG mode: `{payload.get('effective_rag_mode', payload.get('rag_mode', 'pypi'))}`",
+        f"- Structured prompting: `{payload.get('structured_prompting', False)}`",
+        f"- Effective structured prompting: `{payload.get('effective_structured_prompting', payload.get('structured_prompting', False))}`",
+        f"- Repair cycle limit: `{payload.get('repair_cycle_limit', 0)}`",
+        f"- Effective repair cycle limit: `{payload.get('effective_repair_cycle_limit', payload.get('repair_cycle_limit', 0))}`",
+        f"- Candidate fallback before repair: `{payload.get('allow_candidate_fallback_before_repair', False)}`",
+        f"- Effective candidate fallback before repair: `{payload.get('effective_candidate_fallback_before_repair', payload.get('allow_candidate_fallback_before_repair', False))}`",
         f"- Jobs: `{payload.get('jobs', 1)}`",
         f"- Target: `{payload.get('target', 'benchmark')}`",
         f"- Progress: `{payload.get('completed', 0)}/{payload.get('total', 0)}`",
@@ -213,11 +285,50 @@ def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
         f"- Last status: `{payload.get('last_status', '') or 'none'}`",
         "",
     ]
+    ollama_snapshot = OllamaStatsSnapshot.from_payload(payload.get("ollama_stats", {}))
+    if ollama_snapshot.calls:
+        lines.extend(
+            [
+                "## Ollama",
+                "",
+                f"- Calls: `{ollama_snapshot.calls}`",
+                f"- Output: `{ollama_snapshot.eval_tokens}` tokens at `{format_tokens_per_second(ollama_snapshot.eval_tokens_per_second)}`",
+                f"- Prompt: `{ollama_snapshot.prompt_tokens}` tokens at `{format_tokens_per_second(ollama_snapshot.prompt_tokens_per_second)}`",
+                f"- Last model: `{ollama_snapshot.last_model or 'unknown'}`",
+                f"- Last stage: `{ollama_snapshot.last_stage or 'unknown'}`",
+                f"- Last output speed: `{format_tokens_per_second(ollama_snapshot.last_eval_tokens_per_second)}`",
+                "",
+            ]
+        )
     if active_cases:
         lines.append("## Active Cases")
         lines.append("")
         for case_id in active_cases:
             lines.append(f"- `{case_id}`")
+        lines.append("")
+    if current_case_activity:
+        lines.append("## Current Activity")
+        lines.append("")
+        for item in current_case_activity[:8]:
+            if not isinstance(item, dict):
+                continue
+            case_id = str(item.get("case_id", "") or "")
+            attempt = int(item.get("attempt", 0) or 0)
+            kind = str(item.get("kind", "") or "activity")
+            detail = str(item.get("detail", "") or "activity update")
+            lines.append(f"- `{case_id}` attempt `{attempt}` `{kind}`: {detail}")
+        lines.append("")
+    if recent_case_activity:
+        lines.append("## Recent Activity")
+        lines.append("")
+        for item in recent_case_activity[:10]:
+            if not isinstance(item, dict):
+                continue
+            timestamp = str(item.get("timestamp", "") or "")
+            case_id = str(item.get("case_id", "") or "")
+            kind = str(item.get("kind", "") or "activity")
+            detail = str(item.get("detail", "") or "activity update")
+            lines.append(f"- `{timestamp}` `{case_id}` `{kind}`: {detail}")
         lines.append("")
     summary_path = payload.get("summary_path")
     warnings_path = payload.get("warnings_path")
@@ -240,6 +351,11 @@ class PersistentBenchmarkObserver:
         self.inner = inner
         self.run_dir = run_dir
         self.restored_state = restored_state or {}
+        self.ollama_stats = OllamaStatsTracker(self.restored_state.get("ollama_stats"))
+        self.activity_tracker = CaseActivityTracker(
+            self.restored_state.get("current_case_activity"),
+            self.restored_state.get("recent_case_activity"),
+        )
         self.session_started_at = time.monotonic()
         self.prior_elapsed_seconds = float(self.restored_state.get("elapsed_seconds", 0.0) or 0.0)
         self.started_at = str(self.restored_state.get("started_at", "") or datetime.now(timezone.utc).isoformat())
@@ -252,6 +368,40 @@ class PersistentBenchmarkObserver:
             "prompt_profile": self.restored_state.get("prompt_profile", "optimized"),
             "research_bundle": self.restored_state.get("research_bundle", "baseline"),
             "research_features": self.restored_state.get("research_features", []),
+            "model_profile": self.restored_state.get("model_profile", "gemma-moe"),
+            "effective_model_profile": self.restored_state.get(
+                "effective_model_profile",
+                self.restored_state.get("model_profile", "gemma-moe"),
+            ),
+            "rag_mode": self.restored_state.get("rag_mode", "pypi"),
+            "effective_rag_mode": self.restored_state.get(
+                "effective_rag_mode",
+                self.restored_state.get("rag_mode", "pypi"),
+            ),
+            "structured_prompting": bool(self.restored_state.get("structured_prompting", False)),
+            "effective_structured_prompting": bool(
+                self.restored_state.get(
+                    "effective_structured_prompting",
+                    self.restored_state.get("structured_prompting", False),
+                )
+            ),
+            "repair_cycle_limit": int(self.restored_state.get("repair_cycle_limit", 0) or 0),
+            "effective_repair_cycle_limit": int(
+                self.restored_state.get(
+                    "effective_repair_cycle_limit",
+                    self.restored_state.get("repair_cycle_limit", 0),
+                )
+                or 0
+            ),
+            "allow_candidate_fallback_before_repair": bool(
+                self.restored_state.get("allow_candidate_fallback_before_repair", False)
+            ),
+            "effective_candidate_fallback_before_repair": bool(
+                self.restored_state.get(
+                    "effective_candidate_fallback_before_repair",
+                    self.restored_state.get("allow_candidate_fallback_before_repair", False),
+                )
+            ),
             "jobs": int(self.restored_state.get("jobs", 1) or 1),
             "target": self.restored_state.get("target", "benchmark"),
             "total": int(self.restored_state.get("total", 0) or 0),
@@ -267,6 +417,13 @@ class PersistentBenchmarkObserver:
             "summary_path": self.restored_state.get("summary_path"),
             "warnings_path": self.restored_state.get("warnings_path"),
             "stop_requested": False,
+            "hard_stop_requested": False,
+            "current_case_activity": list(self.restored_state.get("current_case_activity", []))
+            if isinstance(self.restored_state.get("current_case_activity", []), list)
+            else [],
+            "recent_case_activity": list(self.restored_state.get("recent_case_activity", []))
+            if isinstance(self.restored_state.get("recent_case_activity", []), list)
+            else [],
         }
 
     def _elapsed_seconds(self) -> float:
@@ -277,9 +434,19 @@ class PersistentBenchmarkObserver:
             self.payload["status"] = status
         if last_error is not None:
             self.payload["last_error"] = last_error
+        self.payload["ollama_stats"] = self.ollama_stats.to_payload()
+        self.payload.update(self.activity_tracker.snapshot())
         self.payload["elapsed_seconds"] = self._elapsed_seconds()
         self.payload["last_updated_at"] = datetime.now(timezone.utc).isoformat()
         write_run_state(self.run_dir, self.payload)
+
+    def _append_activity_log(self, case_id: str, *, attempt: int, kind: str, detail: str) -> None:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        line = f"[{timestamp}] case={case_id} attempt={attempt} kind={kind} {detail}\n"
+        for path in (self.run_dir / "activity.log", self.run_dir / case_id / "activity.log"):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
 
     def start(
         self,
@@ -299,7 +466,13 @@ class PersistentBenchmarkObserver:
         jobs: int,
         target: str,
         artifacts_dir: Path,
+        elapsed_seconds: float = 0.0,
+        ollama_stats: OllamaStatsTracker | None = None,
+        runtime_config: dict[str, object] | None = None,
+        completed_results: list[dict[str, object]] | None = None,
     ) -> None:
+        del elapsed_seconds, ollama_stats
+        runtime_payload = dict(runtime_config or {})
         self.payload.update(
             {
                 "run_id": run_id,
@@ -320,8 +493,11 @@ class PersistentBenchmarkObserver:
                 "failures": failures,
                 "current_cases": [],
                 "stop_requested": False,
+                "hard_stop_requested": False,
             }
         )
+        if runtime_payload:
+            self.payload.update(runtime_payload)
         self._persist(status="running")
         self.inner.start(
             run_id=run_id,
@@ -340,6 +516,9 @@ class PersistentBenchmarkObserver:
             target=target,
             artifacts_dir=artifacts_dir,
             elapsed_seconds=self.prior_elapsed_seconds,
+            ollama_stats=self.ollama_stats,
+            runtime_config=runtime_payload,
+            completed_results=completed_results,
         )
 
     def case_started(self, case_id: str) -> None:
@@ -347,8 +526,18 @@ class PersistentBenchmarkObserver:
         if case_id not in current_cases:
             current_cases.append(case_id)
         self.payload["current_cases"] = current_cases
+        self.activity_tracker.emit(case_id, attempt=0, kind="case_started", detail="Case scheduled for execution.")
+        self._append_activity_log(case_id, attempt=0, kind="case_started", detail="Case scheduled for execution.")
         self._persist()
         self.inner.case_started(case_id)
+
+    def case_event(self, case_id: str, *, attempt: int = 0, kind: str, detail: str) -> None:
+        self.activity_tracker.emit(case_id, attempt=attempt, kind=kind, detail=detail)
+        self._append_activity_log(case_id, attempt=attempt, kind=kind, detail=detail)
+        self._persist()
+        case_event = getattr(self.inner, "case_event", None)
+        if callable(case_event):
+            case_event(case_id, attempt=attempt, kind=kind, detail=detail)
 
     def advance(self, result: dict[str, object]) -> None:
         case_id = str(result.get("case_id", ""))
@@ -360,6 +549,7 @@ class PersistentBenchmarkObserver:
         self.payload["failures"] = int(self.payload.get("failures", 0) or 0) + int(not success)
         self.payload["last_case_id"] = case_id
         self.payload["last_status"] = "success" if success else str(result.get("final_error_category", "failure"))
+        self.activity_tracker.finish_case(case_id)
         self._persist()
         self.inner.advance(result)
 
@@ -369,6 +559,25 @@ class PersistentBenchmarkObserver:
             self.payload["stop_requested"] = True
             self._persist(status="stopping")
         return should_stop
+
+    def request_hard_stop(self, *, reason: str = "Hard quit requested.") -> None:
+        request_hard_stop = getattr(self.inner, "request_hard_stop", None)
+        if callable(request_hard_stop):
+            try:
+                request_hard_stop(invoke_callback=False)
+            except TypeError:
+                request_hard_stop()
+        else:
+            request_stop = getattr(self.inner, "request_stop", None)
+            if callable(request_stop):
+                request_stop()
+        self.payload["stop_requested"] = True
+        self.payload["hard_stop_requested"] = True
+        self._persist(status="interrupted", last_error=reason)
+
+    def hard_stop_requested(self) -> bool:
+        hard_stop_requested = getattr(self.inner, "hard_stop_requested", None)
+        return bool(hard_stop_requested()) if callable(hard_stop_requested) else False
 
     def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None:
         self.payload["current_cases"] = []
@@ -397,6 +606,14 @@ def format_elapsed(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
+def _force_exit_now(code: int = 130) -> None:
+    with contextlib.suppress(Exception):
+        sys.stdout.flush()
+    with contextlib.suppress(Exception):
+        sys.stderr.flush()
+    os._exit(code)
+
+
 class BenchmarkProgress:
     def __init__(self, run_id: str, total: int, completed: int = 0, refresh_interval: float = 1.0):
         self.run_id = run_id
@@ -418,6 +635,10 @@ class BenchmarkProgress:
         self.target = "benchmark"
         self.active_cases = 0
         self.artifacts_dir = Path(".")
+        self.runtime_config: dict[str, object] = {}
+        self.ollama_stats: OllamaStatsTracker | None = None
+        self.current_case_activity: dict[str, dict[str, object]] = {}
+        self.recent_case_activity: list[dict[str, object]] = []
         self.started_at = time.monotonic()
         self._lock = threading.RLock()
         self._isatty = sys.stdout.isatty()
@@ -425,13 +646,25 @@ class BenchmarkProgress:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._cancel_requested = False
+        self._hard_cancel_requested = False
 
     def _line(self) -> str:
         bar = format_progress_bar(self.completed, self.total)
         percent = (self.completed / self.total * 100.0) if self.total else 100.0
         status_bits = [f"ok {self.successes}", f"fail {self.failures}"]
+        if self.ollama_stats is not None:
+            snapshot = self.ollama_stats.snapshot()
+            if snapshot.calls:
+                status_bits.append(f"llm {format_tokens_per_second(snapshot.eval_tokens_per_second)}")
         if self.current_case_id:
-            status_bits.append(f"current {self.current_case_id}")
+            current_activity = self.current_case_activity.get(self.current_case_id)
+            if current_activity:
+                detail = str(current_activity.get("detail", "") or "").replace("\n", " ").strip()
+                if len(detail) > 56:
+                    detail = f"{detail[:53]}..."
+                status_bits.append(f"current {self.current_case_id}:{detail}")
+            else:
+                status_bits.append(f"current {self.current_case_id}")
         elif self.last_case_id:
             status_bits.append(f"last {self.last_case_id}:{self.last_status}")
         return (
@@ -469,7 +702,11 @@ class BenchmarkProgress:
         target: str,
         artifacts_dir: Path,
         elapsed_seconds: float = 0.0,
+        ollama_stats: OllamaStatsTracker | None = None,
+        runtime_config: dict[str, object] | None = None,
+        completed_results: list[dict[str, object]] | None = None,
     ) -> None:
+        del completed_results
         self.run_id = run_id
         self.total = total
         self.completed = completed
@@ -485,6 +722,8 @@ class BenchmarkProgress:
         self.jobs = jobs
         self.target = target
         self.artifacts_dir = artifacts_dir
+        self.runtime_config = dict(runtime_config or {})
+        self.ollama_stats = ollama_stats
         self.started_at = time.monotonic() - elapsed_seconds
         self.render()
         if not self._isatty or self._thread is not None:
@@ -503,6 +742,28 @@ class BenchmarkProgress:
             self.active_cases += 1
             self.render()
 
+    def case_event(self, case_id: str, *, attempt: int = 0, kind: str, detail: str) -> None:
+        with self._lock:
+            self.current_case_activity[case_id] = {
+                "case_id": case_id,
+                "attempt": attempt,
+                "kind": kind,
+                "detail": detail,
+            }
+            self.recent_case_activity.insert(
+                0,
+                {
+                    "case_id": case_id,
+                    "attempt": attempt,
+                    "kind": kind,
+                    "detail": detail,
+                },
+            )
+            del self.recent_case_activity[20:]
+            if not self.current_case_id:
+                self.current_case_id = case_id
+            self.render()
+
     def advance(self, result: dict[str, object]) -> None:
         success = bool(result.get("success", False))
         case_id = str(result.get("case_id", ""))
@@ -514,6 +775,7 @@ class BenchmarkProgress:
             self.last_status = "ok" if success else str(result.get("final_error_category", "fail"))
             if self.current_case_id == case_id:
                 self.current_case_id = ""
+            self.current_case_activity.pop(case_id, None)
             self.active_cases = max(0, self.active_cases - 1)
             self.render()
 
@@ -522,9 +784,19 @@ class BenchmarkProgress:
             self._cancel_requested = True
             self.render()
 
+    def request_hard_stop(self) -> None:
+        with self._lock:
+            self._cancel_requested = True
+            self._hard_cancel_requested = True
+            self.render()
+
     def stop_requested(self) -> bool:
         with self._lock:
             return self._cancel_requested
+
+    def hard_stop_requested(self) -> bool:
+        with self._lock:
+            return self._hard_cancel_requested
 
     def _finish_render(self, status: str) -> None:
         self._stop_event.set()
@@ -879,7 +1151,7 @@ def build_runtime_comparison_row(
     case_id = str(result.get("case_id", "") or "")
     success = bool(result.get("success", False))
     official = official_lookup.get(case_id, {})
-    return {
+    row = {
         "case_number": case_number,
         "case_id": case_id,
         "run_result": "success" if success else "failure",
@@ -893,12 +1165,21 @@ def build_runtime_comparison_row(
         "run_finished_at": str(result.get("finished_at", "") or ""),
         "official_in_csv": bool(official),
         "official_result": official.get("official_result", ""),
+        "result_matches_csv": "",
         "official_passed": official.get("official_passed", ""),
         "official_duration": official.get("official_duration", ""),
         "official_python_modules": official.get("official_python_modules", ""),
         "official_file": official.get("official_file", ""),
         "official_csv_sources": official.get("official_csv_sources", ""),
     }
+    official_passed = _parse_official_passed_flag(row.get("official_passed", ""))
+    if official_passed is not None:
+        row["result_matches_csv"] = "PASS" if success == official_passed else "FAIL"
+        return row
+    official_result = _normalize_result_label(row.get("official_result", ""))
+    if official_result:
+        row["result_matches_csv"] = "PASS" if _run_result_label_for_official(row) == official_result else "FAIL"
+    return row
 
 
 def _comparison_markdown_cell(value: object) -> str:
@@ -1082,6 +1363,35 @@ def resolve_trace_path(settings: Settings, run_id: str, case_id: str | None = No
     return (run_dir / case_id / "llm-trace.log") if case_id else (run_dir / "llm-trace.log")
 
 
+def probe_docker_daemon(settings: Settings, *, timeout_seconds: int = 5) -> tuple[bool, str]:
+    docker_path = shutil.which("docker")
+    if not docker_path:
+        return False, "docker not found on PATH"
+    env = os.environ.copy()
+    if settings.docker_host:
+        env["DOCKER_HOST"] = settings.docker_host
+    else:
+        env.pop("DOCKER_HOST", None)
+    try:
+        completed = subprocess.run(
+            ["docker", "info", "--format", "{{.ServerVersion}}"],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            env=env,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"docker daemon check timed out after {timeout_seconds}s"
+    except OSError as exc:
+        return False, f"docker daemon check failed: {exc}"
+    if completed.returncode == 0:
+        detail = completed.stdout.strip() or completed.stderr.strip() or "docker daemon reachable"
+        return True, detail
+    detail = completed.stderr.strip() or completed.stdout.strip() or f"docker info exited with status {completed.returncode}"
+    return False, detail
+
+
 def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[str, object]:
     dataset = GistableDataset(settings)
     dataset_root = dataset.dataset_root(ref)
@@ -1096,6 +1406,12 @@ def collect_doctor_report(settings: Settings, ref: str | None = None) -> dict[st
 
     docker_path = shutil.which("docker")
     add_check("docker_cli", "ok" if docker_path else "missing", docker_path or "docker not found on PATH")
+    docker_ok, docker_detail = probe_docker_daemon(settings)
+    add_check(
+        "docker_daemon",
+        "ok" if docker_ok else ("warning" if docker_path else "missing"),
+        docker_detail,
+    )
 
     pyego_entrypoint = settings.pyego_root / "PyEGo.py"
     add_check(
@@ -1211,6 +1527,10 @@ def run_benchmark(
     notify_paths: bool = True,
     fresh_run: bool = False,
 ) -> int:
+    if run_id and not fresh_run:
+        restored_state = load_run_state(settings.artifacts_dir / run_id)
+        if restored_state:
+            apply_saved_run_settings(settings, restored_state)
     dataset = GistableDataset(settings)
     dataset.fetch(ref)
     if subset:
@@ -1253,22 +1573,52 @@ def run_case_batch(
     if fresh_run and run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    restored_state = load_run_state(run_dir)
+    if restored_state:
+        apply_saved_run_settings(settings, restored_state)
+    warnings_path = run_dir / "warnings.log"
+    runtime_errors = settings.validate_benchmark_runtime()
+    if runtime_errors:
+        message = "Benchmark runtime validation failed: " + "; ".join(runtime_errors)
+        warnings_path.parent.mkdir(parents=True, exist_ok=True)
+        warnings_path.write_text(f"{message}\n", encoding="utf-8")
+        print(f"[ERROR] {message}", file=sys.stderr)
+        if notify_paths:
+            _notify_path("Warnings log written", warnings_path)
+        return 2
     if settings.resolver == "pyego":
         pyego_runtime_ok, pyego_runtime_detail = validate_pyego_runtime(settings)
         if not pyego_runtime_ok:
             message = f"PyEGo preflight failed: {pyego_runtime_detail}"
-            warnings_path = run_dir / "warnings.log"
             warnings_path.parent.mkdir(parents=True, exist_ok=True)
             warnings_path.write_text(f"{message}\n", encoding="utf-8")
             print(f"[ERROR] {message}", file=sys.stderr)
             _notify_path("Warnings log written", warnings_path)
             return 2
+    docker_ok, docker_detail = probe_docker_daemon(settings)
+    if not docker_ok:
+        message = f"Docker preflight failed: {docker_detail}"
+        warnings_path.parent.mkdir(parents=True, exist_ok=True)
+        warnings_path.write_text(f"{message}\n", encoding="utf-8")
+        print(f"[ERROR] {message}", file=sys.stderr)
+        if notify_paths:
+            _notify_path("Warnings log written", warnings_path)
+        return 2
 
-    restored_state = load_run_state(run_dir)
     started_at = time.monotonic()
     restored_elapsed_seconds = float(restored_state.get("elapsed_seconds", 0.0) or 0.0)
-    warnings_path = run_dir / "warnings.log"
     summary_defaults = summary_defaults_from_settings(settings)
+    runtime_keys = set(settings.effective_runtime_config())
+    if restored_state and any(key in restored_state for key in runtime_keys):
+        mismatches = settings.runtime_config_mismatches(restored_state)
+        if mismatches:
+            message = "Refusing to resume run with mismatched runtime config: " + "; ".join(mismatches[:8])
+            warnings_path.parent.mkdir(parents=True, exist_ok=True)
+            warnings_path.write_text(f"{message}\n", encoding="utf-8")
+            print(f"[ERROR] {message}", file=sys.stderr)
+            if notify_paths:
+                _notify_path("Warnings log written", warnings_path)
+            return 2
 
     completed_case_ids = [case_id for case_id in case_ids if (run_dir / case_id / "result.json").exists()]
     completed_case_id_set = set(completed_case_ids)
@@ -1283,11 +1633,29 @@ def run_case_batch(
         build_runtime_comparison_row(result, official_lookup, case_number=index)
         for index, result in enumerate(completed_results, start=1)
     ]
+    runtime_row_by_case_id = {
+        str(row.get("case_id", "") or ""): row
+        for row in runtime_rows
+        if str(row.get("case_id", "") or "")
+    }
     _write_runtime_comparison_tables(runtime_table_csv_path, runtime_table_md_path, runtime_rows)
     _write_gist_match_table(gist_match_csv_path, runtime_rows)
     _write_gist_match_detailed_table(gist_match_detailed_csv_path, runtime_rows)
     completed_successes = sum(1 for result in completed_results if bool(result.get("success", False)))
     completed_failures = len(completed_results) - completed_successes
+    preloaded_completed_results: list[dict[str, object]] = []
+    for result in sorted(
+        completed_results,
+        key=lambda item: (
+            str(item.get("finished_at", "") or item.get("started_at", "") or ""),
+            str(item.get("case_id", "") or ""),
+        ),
+        reverse=True,
+    ):
+        enriched_result = dict(result)
+        row = runtime_row_by_case_id.get(str(result.get("case_id", "") or ""), {})
+        enriched_result["result_matches_csv"] = row.get("result_matches_csv", "")
+        preloaded_completed_results.append(enriched_result)
     if not case_ids:
         summary = summarize_run(
             run_dir,
@@ -1321,6 +1689,7 @@ def run_case_batch(
                 "warnings_path": "",
                 "stop_requested": False,
                 "last_error": "No benchmark cases were selected for this run.",
+                **summary_defaults,
             },
         )
         if notify_paths:
@@ -1349,11 +1718,30 @@ def run_case_batch(
         jobs=jobs,
         target=target_label,
         artifacts_dir=run_dir,
+        runtime_config=settings.effective_runtime_config(),
+        completed_results=preloaded_completed_results,
     )
+
+    def _hard_quit(reason: str = "Hard quit requested.") -> None:
+        progress_observer.request_hard_stop(reason=reason)
+        _force_exit_now(130)
+
+    set_hard_exit_callback = getattr(inner_observer, "set_hard_exit_callback", None)
+    if callable(set_hard_exit_callback):
+        set_hard_exit_callback(lambda: _hard_quit("Hard quit requested from benchmark dashboard."))
 
     def process_case(case_id: str) -> dict[str, object]:
         case = runtime_dataset.load_case(case_id, ref, case_source=settings.benchmark_case_source)
-        workflow = ResolutionWorkflow(settings)
+        prompt_runner = OllamaPromptRunner(
+            settings,
+            settings.prompt_template_dir,
+            stats_callback=progress_observer.ollama_stats.record,
+        )
+        workflow = ResolutionWorkflow(
+            settings,
+            prompt_runner=prompt_runner,
+            activity_callback=progress_observer.case_event,
+        )
         state = workflow.initial_state_for_case(case, run_id=active_run_id)
         final_state = workflow.run(state)
         return dict(final_state["final_result"])
@@ -1362,25 +1750,32 @@ def run_case_batch(
         with redirect_runtime_warnings(warnings_path):
             if jobs <= 1:
                 for case_id in pending_case_ids:
+                    if progress_observer.hard_stop_requested():
+                        _hard_quit()
                     if progress_observer.stop_requested():
                         break
                     progress_observer.case_started(case_id)
                     result = process_case(case_id)
-                    progress_observer.advance(result)
                     row = build_runtime_comparison_row(
                         result,
                         official_lookup,
                         case_number=len(runtime_rows) + 1,
                     )
+                    enriched_result = dict(result)
+                    enriched_result["result_matches_csv"] = row.get("result_matches_csv", "")
+                    progress_observer.advance(enriched_result)
                     runtime_rows.append(row)
                     _append_runtime_comparison_row(runtime_table_csv_path, runtime_table_md_path, row)
                     _append_gist_match_row(gist_match_csv_path, row)
                     _append_gist_match_detailed_row(gist_match_detailed_csv_path, row)
             else:
-                with ThreadPoolExecutor(max_workers=jobs) as executor:
+                executor = ThreadPoolExecutor(max_workers=jobs)
+                try:
                     pending_iterator = iter(pending_case_ids)
                     futures: dict[object, str] = {}
                     for _ in range(min(jobs, len(pending_case_ids))):
+                        if progress_observer.hard_stop_requested():
+                            _hard_quit()
                         if progress_observer.stop_requested():
                             break
                         case_id = next(pending_iterator, None)
@@ -1392,22 +1787,42 @@ def run_case_batch(
                         future = next(as_completed(futures))
                         case_id = futures.pop(future)
                         result = future.result()
-                        progress_observer.advance(result)
                         row = build_runtime_comparison_row(
                             result,
                             official_lookup,
                             case_number=len(runtime_rows) + 1,
                         )
+                        enriched_result = dict(result)
+                        enriched_result["result_matches_csv"] = row.get("result_matches_csv", "")
+                        progress_observer.advance(enriched_result)
                         runtime_rows.append(row)
                         _append_runtime_comparison_row(runtime_table_csv_path, runtime_table_md_path, row)
                         _append_gist_match_row(gist_match_csv_path, row)
                         _append_gist_match_detailed_row(gist_match_detailed_csv_path, row)
+                        if progress_observer.hard_stop_requested():
+                            _hard_quit()
                         if progress_observer.stop_requested():
                             continue
                         next_case_id = next(pending_iterator, None)
                         if next_case_id is not None:
                             progress_observer.case_started(next_case_id)
                             futures[executor.submit(process_case, next_case_id)] = next_case_id
+                except SystemExit:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    raise
+                except KeyboardInterrupt:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    raise
+                except BaseException:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    raise
+                else:
+                    executor.shutdown(wait=True)
+    except KeyboardInterrupt as exc:
+        progress_observer.request_hard_stop(reason=f"{type(exc).__name__}: {exc}")
+        _force_exit_now(130)
+    except SystemExit:
+        raise
     except BaseException as exc:
         progress_observer.abort(exc)
         raise

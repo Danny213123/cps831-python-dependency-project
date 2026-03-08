@@ -66,6 +66,7 @@ class CandidatePlan:
     rank: int
     reason: str
     dependencies: list[CandidateDependency] = field(default_factory=list)
+    runtime_profile: str = ""
 
 
 @dataclass(slots=True)
@@ -75,6 +76,7 @@ class PackageVersionOptions:
     requires_python: dict[str, str] = field(default_factory=dict)
     upload_time: dict[str, str] = field(default_factory=dict)
     policy_notes: list[str] = field(default_factory=list)
+    platform_notes: dict[str, list[str]] = field(default_factory=dict)
     requires_dist: dict[str, list[str]] = field(default_factory=dict)
 
 
@@ -166,6 +168,7 @@ class ExecutionOutcome:
     image_tag: str = ""
     dependency_retryable: bool = False
     retry_severity: str = "terminal"
+    classifier_origin: str = ""
 
 
 @dataclass(slots=True)
@@ -188,6 +191,11 @@ class BenchmarkSummary:
     use_langchain: bool = True
     rag_mode: str = "pypi"
     structured_prompting: bool = False
+    effective_model_profile: str = "gemma-moe"
+    effective_rag_mode: str = "pypi"
+    effective_structured_prompting: bool = False
+    effective_repair_cycle_limit: int = 0
+    effective_candidate_fallback_before_repair: bool = False
     extraction_model: str = "gemma3:4b"
     runner_model: str = "gemma3:12b"
     version_model: str = "gemma3:12b"
@@ -212,6 +220,14 @@ class BenchmarkSummary:
     version_negotiation_case_count: int = 0
     dynamic_import_case_count: int = 0
     feedback_memory_case_count: int = 0
+    unsupported_import_failures: int = 0
+    bad_initial_candidate_failures: int = 0
+    platform_compatibility_failures: int = 0
+    native_retry_success_count: int = 0
+    model_mix_warning: str = ""
+    classifier_origin_counts: dict[str, int] = field(default_factory=dict)
+    deferred_python_fallback_cases: int = 0
+    root_cause_counts: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -227,6 +243,9 @@ class ResolutionState(TypedDict, total=False):
     extracted_imports: list[str]
     inferred_packages: list[str]
     unresolved_packages: list[str]
+    unsupported_imports: list[str]
+    ambiguous_imports: list[str]
+    bad_initial_candidates: list[dict[str, str]]
     version_options: list[PackageVersionOptions]
     selected_dependencies: list[ResolvedDependency]
     repaired_dependency_lines: list[str]
@@ -239,9 +258,12 @@ class ResolutionState(TypedDict, total=False):
     repair_stall_count: int
     current_validation_command: str
     current_runtime_profile: str
+    validation_options: list[dict[str, str]]
+    default_validation_profile: str
     generated_dockerfile: str
     generated_requirements: str
     prepared_execution_context: Any
+    pending_native_retry: bool
     case_started_at: str
     case_finished_at: str
     last_execution: ExecutionOutcome
@@ -253,6 +275,10 @@ class ResolutionState(TypedDict, total=False):
     benchmark_target_python: str
     inferred_target_python: str
     python_version_source: str
+    deferred_target_python: str
+    python_fallback_used: bool
+    pending_python_fallback: bool
+    classifier_origin: str
     resolver: ResolverName
     preset: PresetName
     prompt_profile: PromptProfile
@@ -263,6 +289,7 @@ class ResolutionState(TypedDict, total=False):
     repair_outcome: str
     applied_compatibility_policy: dict[str, list[str]]
     version_selection_source: str
+    candidate_plan_strategy: str
     inference_candidates: list[InferenceCandidate]
     repo_alias_candidates: dict[str, list[str]]
     dynamic_import_candidates: list[str]
@@ -275,6 +302,12 @@ class ResolutionState(TypedDict, total=False):
     python_constraint_intersection: list[str]
     top_level_module_map: dict[str, list[str]]
     system_dependencies: list[str]
+    bootstrap_dependencies: list[str]
+    system_dependency_hints: list[str]
+    system_packages_attempted: list[str]
+    bootstrap_packages_attempted: list[str]
+    platform_compatibility_notes: list[str]
+    repair_skipped_reason: str
     resolver_implementation: str
     repo_evidence: dict[str, Any]
     pypi_evidence: dict[str, Any]
@@ -284,6 +317,8 @@ class ResolutionState(TypedDict, total=False):
     selected_candidate_plan: CandidatePlan | None
     selected_candidate_rank: int | None
     repair_cycle_count: int
+    repair_model_concluded_impossible: bool
+    repair_plan_unavailable_reason: str
     structured_outputs: dict[str, Any]
     research_path: bool
     structured_prompt_failures: int

@@ -15,7 +15,9 @@ Return strict JSON only using this schema:
 
 Rules:
 - Only use the candidate bundles provided.
+- Each selected bundle must preserve the full dependency set from the chosen candidate bundle.
 - Prefer bundles compatible with the target Python and repo evidence.
+- When source compatibility hints are present, prefer bundles that satisfy those version families.
 - Avoid bundles contradicted by the conflict notes.
 - No markdown, no commentary, no text outside JSON.
 
@@ -27,6 +29,9 @@ Candidate bundles:
 
 Conflict notes:
 {conflict_notes}
+
+Source compatibility hints:
+{source_compatibility_hints}
 
 Repo evidence:
 {repo_evidence}

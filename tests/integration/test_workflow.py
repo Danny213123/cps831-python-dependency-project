@@ -84,6 +84,9 @@ class FakeDockerExecutor:
         target_python: str = "3.12",
         validation_command: str | None = None,
         extra_system_packages: list[str] | None = None,
+        extra_bootstrap_pins: list[str] | None = None,
+        case_id: str = "",
+        attempt_number: int = 0,
     ) -> PreparedContext:
         return self._prepared(artifact_dir, image_tag, validation_command)
 
@@ -94,6 +97,9 @@ class FakeDockerExecutor:
         artifact_dir: Path,
         image_tag: str,
         extra_system_packages: list[str] | None = None,
+        extra_bootstrap_pins: list[str] | None = None,
+        case_id: str = "",
+        attempt_number: int = 0,
     ) -> PreparedContext:
         return self._prepared(artifact_dir, image_tag, target.validation_command)
 
@@ -717,6 +723,8 @@ def test_research_workflow_tries_ranked_candidate_plans_before_repair(tmp_path: 
     settings.rag_mode = "hybrid"
     settings.structured_prompting = True
     settings.candidate_plan_count = 3
+    settings.allow_candidate_fallback_before_repair = True
+    settings.repair_cycle_limit = 2
     settings.repo_evidence_enabled = True
     project_root = write_project(tmp_path, "import yaml\nprint('ok')\n")
     workflow = ResolutionWorkflow(
@@ -984,3 +992,45 @@ def test_workflow_writes_llm_trace_log(tmp_path: Path) -> None:
     content = trace_log.read_text(encoding="utf-8")
     assert "--- PROMPT ---" in content
     assert "--- RESPONSE ---" in content
+
+
+def test_workflow_emits_activity_events(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    project_root = write_project(tmp_path, "import importlib\nmodule = importlib.import_module('yaml')\n")
+    activity_events: list[tuple[str, int, str, str]] = []
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=FakePromptRunner(
+            {
+                "extract": ["yaml"],
+                "version": ["PyYAML==6.0.2"],
+                "repair": [],
+                "adjudicate": [],
+            }
+        ),
+        pypi_store=FakePyPIStore({"PyYAML": ["6.0.2"]}),
+        docker_executor=FakeDockerExecutor(
+            [
+                DockerExecutionResult(
+                    build_succeeded=True,
+                    run_succeeded=True,
+                    exit_code=0,
+                    build_log="",
+                    run_log="",
+                    image_tag="img-1",
+                    wall_clock_seconds=0.1,
+                )
+            ]
+        ),
+        activity_callback=lambda case_id, attempt, kind, detail: activity_events.append((case_id, attempt, kind, detail)),
+    )
+
+    state = workflow.initial_state_for_project(project_root)
+    final_state = workflow.run(state)
+
+    event_kinds = [kind for _, _, kind, _ in activity_events]
+    assert final_state["final_result"]["success"] is True
+    assert "llm_prompt_sent" in event_kinds
+    assert "llm_response_received" in event_kinds
+    assert "docker_context_prepared" in event_kinds
+    assert "candidate_execution_started" in event_kinds

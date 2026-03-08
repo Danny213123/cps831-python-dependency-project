@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import ssl
 import tarfile
 import urllib.parse
@@ -11,6 +12,9 @@ from email.parser import Parser
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+
+
+PARSED_SCHEMA_VERSION = 2
 
 
 def _safe_name(package: str, version: str) -> str:
@@ -43,11 +47,21 @@ def _parse_metadata_names(text: str) -> list[str]:
     return sorted(names)
 
 
+def _parse_requires_python(text: str) -> str:
+    parsed = Parser().parsestr(text)
+    return str(parsed.get("Requires-Python") or "").strip()
+
+
 class PackageMetadataStore:
-    def __init__(self, cache_dir: Path):
+    def __init__(self, cache_dir: Path, *, keep_raw: bool | None = None):
         self.cache_dir = cache_dir
         self.raw_dir = cache_dir / "raw"
         self.parsed_dir = cache_dir / "parsed"
+        self.keep_raw = (
+            keep_raw
+            if keep_raw is not None
+            else os.environ.get("APDR_PACKAGE_METADATA_KEEP_RAW", "").strip().lower() in {"1", "true", "yes", "on"}
+        )
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.parsed_dir.mkdir(parents=True, exist_ok=True)
 
@@ -67,6 +81,14 @@ class PackageMetadataStore:
         with urllib.request.urlopen(url, timeout=30, context=context) as response:
             return response.read()
 
+    def _cleanup_raw_cache(self, raw_path: Path) -> None:
+        if self.keep_raw or not raw_path.exists():
+            return
+        try:
+            raw_path.unlink()
+        except OSError:
+            return
+
     def _fetch_release_bytes(self, release_files: list[dict[str, Any]], raw_path: Path) -> bytes | None:
         preferred = sorted(
             release_files,
@@ -83,14 +105,16 @@ class PackageMetadataStore:
                 payload = self._download_bytes(url)
             except OSError:
                 continue
-            raw_path.write_bytes(payload)
+            if self.keep_raw:
+                raw_path.write_bytes(payload)
             return payload
         return None
 
     @staticmethod
-    def _extract_from_wheel(payload: bytes) -> tuple[list[str], list[str]]:
+    def _extract_from_wheel(payload: bytes) -> tuple[list[str], list[str], str]:
         top_level: set[str] = set()
         requires_dist: list[str] = []
+        requires_python = ""
         with zipfile.ZipFile(BytesIO(payload)) as archive:
             for name in archive.namelist():
                 lowered = name.lower()
@@ -101,12 +125,19 @@ class PackageMetadataStore:
                     top_level.update(_parse_metadata_names(text))
                     parsed = Parser().parsestr(text)
                     requires_dist.extend(parsed.get_all("Requires-Dist") or [])
-        return sorted(top_level), sorted({entry.strip() for entry in requires_dist if entry.strip()})
+                    if not requires_python:
+                        requires_python = _parse_requires_python(text)
+        return (
+            sorted(top_level),
+            sorted({entry.strip() for entry in requires_dist if entry.strip()}),
+            requires_python,
+        )
 
     @staticmethod
-    def _extract_from_sdist(payload: bytes) -> tuple[list[str], list[str]]:
+    def _extract_from_sdist(payload: bytes) -> tuple[list[str], list[str], str]:
         top_level: set[str] = set()
         requires_dist: list[str] = []
+        requires_python = ""
         with tarfile.open(fileobj=BytesIO(payload), mode="r:*") as archive:
             for member in archive.getmembers():
                 lowered = member.name.lower()
@@ -123,7 +154,20 @@ class PackageMetadataStore:
                         top_level.update(_parse_metadata_names(text))
                         parsed = Parser().parsestr(text)
                         requires_dist.extend(parsed.get_all("Requires-Dist") or [])
-        return sorted(top_level), sorted({entry.strip() for entry in requires_dist if entry.strip()})
+                        if not requires_python:
+                            requires_python = _parse_requires_python(text)
+        return (
+            sorted(top_level),
+            sorted({entry.strip() for entry in requires_dist if entry.strip()}),
+            requires_python,
+        )
+
+    @staticmethod
+    def _parsed_cache_is_fresh(payload: dict[str, Any]) -> bool:
+        schema_version = payload.get("schema_version")
+        if schema_version != PARSED_SCHEMA_VERSION:
+            return False
+        return "requires_python" in payload
 
     def parse_release_metadata(
         self,
@@ -133,37 +177,45 @@ class PackageMetadataStore:
         release_files: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         parsed_path = self._parsed_path(package, version)
-        if parsed_path.exists():
-            return json.loads(parsed_path.read_text(encoding="utf-8"))
-
         raw_path = self._raw_path(package, version)
+        if parsed_path.exists():
+            cached = json.loads(parsed_path.read_text(encoding="utf-8"))
+            if self._parsed_cache_is_fresh(cached):
+                self._cleanup_raw_cache(raw_path)
+                return cached
+
         payload = raw_path.read_bytes() if raw_path.exists() else None
         if payload is None and release_files:
             payload = self._fetch_release_bytes(release_files, raw_path)
 
         top_level: list[str] = []
         requires_dist: list[str] = []
+        requires_python = ""
         source = "derived"
         if payload:
             try:
                 if zipfile.is_zipfile(BytesIO(payload)):
-                    top_level, requires_dist = self._extract_from_wheel(payload)
+                    top_level, requires_dist, requires_python = self._extract_from_wheel(payload)
                     source = "wheel"
                 else:
-                    top_level, requires_dist = self._extract_from_sdist(payload)
+                    top_level, requires_dist, requires_python = self._extract_from_sdist(payload)
                     source = "sdist"
             except (zipfile.BadZipFile, tarfile.TarError, OSError):
                 top_level = []
                 requires_dist = []
+                requires_python = ""
 
         if not top_level:
             top_level = _default_top_level_candidates(package)
         parsed = {
+            "schema_version": PARSED_SCHEMA_VERSION,
             "package": package,
             "version": version,
             "top_level_modules": sorted({item for item in top_level if item}),
             "requires_dist": requires_dist,
+            "requires_python": requires_python,
             "source": source,
         }
         parsed_path.write_text(json.dumps(parsed, indent=2), encoding="utf-8")
+        self._cleanup_raw_cache(raw_path)
         return parsed

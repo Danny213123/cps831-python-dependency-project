@@ -51,7 +51,7 @@ def test_settings_from_env_supports_research_preset(tmp_path: Path) -> None:
 
     assert settings.preset == "research"
     assert settings.prompt_profile == "research-rag"
-    assert settings.max_attempts == 6
+    assert settings.max_attempts == 15
     assert settings.rag_mode == "hybrid"
     assert settings.structured_prompting is True
     assert settings.candidate_plan_count == 3
@@ -92,6 +92,14 @@ def test_settings_from_env_supports_qwen35_moe_lite_defaults(tmp_path: Path) -> 
     assert settings.model_profile == "qwen35-moe-lite"
     assert settings.extraction_model == "qwen3.5:0.8b"
     assert settings.reasoning_model == "qwen3.5:4b"
+
+
+def test_settings_from_env_supports_mistral_nemo_12b_defaults(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, model_profile_override="mistral-nemo-12b")
+
+    assert settings.model_profile == "mistral-nemo-12b"
+    assert settings.extraction_model == "mistral-nemo:12b"
+    assert settings.reasoning_model == "mistral-nemo:12b"
 
 
 def test_settings_from_env_marks_custom_model_overrides(tmp_path: Path) -> None:
@@ -146,6 +154,7 @@ def test_settings_from_env_supports_competition_run_benchmark_source(tmp_path: P
     )
 
     assert settings.benchmark_case_source == "competition-run"
+    assert settings.benchmark_platform == "linux/amd64"
 
 
 def test_settings_from_env_supports_competition_csv_overrides(tmp_path: Path) -> None:
@@ -158,6 +167,17 @@ def test_settings_from_env_supports_competition_csv_overrides(tmp_path: Path) ->
     )
 
     assert settings.competition_result_csvs == (csv_path.resolve(),)
+
+
+def test_settings_from_env_uses_repo_tracked_pllm_competition_csv_by_default(tmp_path: Path) -> None:
+    csv_path = tmp_path / "data" / "benchmarks" / "gistable" / "competition" / "hard-gists-l10-r1-10-final.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    csv_path.write_text("id,name\n10,abc123\n", encoding="utf-8")
+
+    settings = Settings.from_env(project_root=tmp_path)
+
+    assert settings.competition_result_csvs[0] == csv_path.resolve()
+    assert csv_path.resolve() in settings.competition_result_csvs
 
 
 def test_settings_from_env_supports_competition_filter_file_override(tmp_path: Path) -> None:
@@ -193,3 +213,23 @@ def test_prompt_template_dir_falls_back_to_root_when_profile_missing(tmp_path: P
     settings.prompts_dir = prompts_root
 
     assert settings.prompt_template_dir == prompts_root
+
+
+def test_runtime_config_round_trip_and_mismatch_detection(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    payload = settings.effective_runtime_config()
+
+    restored = Settings.from_env(project_root=tmp_path)
+    restored.apply_runtime_config(payload)
+
+    assert restored.model_profile == settings.model_profile
+    assert restored.rag_mode == settings.rag_mode
+    assert restored.structured_prompting == settings.structured_prompting
+    assert restored.repair_cycle_limit == settings.repair_cycle_limit
+    assert restored.benchmark_platform == settings.benchmark_platform
+    assert restored.runtime_config_mismatches(payload) == []
+
+    payload["effective_structured_prompting"] = False
+    mismatches = restored.runtime_config_mismatches(payload)
+
+    assert any("effective_structured_prompting" in mismatch for mismatch in mismatches)

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import ast
+import inspect
 import json
 import re
 import shutil
+from string import Formatter
 import tomllib
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from agentic_python_dependency.benchmark.gistable import GistableDataset
@@ -50,6 +53,9 @@ from agentic_python_dependency.tools.import_extractor import (
     discover_python_files,
     extract_import_roots_from_code,
     filter_third_party_imports,
+    is_ambiguous_import,
+    is_trap_package_name,
+    is_unsupported_import,
     looks_like_package_name,
     load_python_sources,
     normalize_candidate_packages,
@@ -264,14 +270,14 @@ def reconcile_inferred_target_python(
     inferred_version = snapped
     inferred_major = inferred_version.split(".", 1)[0]
     benchmark_major = benchmark_target_python.split(".", 1)[0] if benchmark_target_python else ""
-    if inferred_major == "3" and not _is_python3_syntax_compatible(source_text):
-        if benchmark_major == "2" and benchmark_target_python:
-            return benchmark_target_python, "benchmark_dockerfile_syntax_guardrail"
-        return "2.7.18", "source_syntax_py2_guardrail"
     if inferred_major == "3" and extracted_imports and _has_python2_only_imports(extracted_imports):
         if benchmark_major == "2" and benchmark_target_python:
             return benchmark_target_python, "python2_import_signal"
         return "2.7.18", "python2_import_signal_default"
+    if inferred_major == "3" and not _is_python3_syntax_compatible(source_text):
+        if benchmark_major == "2" and benchmark_target_python:
+            return benchmark_target_python, "benchmark_dockerfile_syntax_guardrail"
+        return inferred_version, "llm_prompt_a"
     if inferred_major == benchmark_major:
         return inferred_version, "llm_prompt_a"
     return inferred_version, "llm_prompt_a"
@@ -291,13 +297,22 @@ def route_after_normalize(state: ResolutionState) -> str:
 
 def route_after_classification(state: ResolutionState, max_attempts: int) -> str:
     execution = state["last_execution"]
+    if state.get("pending_python_fallback") and state["current_attempt"] < max_attempts:
+        return "retry_current_plan"
+    if state.get("pending_native_retry") and state["current_attempt"] < max_attempts:
+        return "retry_current_plan"
     if execution.dependency_retryable and state["current_attempt"] < max_attempts:
         return "repair_prompt_c"
     return "finalize_result"
 
 
 def route_after_research_plan_selection(state: ResolutionState) -> str:
-    return "materialize_execution_context" if state.get("selected_candidate_plan") else "finalize_result"
+    selected_plan = state.get("selected_candidate_plan")
+    if not selected_plan:
+        return "finalize_result"
+    if not selected_plan.dependencies and state.get("repair_skipped_reason"):
+        return "finalize_result"
+    return "materialize_execution_context"
 
 
 def route_after_research_classification(state: ResolutionState, settings: Settings) -> str:
@@ -305,6 +320,10 @@ def route_after_research_classification(state: ResolutionState, settings: Settin
     execution = state["last_execution"]
     if state["current_attempt"] >= settings.max_attempts:
         return "finalize_result"
+    if state.get("pending_python_fallback"):
+        return "replan_after_python_fallback"
+    if state.get("pending_native_retry"):
+        return "retry_current_plan"
     if decision is None:
         if not execution.dependency_retryable:
             return "finalize_result"
@@ -323,8 +342,14 @@ def route_after_research_classification(state: ResolutionState, settings: Settin
     return "finalize_result"
 
 
-def route_after_research_repair(state: ResolutionState) -> str:
-    return "select_next_candidate_plan" if state.get("candidate_plans") else "finalize_result"
+def route_after_research_repair(state: ResolutionState, settings: Settings) -> str:
+    if state.get("candidate_plans"):
+        return "select_next_candidate_plan"
+    if state.get("repair_model_concluded_impossible"):
+        return "finalize_result"
+    if state.get("repair_cycle_count", 0) < settings.repair_cycle_limit:
+        return "repair_prompt_c_research"
+    return "finalize_result"
 
 
 def route_after_constraint_precheck(state: ResolutionState) -> str:
@@ -374,6 +399,29 @@ def build_import_smoke_command(import_roots: list[str]) -> str:
     )
 
 
+def build_import_spec_probe_command(import_roots: list[str]) -> str:
+    modules = sorted({root for root in import_roots if root})
+    if not modules:
+        return (
+            "python - <<'PY'\n"
+            "import py_compile\n"
+            "py_compile.compile('snippet.py', doraise=True)\n"
+            "print('import-specs-ok')\n"
+            "PY"
+        )
+    return (
+        "python - <<'PY'\n"
+        "import importlib.util as importlib_util\n"
+        "modules = "
+        f"{json.dumps(modules)}\n"
+        "missing = [name for name in modules if importlib_util.find_spec(name) is None]\n"
+        "if missing:\n"
+        "    raise ImportError('Missing module specs: ' + ', '.join(missing))\n"
+        "print('import-specs-ok')\n"
+        "PY"
+    )
+
+
 def build_snippet_import_command() -> str:
     return (
         "python - <<'PY'\n"
@@ -387,6 +435,42 @@ def build_snippet_import_command() -> str:
         "print('import-ok')\n"
         "PY"
     )
+
+
+def build_import_statements_command() -> str:
+    return (
+        "python - <<'PY'\n"
+        "import ast\n"
+        "import io\n"
+        "import os\n"
+        "for key, value in [('MPLBACKEND', 'Agg'), ('SDL_VIDEODRIVER', 'dummy'), ('QT_QPA_PLATFORM', 'offscreen')]:\n"
+        "    os.environ.setdefault(key, value)\n"
+        "source = io.open('snippet.py', 'r', encoding='utf-8').read()\n"
+        "tree = ast.parse(source, filename='snippet.py')\n"
+        "module = ast.parse('', filename='snippet.py')\n"
+        "module.body = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]\n"
+        "if hasattr(module, 'type_ignores'):\n"
+        "    module.type_ignores = []\n"
+        "namespace = {}\n"
+        "exec(compile(module, 'snippet.py', 'exec'), namespace, namespace)\n"
+        "print('imports-ok')\n"
+        "PY"
+    )
+
+
+def _has_top_level_ml_training_loop(source_code: str, extracted_imports: list[str]) -> bool:
+    ml_imports = {"tensorflow", "keras", "torch", "gym", "gymnasium"}
+    normalized_imports = {normalize_package_name(item) for item in extracted_imports}
+    if not normalized_imports & ml_imports:
+        return False
+    try:
+        tree = ast.parse(source_code)
+    except SyntaxError:
+        return False
+    for node in tree.body:
+        if isinstance(node, (ast.For, ast.While, ast.AsyncFor)):
+            return True
+    return False
 
 
 def build_snippet_stub_argv_command(max_index: int) -> str:
@@ -410,23 +494,48 @@ def build_snippet_stub_argv_command(max_index: int) -> str:
     )
 
 
-def infer_benchmark_validation_profile(source_code: str, extracted_imports: list[str]) -> tuple[str, str]:
+def build_benchmark_validation_options(source_code: str, extracted_imports: list[str]) -> tuple[list[dict[str, str]], str]:
     lowered = source_code.lower()
-    if any(token in lowered for token in ("flask(", ".run(", "uvicorn.run", "serve_forever(", "app.run(")):
-        return ("service_import", build_snippet_import_command())
-    if any(token in lowered for token in ("argparse", "optparse", "click.command", "sys.argv")):
+    options: list[dict[str, str]] = []
+    normalized_imports = {normalize_package_name(item) for item in extracted_imports}
+    hardware_sensitive_ml_imports = {"tensorflow", "torch"}
+
+    def add_option(profile: str, command: str, reason: str) -> None:
+        if any(option["profile"] == profile for option in options):
+            return
+        options.append({"profile": profile, "command": command, "reason": reason})
+
+    default_profile = "docker_cmd"
+    default_command = ""
+    if any(token in lowered for token in ("flask(", "uvicorn.run", "serve_forever(", "app.run(")):
+        default_profile = "service_import"
+        default_command = build_snippet_import_command()
+        add_option("service_import", default_command, "service entrypoints should be import-validated")
+    elif any(token in lowered for token in ("argparse", "optparse", "click.command", "sys.argv")):
         if "argparse" not in lowered and "optparse" not in lowered and "click.command" not in lowered and "sys.argv" in lowered:
             max_index = 0
             for match in re.findall(r"sys\.argv\[(\d+)\]", source_code):
                 max_index = max(max_index, int(match))
             if max_index:
-                return ("argv_stub", build_snippet_stub_argv_command(max_index))
-        return (
-            "cli_help",
-            "python snippet.py --help >/tmp/apdr-help.txt 2>&1 || "
-            "python snippet.py -h >/tmp/apdr-help.txt 2>&1 || "
-            f"{build_snippet_import_command()}",
-        )
+                default_profile = "argv_stub"
+                default_command = build_snippet_stub_argv_command(max_index)
+                add_option("argv_stub", default_command, "raw sys.argv access needs stubbed positional args")
+            else:
+                default_profile = "cli_help"
+                default_command = (
+                    "python snippet.py --help >/tmp/apdr-help.txt 2>&1 || "
+                    "python snippet.py -h >/tmp/apdr-help.txt 2>&1 || "
+                    f"{build_snippet_import_command()}"
+                )
+                add_option("cli_help", default_command, "CLI scripts should prefer help-mode validation")
+        else:
+            default_profile = "cli_help"
+            default_command = (
+                "python snippet.py --help >/tmp/apdr-help.txt 2>&1 || "
+                "python snippet.py -h >/tmp/apdr-help.txt 2>&1 || "
+                f"{build_snippet_import_command()}"
+            )
+            add_option("cli_help", default_command, "CLI scripts should prefer help-mode validation")
     import_only_tokens = (
         "get_ipython(",
         "db.model",
@@ -435,16 +544,48 @@ def infer_benchmark_validation_profile(source_code: str, extracted_imports: list
         "read_csv(",
         ".parse(",
         "open(",
+        "django.conf.settings",
+        "models.model",
     )
     if "__name__ == '__main__'" in source_code or '__name__ == "__main__"' in source_code:
-        return ("main_guard_import", build_snippet_import_command())
-    if any(token in lowered for token in import_only_tokens):
-        return ("import_smoke", build_import_smoke_command(extracted_imports))
-    if any(
+        default_profile = "main_guard_import"
+        default_command = build_snippet_import_command()
+        add_option("main_guard_import", default_command, "main-guarded scripts should avoid full execution")
+    elif _has_top_level_ml_training_loop(source_code, extracted_imports) and normalized_imports & hardware_sensitive_ml_imports:
+        default_profile = "import_specs"
+        default_command = build_import_spec_probe_command(extracted_imports)
+        add_option("import_specs", default_command, "hardware-sensitive ML imports should use spec-only validation")
+    elif _has_top_level_ml_training_loop(source_code, extracted_imports):
+        default_profile = "import_statements"
+        default_command = build_import_statements_command()
+        add_option("import_statements", default_command, "long-running ML scripts should validate import statements only")
+    elif any(token in lowered for token in import_only_tokens):
+        default_profile = "import_smoke"
+        default_command = build_import_smoke_command(extracted_imports)
+        add_option("import_smoke", default_command, "framework or data scripts should use import-only validation")
+    elif any(
         token in lowered
         for token in ("tkinter", "tkinter.", "turtle", "pygame", "mainloop(", "plt.show(", "pyqt", "wx.")
     ):
-        return ("headless_imports", build_import_smoke_command(extracted_imports))
+        default_profile = "headless_imports"
+        default_command = build_import_smoke_command(extracted_imports)
+        add_option("headless_imports", default_command, "GUI imports should use headless import validation")
+
+    add_option(default_profile, default_command, "default heuristic validation profile")
+    if extracted_imports:
+        add_option("import_smoke", build_import_smoke_command(extracted_imports), "top-level imports only")
+        if normalized_imports & hardware_sensitive_ml_imports:
+            add_option("import_specs", build_import_spec_probe_command(extracted_imports), "check module specs without importing hardware-sensitive packages")
+    add_option("import_statements", build_import_statements_command(), "execute only import statements from the snippet")
+    add_option("docker_cmd", "", "run the snippet exactly as the benchmark Docker command would")
+    return options, default_profile
+
+
+def infer_benchmark_validation_profile(source_code: str, extracted_imports: list[str]) -> tuple[str, str]:
+    options, default_profile = build_benchmark_validation_options(source_code, extracted_imports)
+    for option in options:
+        if option["profile"] == default_profile:
+            return option["profile"], option["command"]
     return ("docker_cmd", "")
 
 
@@ -466,12 +607,24 @@ def infer_graph_recursion_limit(max_attempts: int) -> int:
 
 
 class ResolutionWorkflow:
+    _OPTIONAL_PROMPT_VARIABLE_DEFAULTS: dict[str, Any] = {
+        "candidate_bundle_hints": "{}",
+        "conflict_notes": "[]",
+        "source_compatibility_hints": "[]",
+        "validation_options": "[]",
+        "default_validation_profile": "",
+        "repair_memory": "{}",
+        "feedback_summary": "{}",
+        "max_plan_count": 1,
+    }
+
     def __init__(
         self,
         settings: Settings,
         prompt_runner: OllamaPromptRunner | None = None,
         pypi_store: PyPIMetadataStore | None = None,
         docker_executor: DockerExecutor | None = None,
+        activity_callback: Callable[[str, int, str, str], None] | None = None,
     ):
         self.settings = settings
         self.preset_config = get_preset_config(settings.preset)
@@ -479,13 +632,23 @@ class ResolutionWorkflow:
         self.pypi_store = pypi_store or PyPIMetadataStore(settings.pypi_cache_dir)
         self.package_metadata_store = PackageMetadataStore(settings.package_metadata_dir)
         self.docker_executor = docker_executor or DockerExecutor(settings)
+        self.activity_callback = activity_callback
+        setattr(self.docker_executor, "activity_callback", activity_callback)
         self.dataset = GistableDataset(settings)
 
     def _prompt_template(self, name: str) -> str:
         return (self.settings.prompt_template_dir / name).read_text(encoding="utf-8")
 
     def _format_prompt(self, name: str, **variables: Any) -> str:
-        return self._prompt_template(name).format(**variables)
+        template = self._prompt_template(name)
+        formatter = Formatter()
+        resolved_variables = dict(variables)
+        for _literal, field_name, _format_spec, _conversion in formatter.parse(template):
+            if not field_name or field_name in resolved_variables:
+                continue
+            if field_name in self._OPTIONAL_PROMPT_VARIABLE_DEFAULTS:
+                resolved_variables[field_name] = self._OPTIONAL_PROMPT_VARIABLE_DEFAULTS[field_name]
+        return template.format(**resolved_variables)
 
     def _trace_log_paths(self, state: ResolutionState) -> list[Path]:
         if "artifact_dir" not in state:
@@ -592,10 +755,24 @@ class ResolutionWorkflow:
                 if not message.endswith("\n"):
                     handle.write("\n")
 
+    def _emit_activity(self, state: ResolutionState, *, kind: str, detail: str) -> None:
+        if self.activity_callback is None:
+            return
+        case_id = str(state.get("case_id", "") or "").strip()
+        if not case_id:
+            return
+        attempt = int(state.get("current_attempt", 0) or 0)
+        self.activity_callback(case_id, attempt=attempt, kind=kind, detail=detail)
+
     def _trace_request(self, state: ResolutionState, stage: str, prompt_text: str) -> None:
         timestamp = datetime.now(timezone.utc).isoformat()
         model = self._stage_model_name(stage)
         attempt = state.get("current_attempt", 0)
+        self._emit_activity(
+            state,
+            kind="llm_prompt_sent",
+            detail=f"Sending {stage} prompt to {model}.",
+        )
         message = (
             f"[{timestamp}] case={state.get('case_id', '')} attempt={attempt} stage={stage} model={model}\n"
             "--- PROMPT ---\n"
@@ -608,6 +785,11 @@ class ResolutionWorkflow:
         timestamp = datetime.now(timezone.utc).isoformat()
         model = self._stage_model_name(stage)
         attempt = state.get("current_attempt", 0)
+        self._emit_activity(
+            state,
+            kind="llm_response_received",
+            detail=f"Received {stage} response from {model}.",
+        )
         message = (
             f"[{timestamp}] case={state.get('case_id', '')} attempt={attempt} stage={stage} model={model}\n"
             "--- RESPONSE ---\n"
@@ -630,6 +812,125 @@ class ResolutionWorkflow:
                 "plugin",
             )
         )
+
+    @staticmethod
+    def _has_legacy_keras_api(source_text: str) -> bool:
+        lowered = source_text.lower()
+        if "from keras.layers import" in lowered and re.search(r"\bmerge\b", lowered):
+            return True
+        return bool(
+            re.search(r"\bModel\s*\([^)]*\binput\s*=", source_text)
+            or re.search(r"\bModel\s*\([^)]*\boutput\s*=", source_text)
+        )
+
+    @staticmethod
+    def _has_legacy_gym_api(source_text: str) -> bool:
+        return bool(
+            re.search(
+                r"^\s*[^=\n,]+,\s*[^=\n,]+,\s*[^=\n,]+,\s*[^=\n,]+\s*=\s*.*\.step\(",
+                source_text,
+                re.MULTILINE,
+            )
+            or re.search(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*.*\.reset\(\)\s*$", source_text, re.MULTILINE)
+        )
+
+    def _benchmark_resolution_platform(self, state: ResolutionState) -> str:
+        if state.get("mode") != "gistable":
+            return ""
+        return str(self.settings.benchmark_platform or "").strip()
+
+    def _get_version_options_for_state(
+        self,
+        state: ResolutionState,
+        package: str,
+        target_python: str,
+        *,
+        limit: int,
+    ) -> PackageVersionOptions:
+        kwargs: dict[str, Any] = {}
+        try:
+            parameters = inspect.signature(self.pypi_store.get_version_options).parameters
+        except (TypeError, ValueError):
+            parameters = {}
+        if "limit" in parameters:
+            kwargs["limit"] = limit
+        if "preset" in parameters:
+            kwargs["preset"] = self.settings.preset
+        platform_override = self._benchmark_resolution_platform(state)
+        if platform_override and "platform" in parameters:
+            kwargs["platform"] = platform_override
+        return self.pypi_store.get_version_options(package, target_python, **kwargs)
+
+    def _source_version_preferences(self, state: ResolutionState) -> dict[str, tuple[str, str]]:
+        source_text = "\n".join(state.get("source_files", {}).values())
+        inferred = {normalize_package_name(package) for package in state.get("inferred_packages", [])}
+        preferences: dict[str, tuple[str, str]] = {}
+        if "keras" in inferred and self._has_legacy_keras_api(source_text):
+            preferences["keras"] = ("<=2.4.3", "legacy_keras_api")
+            if "tensorflow" in inferred:
+                preferences["tensorflow"] = ("<=2.4.4", "legacy_keras_tensorflow_api")
+                if "numpy" in inferred:
+                    preferences["numpy"] = ("<=1.19.5", "legacy_tensorflow_numpy")
+        if "gym" in inferred and self._has_legacy_gym_api(source_text):
+            preferences["gym"] = ("<0.26", "legacy_gym_api")
+        return preferences
+
+    def _apply_source_version_preferences(self, state: ResolutionState) -> None:
+        preferences = self._source_version_preferences(state)
+        if not preferences:
+            return
+        updated_options: list[PackageVersionOptions] = []
+        changed = False
+        for option in state.get("version_options", []):
+            normalized_package = normalize_package_name(option.package)
+            preference = preferences.get(normalized_package)
+            if preference is None or not option.versions:
+                updated_options.append(option)
+                continue
+            specifier_text, reason = preference
+            try:
+                specifier = SpecifierSet(specifier_text)
+            except InvalidSpecifier:
+                updated_options.append(option)
+                continue
+            preferred_versions: list[str] = []
+            fallback_versions: list[str] = []
+            for version in option.versions:
+                try:
+                    parsed = Version(version)
+                except InvalidVersion:
+                    fallback_versions.append(version)
+                    continue
+                if parsed in specifier:
+                    preferred_versions.append(version)
+                else:
+                    fallback_versions.append(version)
+            if not preferred_versions:
+                updated_options.append(option)
+                continue
+            reordered_versions = option.versions if self._is_research() else preferred_versions + fallback_versions
+            policy_notes = list(option.policy_notes)
+            policy_note = f"source_compat_{reason}:{specifier_text}"
+            if policy_note not in policy_notes:
+                policy_notes.append(policy_note)
+            changed |= reordered_versions != option.versions or policy_notes != option.policy_notes
+            updated_options.append(
+                PackageVersionOptions(
+                    package=option.package,
+                    versions=reordered_versions,
+                    requires_python=dict(option.requires_python),
+                    upload_time=dict(option.upload_time),
+                    policy_notes=policy_notes,
+                    platform_notes={version: list(notes) for version, notes in option.platform_notes.items()},
+                    requires_dist={version: list(entries) for version, entries in option.requires_dist.items()},
+                )
+            )
+        if not changed:
+            return
+        state["version_options"] = updated_options
+        state["applied_compatibility_policy"] = {
+            option.package: option.policy_notes for option in updated_options if option.policy_notes
+        }
 
     def _should_use_extract_llm(self, state: ResolutionState, extracted_imports: list[str]) -> bool:
         if not extracted_imports:
@@ -676,6 +977,93 @@ class ResolutionWorkflow:
         allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
         return "\n".join(allowed_packages)
 
+    @staticmethod
+    def _record_bad_initial_candidate(
+        state: ResolutionState,
+        *,
+        package: str,
+        reason: str,
+        source: str,
+    ) -> None:
+        entries = list(state.get("bad_initial_candidates", []))
+        candidate = {"package": package, "reason": reason, "source": source}
+        if candidate not in entries:
+            entries.append(candidate)
+        state["bad_initial_candidates"] = entries
+
+    def _candidate_block_reason(
+        self,
+        state: ResolutionState,
+        package: str,
+        sources: list[str] | set[str] | tuple[str, ...],
+    ) -> str | None:
+        normalized_package = normalize_package_name(package)
+        source_set = {str(source) for source in sources}
+        repo_declared = {
+            normalize_package_name(package_name)
+            for package_name in state.get("repo_evidence", {}).get("declared_packages", [])
+            if isinstance(package_name, str) and package_name.strip()
+        }
+        repo_alias_targets = {
+            normalize_package_name(candidate)
+            for packages in state.get("repo_alias_candidates", {}).values()
+            for candidate in packages
+            if isinstance(candidate, str) and candidate.strip()
+        }
+        if is_unsupported_import(package):
+            return "unsupported_external_runtime"
+        if is_trap_package_name(package) and normalized_package not in repo_declared and normalized_package not in repo_alias_targets:
+            return "trap_package_without_repo_evidence"
+        if (
+            is_ambiguous_import(package)
+            and normalized_package not in repo_declared
+            and normalized_package not in repo_alias_targets
+            and "repo_declared" not in source_set
+            and "repo_alias" not in source_set
+        ):
+            return "ambiguous_import_without_repo_evidence"
+        return None
+
+    def _sanitize_candidate_provenance(
+        self,
+        state: ResolutionState,
+        provenance: dict[str, str],
+    ) -> dict[str, str]:
+        filtered: dict[str, str] = {}
+        unsupported = set(state.get("unsupported_imports", []))
+        ambiguous = set(state.get("ambiguous_imports", []))
+        for package, source in provenance.items():
+            reason = self._candidate_block_reason(state, package, [source])
+            if reason is not None:
+                if is_unsupported_import(package):
+                    unsupported.add(package)
+                if is_ambiguous_import(package) or is_trap_package_name(package):
+                    ambiguous.add(package)
+                self._record_bad_initial_candidate(state, package=package, reason=reason, source=source)
+                continue
+            filtered[package] = source
+        state["unsupported_imports"] = sorted(unsupported)
+        state["ambiguous_imports"] = sorted(ambiguous)
+        return filtered
+
+    def _set_inferred_packages_from_provenance(
+        self,
+        state: ResolutionState,
+        provenance: dict[str, str],
+    ) -> ResolutionState:
+        filtered = self._sanitize_candidate_provenance(state, provenance)
+        state["inferred_packages"] = sorted(filtered, key=str.lower)
+        state["candidate_provenance"] = filtered
+        if state["inferred_packages"]:
+            state["repair_skipped_reason"] = ""
+        elif state.get("unsupported_imports") and not state.get("ambiguous_imports"):
+            state["repair_skipped_reason"] = "unsupported_imports_only"
+        elif state.get("unsupported_imports") or state.get("ambiguous_imports"):
+            state["repair_skipped_reason"] = "no_supported_candidates"
+        else:
+            state["repair_skipped_reason"] = ""
+        return state
+
     def _maybe_alias_retry(self, state: ResolutionState) -> list[str] | None:
         if not self.preset_config.allow_alias_retry:
             return None
@@ -686,24 +1074,64 @@ class ResolutionWorkflow:
         alias = runtime_package_alias(missing_module)
         if not alias:
             return None
-        if normalize_package_name(alias) not in {normalize_package_name(package) for package in state.get("inferred_packages", [])}:
+        normalized_alias = normalize_package_name(alias)
+        normalized_inferred = {normalize_package_name(package) for package in state.get("inferred_packages", [])}
+        selected_dependencies = list(state.get("selected_dependencies", []))
+        if normalized_alias not in normalized_inferred and not any(
+            is_trap_package_name(dependency.name) for dependency in selected_dependencies
+        ):
             return None
         try:
-            option = self.pypi_store.get_version_options(
+            option = self._get_version_options_for_state(
+                state,
                 alias,
                 state["target_python"],
                 limit=self._version_option_limit(state.get("target_python", "3.12")),
-                preset=self.settings.preset,
             )
         except FileNotFoundError:
             return None
         if not option.versions:
             return None
         state["repair_outcome"] = "alias_retry"
-        return [f"{alias}=={option.versions[0]}"]
+        repaired_dependencies = [
+            dependency.pin()
+            for dependency in selected_dependencies
+            if normalize_package_name(dependency.name) != normalize_package_name(missing_module)
+            and not is_trap_package_name(dependency.name)
+            and normalize_package_name(dependency.name) != normalized_alias
+        ]
+        repaired_dependencies.append(f"{alias}=={option.versions[0]}")
+        return sorted(set(repaired_dependencies), key=str.lower)
 
     def _candidate_provenance_from(self, packages: list[str], extracted_imports: list[str]) -> dict[str, str]:
         return normalize_candidate_packages_with_sources(packages, extracted_imports)
+
+    def _backfill_runtime_alias_imports(self, packages: list[str], extracted_imports: list[str]) -> list[str]:
+        merged: list[str] = []
+        seen: set[str] = set()
+        for package in packages:
+            if not package:
+                continue
+            normalized = normalize_package_name(package)
+            if normalized in seen:
+                continue
+            merged.append(package)
+            seen.add(normalized)
+            alias = runtime_package_alias(package)
+            if alias:
+                seen.add(normalize_package_name(alias))
+        for import_name in extracted_imports:
+            alias = runtime_package_alias(import_name)
+            if not alias:
+                continue
+            normalized_import = normalize_package_name(import_name)
+            normalized_alias = normalize_package_name(alias)
+            if normalized_import in seen or normalized_alias in seen:
+                continue
+            merged.append(import_name)
+            seen.add(normalized_import)
+            seen.add(normalized_alias)
+        return merged
 
     def _uses_full_apd(self) -> bool:
         return self.settings.resolver == "apdr"
@@ -729,14 +1157,278 @@ class ResolutionWorkflow:
 
     @staticmethod
     def _candidate_plan_payload(plans: list[CandidatePlan]) -> list[dict[str, Any]]:
-        return [
-            {
+        payload: list[dict[str, Any]] = []
+        for plan in plans:
+            item = {
                 "rank": plan.rank,
                 "reason": plan.reason,
                 "dependencies": [{"name": dep.name, "version": dep.version} for dep in plan.dependencies],
             }
-            for plan in plans
+            if plan.runtime_profile:
+                item["runtime_profile"] = plan.runtime_profile
+            payload.append(item)
+        return payload
+
+    @staticmethod
+    def _default_validation_option(state: ResolutionState) -> dict[str, str]:
+        options = state.get("validation_options", [])
+        default_profile = str(state.get("default_validation_profile", "") or "").strip()
+        for option in options:
+            if option.get("profile") == default_profile:
+                return option
+        if options:
+            return options[0]
+        return {"profile": state.get("current_runtime_profile", "docker_cmd"), "command": state.get("current_validation_command", ""), "reason": "current"}
+
+    def _apply_validation_profile(self, state: ResolutionState, runtime_profile: str | None = None) -> None:
+        if state.get("mode") != "gistable":
+            return
+        selected_profile = str(runtime_profile or "").strip()
+        selected_option: dict[str, str] | None = None
+        if selected_profile:
+            for option in state.get("validation_options", []):
+                if option.get("profile") == selected_profile:
+                    selected_option = option
+                    break
+        if selected_option is None:
+            selected_option = self._default_validation_option(state)
+        state["current_runtime_profile"] = str(selected_option.get("profile", "docker_cmd") or "docker_cmd")
+        state["current_validation_command"] = str(selected_option.get("command", "") or "")
+
+    def _validation_options_summary(self, state: ResolutionState, *, limit: int = 2500) -> str:
+        payload = [
+            {
+                "profile": option.get("profile", ""),
+                "reason": option.get("reason", ""),
+                "command": option.get("command", ""),
+            }
+            for option in state.get("validation_options", [])
         ]
+        rendered = json.dumps(payload, indent=2)
+        return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
+
+    def _planning_version_space_summary(self, state: ResolutionState, *, limit: int = 5000) -> str:
+        package_limit = 16
+        for version_limit in (24, 16, 12, 8, 6, 4, 2):
+            payload = {
+                "packages": [
+                    {
+                        "package": option.package,
+                        "versions": option.versions[:version_limit],
+                        "policy_notes": option.policy_notes[:4],
+                        "requires_python": {
+                            version: option.requires_python.get(version, "")
+                            for version in option.versions[: min(version_limit, 12)]
+                            if option.requires_python.get(version, "")
+                        },
+                        "platform_notes": {
+                            version: option.platform_notes.get(version, [])[:4]
+                            for version in option.versions[: min(version_limit, 8)]
+                            if option.platform_notes.get(version, [])
+                        },
+                        "requires_dist": {
+                            version: option.requires_dist.get(version, [])[:6]
+                            for version in option.versions[: min(version_limit, 6)]
+                            if option.requires_dist.get(version, [])
+                        },
+                    }
+                    for option in state.get("version_options", [])[:package_limit]
+                ],
+                "unresolved_packages": state.get("unresolved_packages", [])[:8],
+            }
+            rendered = json.dumps(payload, indent=2)
+            if len(rendered) <= limit:
+                return rendered
+        minimal = json.dumps(
+            {
+                "packages": [
+                    {"package": option.package, "versions": option.versions[:2]}
+                    for option in state.get("version_options", [])[:8]
+                ]
+            },
+            indent=2,
+        )
+        return minimal if len(minimal) <= limit else minimal[: limit - 3] + "..."
+
+    def _candidate_bundle_hint_summary(self, state: ResolutionState, *, limit: int = 3500) -> str:
+        payload = {
+            "generated_bundles": state.get("structured_outputs", {}).get("candidate_bundles", [])[:8],
+            "negotiated_bundles": state.get("structured_outputs", {}).get("version_negotiation", {}).get(
+                "retained_candidate_plans",
+                [],
+            )[:6],
+        }
+        rendered = json.dumps(payload, indent=2)
+        return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
+
+    def _conflict_note_summary(self, state: ResolutionState, *, limit: int = 2000) -> str:
+        payload = [
+            {
+                "package": note.package,
+                "related_package": note.related_package,
+                "kind": note.kind,
+                "reason": note.reason,
+                "severity": note.severity,
+            }
+            for note in state.get("version_conflict_notes", [])[:16]
+        ]
+        rendered = json.dumps(payload, indent=2)
+        return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
+
+    def _source_compatibility_hint_summary(self, state: ResolutionState, *, limit: int = 1600) -> str:
+        preferences = self._source_version_preferences(state)
+        if not preferences:
+            return "[]"
+        payload = [
+            {
+                "package": package,
+                "preferred_specifier": specifier,
+                "reason": reason,
+            }
+            for package, (specifier, reason) in sorted(preferences.items())
+        ]
+        rendered = json.dumps(payload, indent=2)
+        return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
+
+    def _preferred_bundle_versions(self, state: ResolutionState) -> dict[str, list[str]]:
+        preferences = self._source_version_preferences(state)
+        if not preferences:
+            return {}
+        preferred_versions: dict[str, list[str]] = {}
+        for option in state.get("version_options", []):
+            normalized_package = normalize_package_name(option.package)
+            preference = preferences.get(normalized_package)
+            if preference is None:
+                continue
+            specifier_text, _reason = preference
+            try:
+                specifier = SpecifierSet(specifier_text)
+            except InvalidSpecifier:
+                continue
+            matching_versions: list[str] = []
+            for version in option.versions:
+                try:
+                    if Version(version) in specifier:
+                        matching_versions.append(version)
+                except InvalidVersion:
+                    continue
+            if matching_versions:
+                preferred_versions[option.package] = matching_versions
+        return preferred_versions
+
+    @staticmethod
+    def _candidate_plan_signature(plan: CandidatePlan) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            sorted((normalize_package_name(dependency.name), dependency.version) for dependency in plan.dependencies)
+        )
+
+    @staticmethod
+    def _attempt_record_signature(attempt: AttemptRecord) -> tuple[tuple[str, str], ...]:
+        signature: list[tuple[str, str]] = []
+        for dependency in attempt.dependencies:
+            if "==" not in dependency:
+                continue
+            name, version = dependency.split("==", 1)
+            signature.append((normalize_package_name(name), version))
+        return tuple(sorted(signature))
+
+    def _filter_novel_candidate_plans(
+        self,
+        state: ResolutionState,
+        plans: list[CandidatePlan],
+    ) -> list[CandidatePlan]:
+        attempted_signatures = {
+            self._attempt_record_signature(attempt)
+            for attempt in state.get("attempt_records", [])
+            if attempt.dependencies
+        }
+        retained: list[CandidatePlan] = []
+        seen_signatures: set[tuple[tuple[str, str], ...]] = set()
+        for plan in plans:
+            signature = self._candidate_plan_signature(plan)
+            if not signature or signature in attempted_signatures or signature in seen_signatures:
+                continue
+            retained.append(plan)
+            seen_signatures.add(signature)
+        return self._rebuild_ranked_plans(retained)
+
+    @staticmethod
+    def _requires_python_allows_target(specifier: str, target_python: str) -> bool:
+        candidate = str(specifier or "").strip()
+        if not candidate:
+            return True
+        try:
+            return Version(target_python) in SpecifierSet(candidate)
+        except (InvalidSpecifier, InvalidVersion):
+            return True
+
+    @staticmethod
+    def _rebuild_ranked_plans(plans: list[CandidatePlan]) -> list[CandidatePlan]:
+        return [
+            CandidatePlan(
+                rank=index + 1,
+                reason=plan.reason,
+                dependencies=list(plan.dependencies),
+                runtime_profile=plan.runtime_profile,
+            )
+            for index, plan in enumerate(plans)
+        ]
+
+    def _augment_ranked_candidate_plans(
+        self,
+        ranked_plans: list[CandidatePlan],
+        *,
+        bundles: list[dict[str, Any]],
+        max_plan_count: int,
+    ) -> tuple[list[CandidatePlan], str]:
+        retained: list[CandidatePlan] = []
+        seen_signatures: set[tuple[tuple[str, str], ...]] = set()
+
+        for plan in ranked_plans:
+            signature = self._candidate_plan_signature(plan)
+            if signature in seen_signatures:
+                continue
+            retained.append(plan)
+            seen_signatures.add(signature)
+
+        llm_plan_count = len(retained)
+        for bundle in bundles:
+            if len(retained) >= max_plan_count:
+                break
+            dependencies_payload = bundle.get("dependencies", [])
+            if not isinstance(dependencies_payload, list):
+                continue
+            dependencies: list[CandidateDependency] = []
+            for dependency in dependencies_payload:
+                if not isinstance(dependency, dict):
+                    dependencies = []
+                    break
+                name = str(dependency.get("name", "")).strip()
+                version = str(dependency.get("version", "")).strip()
+                if not name or not version:
+                    dependencies = []
+                    break
+                dependencies.append(CandidateDependency(name=name, version=version))
+            if not dependencies:
+                continue
+            fallback_plan = CandidatePlan(
+                rank=0,
+                reason="deterministic fallback conflict-free bundle",
+                dependencies=dependencies,
+            )
+            signature = self._candidate_plan_signature(fallback_plan)
+            if signature in seen_signatures:
+                continue
+            retained.append(fallback_plan)
+            seen_signatures.add(signature)
+
+        if llm_plan_count and len(retained) > llm_plan_count:
+            strategy = "llm+fallback-augmented"
+        elif llm_plan_count:
+            strategy = "llm-selected"
+        else:
+            strategy = "deterministic-fallback"
+        return self._rebuild_ranked_plans(retained[:max_plan_count]), strategy
 
     @staticmethod
     def _allowed_versions_map(options: list[PackageVersionOptions]) -> dict[str, set[str]]:
@@ -754,6 +1446,7 @@ class ResolutionWorkflow:
                     "requires_python": option.requires_python,
                     "requires_dist": option.requires_dist,
                     "policy_notes": option.policy_notes,
+                    "platform_notes": option.platform_notes,
                 }
                 for option in options
             ],
@@ -804,6 +1497,8 @@ class ResolutionWorkflow:
     def _strategy_type_from(previous: list[str], current: list[str]) -> str:
         if not previous:
             return "fallback_candidate"
+        if previous == current:
+            return "same_plan_retry"
         previous_names = {item.split("==", 1)[0] for item in previous}
         current_names = {item.split("==", 1)[0] for item in current}
         if current_names < previous_names:
@@ -860,9 +1555,509 @@ class ResolutionWorkflow:
             else "# no inferred third-party dependencies\n"
         )
 
+    @staticmethod
+    def _activity_excerpt(error_details: str, *, limit: int = 120) -> str:
+        for line in error_details.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.lower().startswith("failure focus:"):
+                return stripped if len(stripped) <= limit else stripped[: limit - 3].rstrip() + "..."
+        return ""
+
+    @staticmethod
+    def _summarize_dependency_pins(
+        dependencies: list[ResolvedDependency] | list[CandidateDependency],
+        *,
+        limit: int = 3,
+    ) -> str:
+        pins = [dependency.pin() for dependency in dependencies]
+        if not pins:
+            return "-"
+        if len(pins) <= limit:
+            return ", ".join(pins)
+        return f"{', '.join(pins[:limit])}, +{len(pins) - limit} more"
+
+    def _emit_post_classification_activity(
+        self,
+        state: ResolutionState,
+        *,
+        category: str,
+        next_step: str,
+        suggested_packages: list[str] | None = None,
+    ) -> None:
+        if next_step == "retry_current_plan":
+            if state.get("pending_python_fallback"):
+                self._emit_activity(
+                    state,
+                    kind="python_fallback_planned",
+                    detail=(
+                        "Retrying with deferred Python fallback "
+                        f"{state.get('target_python', '')} after {category}."
+                    ),
+                )
+                return
+            package_summary = ", ".join(suggested_packages or state.get("system_dependencies", []))
+            detail = (
+                f"Retrying current plan after {category}"
+                + (f" with bootstrap/system hints: {package_summary}." if package_summary else ".")
+            )
+            self._emit_activity(state, kind="native_retry_planned", detail=detail)
+            return
+        if next_step == "select_next_candidate_plan":
+            remaining = list(state.get("remaining_candidate_plans", []))
+            next_rank = remaining[0].rank if remaining else "next"
+            self._emit_activity(
+                state,
+                kind="candidate_fallback_planned",
+                detail=f"Trying fallback candidate plan rank {next_rank} next ({len(remaining)} plan(s) remaining).",
+            )
+            return
+        if next_step in {"repair_prompt_c", "repair_prompt_c_research"}:
+            self._emit_activity(
+                state,
+                kind="repair_planned",
+                detail=f"Routing to repair after {category} using the latest build/run logs.",
+            )
+            return
+        if next_step == "finalize_result":
+            self._emit_activity(
+                state,
+                kind="case_finalizing",
+                detail=f"No further retries scheduled after {category}.",
+            )
+
+    @staticmethod
+    def _failure_focus(error_details: str) -> str:
+        patterns = (
+            r"No module named ['\"]?([A-Za-z0-9_\.]+)['\"]?",
+            r"cannot import name ['\"]?([A-Za-z0-9_\.]+)['\"]?",
+            r"module ['\"]([A-Za-z0-9_\.]+)['\"] has no attribute ['\"]([A-Za-z0-9_\.]+)['\"]",
+            r"(libxcb\.so\.1|libexempi|Exempi library not found|Unknown compiler\(s\)|setuptools\.build_meta|pg_config|zlib|typing|Cython\.Build)",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, error_details, re.IGNORECASE)
+            if not match:
+                continue
+            groups = [group for group in match.groups() if group]
+            if groups:
+                return " / ".join(groups[:2])
+            return match.group(0)
+        return ""
+
+    @staticmethod
+    def _native_retry_hints(error_details: str) -> tuple[list[str], list[str], list[str]]:
+        rules = [
+            (
+                re.compile(
+                    r"Unknown compiler\(s\)|error: command ['\"](?:gcc|g\+\+)['\"] failed|"
+                    r"unable to execute ['\"](?:gcc|g\+\+)['\"]|Python\.h: No such file",
+                    re.IGNORECASE,
+                ),
+                ["compiler_toolchain"],
+                ["build-essential", "gcc", "g++"],
+                [],
+            ),
+            (
+                re.compile(r"gfortran|openblas|lapack|blas|numpy\.distutils", re.IGNORECASE),
+                ["scientific_native_stack"],
+                ["gfortran", "libopenblas-dev", "liblapack-dev"],
+                [],
+            ),
+            (
+                re.compile(r"gobject-introspection|pygobject|libgirepository|pkg-config|cairo", re.IGNORECASE),
+                ["gtk_gobject_build"],
+                ["libgirepository1.0-dev", "libcairo2-dev", "pkg-config"],
+                [],
+            ),
+            (
+                re.compile(r"libxcb\.so\.1|qt|xcb", re.IGNORECASE),
+                ["qt_x11_runtime"],
+                ["libxcb1"],
+                [],
+            ),
+            (
+                re.compile(r"Exempi library not found|libexempi", re.IGNORECASE),
+                ["xmp_exempi_runtime"],
+                ["libexempi-dev"],
+                [],
+            ),
+            (
+                re.compile(r"libhdf5(?:\.so)?|h5py", re.IGNORECASE),
+                ["hdf5_native_runtime"],
+                ["libhdf5-dev"],
+                [],
+            ),
+            (
+                re.compile(r"pg_config executable not found", re.IGNORECASE),
+                ["postgres_build_headers"],
+                ["libpq-dev"],
+                [],
+            ),
+            (
+                re.compile(r"The headers or library files could not be found for zlib", re.IGNORECASE),
+                ["zlib_headers"],
+                ["zlib1g-dev"],
+                [],
+            ),
+            (
+                re.compile(
+                    r"Please make sure the libxml2 and libxslt development packages are installed|"
+                    r"lxml.*(?:libxml2|libxslt)",
+                    re.IGNORECASE,
+                ),
+                ["lxml_headers"],
+                ["libxml2-dev", "libxslt1-dev", "zlib1g-dev"],
+                [],
+            ),
+            (
+                re.compile(r"No module named ['\"]?typing['\"]?", re.IGNORECASE),
+                ["typing_backport"],
+                [],
+                ["typing==3.10.0.0"],
+            ),
+            (
+                re.compile(
+                    r"No module named ['\"]?Cython\.Build['\"]?|"
+                    r"Cython\.Compiler\.Errors\.CompileError.*(?:h5py|gevent|_conv\.pyx|corecext\.pyx)",
+                    re.IGNORECASE | re.DOTALL,
+                ),
+                ["legacy_cython_build"],
+                [],
+                ["Cython<3"],
+            ),
+        ]
+        hints: list[str] = []
+        system_packages: list[str] = []
+        bootstrap_pins: list[str] = []
+        for pattern, rule_hints, rule_packages, rule_bootstrap_pins in rules:
+            if not pattern.search(error_details):
+                continue
+            for hint in rule_hints:
+                if hint not in hints:
+                    hints.append(hint)
+            for package in rule_packages:
+                if package not in system_packages:
+                    system_packages.append(package)
+            for pin in rule_bootstrap_pins:
+                if pin not in bootstrap_pins:
+                    bootstrap_pins.append(pin)
+        return hints, system_packages, bootstrap_pins
+
+    @staticmethod
+    def _requires_python2_runtime_retry(category: str, error_details: str) -> bool:
+        if category == "SyntaxError":
+            return True
+        if category not in {"ImportError", "ModuleNotFoundError", "PackageCompatibilityError"}:
+            return False
+        if re.search(r"Missing parentheses in call to ['\"]print['\"]", error_details, re.IGNORECASE):
+            return True
+        for module in sorted(PY2_STDLIB_EXTRAS, key=len, reverse=True):
+            if re.search(
+                rf"No module named ['\"]?{re.escape(module)}['\"]?",
+                error_details,
+                re.IGNORECASE,
+            ):
+                return True
+        return False
+
+    def _should_reserve_last_attempt_for_deferred_python_fallback(
+        self,
+        state: ResolutionState,
+        execution: ExecutionOutcome,
+    ) -> bool:
+        if not self._uses_full_apd() or state.get("mode") != "gistable":
+            return False
+        if execution.build_succeeded or execution.run_succeeded:
+            return False
+        if not state.get("deferred_target_python") or state.get("python_fallback_used"):
+            return False
+        current_target = str(state.get("target_python", "") or "").strip()
+        if not current_target.startswith("3"):
+            return False
+        current_attempt = int(state.get("current_attempt", 0) or 0)
+        if current_attempt >= self.settings.max_attempts:
+            return False
+        return current_attempt >= max(1, self.settings.max_attempts - 1)
+
+    @staticmethod
+    def _root_cause_bucket(category: str, error_details: str) -> str:
+        lowered = error_details.lower()
+        rules = [
+            ("tensorflow_api_drift", r"tensorflow\.(?:examples|contrib)|tensorflow['\"] has no attribute ['\"](?:placeholder|flags)"),
+            ("pg_config", r"pg_config executable not found"),
+            ("zlib_headers", r"headers or library files could not be found for zlib"),
+            ("lxml_headers", r"libxml2 and libxslt development packages are installed|lxml.*(?:libxml2|libxslt)"),
+            ("typing_backport", r"no module named ['\"]typing['\"]"),
+            ("legacy_cython_build", r"no module named ['\"]cython\.build['\"]|cython\.compiler\.errors\.compileerror"),
+            ("service_connection", r"serverselectiontimeouterror|connection refused"),
+            ("shared_library", r"cannot open shared object file|libxcb\.so\.1|libexempi"),
+        ]
+        for bucket, pattern in rules:
+            if re.search(pattern, lowered, re.IGNORECASE):
+                return bucket
+        return normalize_package_name(category or "unknown")
+
+    def _refresh_deferred_python_fallback(self, state: ResolutionState) -> None:
+        if state.get("mode") != "gistable":
+            state["deferred_target_python"] = ""
+            return
+        if state.get("python_fallback_used"):
+            if not state.get("deferred_target_python"):
+                state["deferred_target_python"] = "2.7.18"
+            return
+        current_target = str(state.get("target_python", "") or "").strip()
+        if not current_target.startswith("3"):
+            state["deferred_target_python"] = ""
+            return
+        extracted_imports = state.get("extracted_imports", [])
+        if _has_python2_only_imports(extracted_imports):
+            state["deferred_target_python"] = ""
+            return
+        source_text = "\n".join(state.get("source_files", {}).values())
+        state["deferred_target_python"] = "2.7.18" if not _is_python3_syntax_compatible(source_text) else ""
+
+    def _filter_version_options_for_target_python(self, state: ResolutionState) -> None:
+        if self._is_research():
+            self.retrieve_version_specific_metadata(state)
+
+        target_python = state.get("target_python", "3.12")
+        filtered_options: list[PackageVersionOptions] = []
+        unresolved = list(state.get("unresolved_packages", []))
+        platform_notes: set[str] = set(state.get("platform_compatibility_notes", []))
+
+        for option in state.get("version_options", []):
+            retained_versions: list[str] = []
+            retained_requires_python: dict[str, str] = {}
+            retained_upload_time: dict[str, str] = {}
+            retained_platform_notes: dict[str, list[str]] = {}
+            retained_requires_dist: dict[str, list[str]] = {}
+
+            for version in option.versions:
+                requires_python = str(option.requires_python.get(version, "") or "").strip()
+                if requires_python and not self._requires_python_allows_target(requires_python, target_python):
+                    platform_notes.add(
+                        f"{option.package} {version}: dropped after recorded Requires-Python {requires_python}"
+                    )
+                    continue
+                retained_versions.append(version)
+                retained_requires_python[version] = requires_python
+                retained_upload_time[version] = option.upload_time.get(version, "")
+                retained_platform_notes[version] = list(option.platform_notes.get(version, []))
+                retained_requires_dist[version] = list(option.requires_dist.get(version, []))
+
+            if not retained_versions:
+                if option.package not in unresolved:
+                    unresolved.append(option.package)
+                continue
+
+            filtered_options.append(
+                PackageVersionOptions(
+                    package=option.package,
+                    versions=retained_versions,
+                    requires_python=retained_requires_python,
+                    upload_time=retained_upload_time,
+                    policy_notes=option.policy_notes,
+                    platform_notes=retained_platform_notes,
+                    requires_dist=retained_requires_dist,
+                )
+            )
+
+        state["version_options"] = filtered_options
+        state["unresolved_packages"] = unresolved
+        state["platform_compatibility_notes"] = sorted(platform_notes)
+        state["applied_compatibility_policy"] = {
+            option.package: option.policy_notes for option in filtered_options if option.policy_notes
+        }
+        self._apply_source_version_preferences(state)
+
+    def _rebuild_selected_dependencies_for_target_python(
+        self,
+        state: ResolutionState,
+        *,
+        package_names: list[str] | None = None,
+    ) -> None:
+        packages = [
+            package
+            for package in (package_names or [dependency.name for dependency in state.get("selected_dependencies", [])])
+            if package
+        ] or list(state.get("inferred_packages", []))
+        version_limit = self._version_option_limit(state.get("target_python", "3.12"))
+        options: list[PackageVersionOptions] = []
+        unresolved: list[str] = []
+        platform_notes: set[str] = set()
+        for package in packages:
+            if not looks_like_package_name(package):
+                unresolved.append(package)
+                continue
+            try:
+                option = self._get_version_options_for_state(
+                    state,
+                    package,
+                    state["target_python"],
+                    limit=version_limit,
+                )
+            except FileNotFoundError:
+                unresolved.append(package)
+                continue
+            if not option.versions:
+                unresolved.append(package)
+                continue
+            for version, notes in option.platform_notes.items():
+                for note in notes:
+                    platform_notes.add(f"{option.package} {version}: {note}")
+            options.append(option)
+        state["version_options"] = options
+        state["unresolved_packages"] = unresolved
+        state["platform_compatibility_notes"] = sorted(platform_notes)
+        self._filter_version_options_for_target_python(state)
+        options = list(state.get("version_options", []))
+        unresolved = list(state.get("unresolved_packages", []))
+        selected = self._deterministic_dependencies(options)
+        state["selected_dependencies"] = sorted(selected, key=lambda dependency: dependency.name.lower())
+        self._prepare_selected_dependencies(state)
+        state["dependency_reason"] = "deferred_python_fallback"
+        state["version_selection_source"] = "deferred_python_fallback"
+        if self._is_research():
+            pypi_evidence = self._build_pypi_evidence_payload(options, unresolved)
+            existing_pypi_evidence = state.get("pypi_evidence", {})
+            existing_alias_resolution = existing_pypi_evidence.get("alias_resolution")
+            if existing_alias_resolution:
+                pypi_evidence["alias_resolution"] = existing_alias_resolution
+            metadata_enrichment = existing_pypi_evidence.get("metadata_enrichment")
+            if metadata_enrichment:
+                pypi_evidence["metadata_enrichment"] = metadata_enrichment
+            state["pypi_evidence"] = pypi_evidence
+            self._write_json_artifact(state, "pypi-evidence.json", pypi_evidence)
+            plan = CandidatePlan(
+                rank=1,
+                reason="deterministic dependency refresh after deferred Python fallback",
+                dependencies=[
+                    CandidateDependency(name=dependency.name, version=dependency.version)
+                    for dependency in state.get("selected_dependencies", [])
+                ],
+            )
+            state["candidate_plans"] = [plan]
+            state["remaining_candidate_plans"] = []
+            state["selected_candidate_plan"] = plan
+            state["selected_candidate_rank"] = 1
+            state["candidate_plan_strategy"] = "deterministic-fallback"
+
+    def _activate_deferred_python_fallback(self, state: ResolutionState) -> None:
+        deferred_target = str(state.get("deferred_target_python", "") or "").strip()
+        if not deferred_target:
+            return
+        state["target_python"] = deferred_target
+        state["python_version_source"] = "deferred_python_fallback"
+        state["python_fallback_used"] = True
+        state["pending_python_fallback"] = True
+        state["pending_native_retry"] = False
+        state["system_dependencies"] = []
+        state["system_dependency_hints"] = []
+        state["system_packages_attempted"] = []
+        state["bootstrap_dependencies"] = []
+        state["bootstrap_packages_attempted"] = []
+        state["version_options"] = []
+        state["unresolved_packages"] = []
+        state["platform_compatibility_notes"] = []
+        state["constraint_pack"] = None
+        state["version_conflict_notes"] = []
+        state["python_constraint_intersection"] = []
+        state["candidate_plans"] = []
+        state["remaining_candidate_plans"] = []
+        state["selected_candidate_plan"] = None
+        state["selected_candidate_rank"] = None
+        state["selected_dependencies"] = []
+        state["generated_requirements"] = "# pending model replan after deferred python fallback\n"
+        self._emit_activity(
+            state,
+            kind="python_fallback_activated",
+            detail=f"Switching to deferred Python fallback {deferred_target} and restarting model planning.",
+        )
+
+    def _apply_python_signal_guardrails(self, state: ResolutionState) -> None:
+        self._refresh_deferred_python_fallback(state)
+        if state.get("mode") != "gistable":
+            return
+        current_target = str(state.get("target_python", "") or "").strip()
+        if not current_target.startswith("3"):
+            return
+        source_text = "\n".join(state.get("source_files", {}).values())
+        resolved_python_version, version_source = reconcile_inferred_target_python(
+            current_target,
+            benchmark_target_python=state.get("benchmark_target_python", ""),
+            source_text=source_text,
+            extracted_imports=state.get("extracted_imports", []),
+        )
+        if version_source not in {
+            "benchmark_dockerfile_syntax_guardrail",
+            "python2_import_signal",
+            "python2_import_signal_default",
+        }:
+            return
+        if resolved_python_version:
+            state["target_python"] = resolved_python_version
+        state["deferred_target_python"] = ""
+        state["python_version_source"] = version_source
+
+    def _maybe_prefer_benchmark_target_python(self, state: ResolutionState) -> None:
+        if state.get("mode") != "gistable":
+            return
+        if state.get("python_version_source") != "llm_prompt_a":
+            return
+        benchmark_target = str(state.get("benchmark_target_python", "") or "").strip()
+        current_target = str(state.get("target_python", "") or "").strip()
+        selected_dependencies = list(state.get("selected_dependencies", []))
+        if not benchmark_target or not current_target or not selected_dependencies:
+            return
+        if benchmark_target == current_target:
+            return
+        benchmark_major = benchmark_target.split(".", 1)[0]
+        current_major = current_target.split(".", 1)[0]
+        if benchmark_major != current_major or benchmark_major != "3":
+            return
+        combined_source = "\n".join(state.get("source_files", {}).values())
+        if not _is_python3_syntax_compatible(combined_source):
+            return
+        if _has_python2_only_imports(state.get("extracted_imports", [])):
+            return
+
+        option_limit = max(self._version_option_limit(benchmark_target), 120)
+        for dependency in selected_dependencies:
+            try:
+                compatible = self._get_version_options_for_state(
+                    state,
+                    dependency.name,
+                    benchmark_target,
+                    limit=option_limit,
+                )
+            except FileNotFoundError:
+                return
+            if dependency.version not in set(compatible.versions):
+                return
+
+        state["target_python"] = benchmark_target
+        state["python_version_source"] = "benchmark_dockerfile_preferred_compatible"
+
     def _default_research_plans(self, state: ResolutionState) -> list[CandidatePlan]:
         options = state.get("version_options", [])
         if not state.get("inferred_packages"):
+            if state.get("unsupported_imports"):
+                state["dependency_reason"] = "unsupported_imports"
+                return [
+                    CandidatePlan(
+                        rank=1,
+                        reason="imports require unsupported external runtime packages",
+                        dependencies=[],
+                    )
+                ]
+            if state.get("ambiguous_imports") or state.get("bad_initial_candidates"):
+                state["dependency_reason"] = "no_supported_candidates"
+                return [
+                    CandidatePlan(
+                        rank=1,
+                        reason="no safe supported PyPI candidates after guarded resolution",
+                        dependencies=[],
+                    )
+                ]
             state["dependency_reason"] = "stdlib_only"
             return [CandidatePlan(rank=1, reason="no third-party dependencies detected", dependencies=[])]
         if not options:
@@ -894,6 +2089,33 @@ class ResolutionWorkflow:
             )
         ]
 
+    def replan_after_python_fallback(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_research() or not state.get("pending_python_fallback"):
+            return state
+        state["pending_python_fallback"] = False
+        state["pending_native_retry"] = False
+        state["repaired_dependency_lines"] = []
+        state["repair_outcome"] = ""
+        state["candidate_plan_strategy"] = ""
+        self._emit_activity(
+            state,
+            kind="python_fallback_replanning",
+            detail=f"Replanning dependencies for Python {state.get('target_python', '')}.",
+        )
+        state = self.retrieve_pypi_metadata(state)
+        state = self.resolve_aliases(state)
+        state = self.retrieve_version_specific_metadata(state)
+        state = self.build_constraint_pack(state)
+        state = self.requires_python_intersection_check(state)
+        if route_after_constraint_precheck(state) == "finalize_result":
+            return state
+        state = self.build_rag_context(state)
+        state = self.generate_candidate_bundles(state)
+        state = self.negotiate_version_bundles(state)
+        state = self.generate_candidate_plans(state)
+        state = self.select_next_candidate_plan(state)
+        return state
+
     def initial_state_for_case(self, case: BenchmarkCase, run_id: str | None = None) -> ResolutionState:
         return ResolutionState(
             run_id=run_id or uuid4().hex[:12],
@@ -916,6 +2138,7 @@ class ResolutionWorkflow:
             repair_outcome="",
             applied_compatibility_policy={},
             version_selection_source="",
+            candidate_plan_strategy="",
             inference_candidates=[],
             repo_alias_candidates={},
             dynamic_import_candidates=[],
@@ -928,6 +2151,22 @@ class ResolutionWorkflow:
             python_constraint_intersection=[],
             top_level_module_map={},
             system_dependencies=[],
+            bootstrap_dependencies=[],
+            unsupported_imports=[],
+            ambiguous_imports=[],
+            bad_initial_candidates=[],
+            deferred_target_python="",
+            python_fallback_used=False,
+            pending_native_retry=False,
+            pending_python_fallback=False,
+            classifier_origin="",
+            validation_options=[],
+            default_validation_profile="",
+            system_dependency_hints=[],
+            system_packages_attempted=[],
+            bootstrap_packages_attempted=[],
+            platform_compatibility_notes=[],
+            repair_skipped_reason="",
             resolver_implementation="internal",
             repo_evidence={},
             pypi_evidence={},
@@ -937,6 +2176,8 @@ class ResolutionWorkflow:
             selected_candidate_plan=None,
             selected_candidate_rank=None,
             repair_cycle_count=0,
+            repair_model_concluded_impossible=False,
+            repair_plan_unavailable_reason="",
             structured_outputs={},
             research_path=self._is_research(),
             structured_prompt_failures=0,
@@ -972,6 +2213,7 @@ class ResolutionWorkflow:
             repair_outcome="",
             applied_compatibility_policy={},
             version_selection_source="",
+            candidate_plan_strategy="",
             inference_candidates=[],
             repo_alias_candidates={},
             dynamic_import_candidates=[],
@@ -984,6 +2226,22 @@ class ResolutionWorkflow:
             python_constraint_intersection=[],
             top_level_module_map={},
             system_dependencies=[],
+            bootstrap_dependencies=[],
+            unsupported_imports=[],
+            ambiguous_imports=[],
+            bad_initial_candidates=[],
+            deferred_target_python="",
+            python_fallback_used=False,
+            pending_native_retry=False,
+            pending_python_fallback=False,
+            classifier_origin="",
+            validation_options=[],
+            default_validation_profile="",
+            system_dependency_hints=[],
+            system_packages_attempted=[],
+            bootstrap_packages_attempted=[],
+            platform_compatibility_notes=[],
+            repair_skipped_reason="",
             resolver_implementation="internal",
             repo_evidence={},
             pypi_evidence={},
@@ -993,6 +2251,8 @@ class ResolutionWorkflow:
             selected_candidate_plan=None,
             selected_candidate_rank=None,
             repair_cycle_count=0,
+            repair_model_concluded_impossible=False,
+            repair_plan_unavailable_reason="",
             structured_outputs={},
             research_path=self._is_research(),
             structured_prompt_failures=0,
@@ -1024,7 +2284,10 @@ class ResolutionWorkflow:
             if route_after_execute(current) == "finalize_result":
                 return self.finalize_result(current)
             current = self.classify_outcome(current)
-            if route_after_classification(current, self.settings.max_attempts) == "finalize_result":
+            next_step = route_after_classification(current, self.settings.max_attempts)
+            if next_step == "retry_current_plan":
+                continue
+            if next_step == "finalize_result":
                 return self.finalize_result(current)
             current = self.repair_prompt_c(current)
             current = self.retrieve_pypi_metadata(current)
@@ -1055,7 +2318,9 @@ class ResolutionWorkflow:
         current = self.negotiate_version_bundles(current)
         current = self.generate_candidate_plans(current)
         current = self.select_next_candidate_plan(current)
-        if not current.get("selected_candidate_plan"):
+        if not current.get("selected_candidate_plan") or (
+            not current.get("selected_dependencies") and current.get("repair_skipped_reason")
+        ):
             return self.finalize_result(current)
         while True:
             current = self.materialize_execution_context(current)
@@ -1066,6 +2331,13 @@ class ResolutionWorkflow:
             next_step = route_after_research_classification(current, self.settings)
             if next_step == "finalize_result":
                 return self.finalize_result(current)
+            if next_step == "retry_current_plan":
+                continue
+            if next_step == "replan_after_python_fallback":
+                current = self.replan_after_python_fallback(current)
+                if not current.get("selected_candidate_plan"):
+                    return self.finalize_result(current)
+                continue
             if next_step == "select_next_candidate_plan":
                 current = self.select_next_candidate_plan(current)
                 if not current.get("selected_candidate_plan"):
@@ -1073,10 +2345,15 @@ class ResolutionWorkflow:
                 continue
             current = self.build_repair_memory_summary(current)
             current = self.repair_prompt_c_research(current)
-            if route_after_research_repair(current) == "finalize_result":
+            repair_next_step = route_after_research_repair(current, self.settings)
+            if repair_next_step == "finalize_result":
                 return self.finalize_result(current)
+            if repair_next_step == "repair_prompt_c_research":
+                continue
             current = self.select_next_candidate_plan(current)
-            if not current.get("selected_candidate_plan"):
+            if not current.get("selected_candidate_plan") or (
+                not current.get("selected_dependencies") and current.get("repair_skipped_reason")
+            ):
                 return self.finalize_result(current)
 
     def build_graph(self):
@@ -1115,7 +2392,11 @@ class ResolutionWorkflow:
         graph.add_conditional_edges(
             "classify_outcome",
             lambda state: route_after_classification(state, self.settings.max_attempts),
-            {"repair_prompt_c": "repair_prompt_c", "finalize_result": "finalize_result"},
+            {
+                "repair_prompt_c": "repair_prompt_c",
+                "retry_current_plan": "materialize_execution_context",
+                "finalize_result": "finalize_result",
+            },
         )
         graph.add_edge("repair_prompt_c", "retrieve_pypi_metadata")
         graph.add_edge("finalize_result", END)
@@ -1146,6 +2427,7 @@ class ResolutionWorkflow:
         graph.add_node("materialize_execution_context", self.materialize_execution_context)
         graph.add_node("execute_candidate", self.execute_candidate)
         graph.add_node("classify_outcome", self.classify_outcome)
+        graph.add_node("replan_after_python_fallback", self.replan_after_python_fallback)
         graph.add_node("build_repair_memory_summary", self.build_repair_memory_summary)
         graph.add_node("repair_prompt_c_research", self.repair_prompt_c_research)
         graph.add_node("finalize_result", self.finalize_result)
@@ -1187,16 +2469,27 @@ class ResolutionWorkflow:
             "classify_outcome",
             lambda state: route_after_research_classification(state, self.settings),
             {
+                "retry_current_plan": "materialize_execution_context",
+                "replan_after_python_fallback": "replan_after_python_fallback",
                 "select_next_candidate_plan": "select_next_candidate_plan",
                 "repair_prompt_c_research": "build_repair_memory_summary",
                 "finalize_result": "finalize_result",
             },
         )
+        graph.add_conditional_edges(
+            "replan_after_python_fallback",
+            route_after_research_plan_selection,
+            {"materialize_execution_context": "materialize_execution_context", "finalize_result": "finalize_result"},
+        )
         graph.add_edge("build_repair_memory_summary", "repair_prompt_c_research")
         graph.add_conditional_edges(
             "repair_prompt_c_research",
-            route_after_research_repair,
-            {"select_next_candidate_plan": "select_next_candidate_plan", "finalize_result": "finalize_result"},
+            lambda state: route_after_research_repair(state, self.settings),
+            {
+                "repair_prompt_c_research": "build_repair_memory_summary",
+                "select_next_candidate_plan": "select_next_candidate_plan",
+                "finalize_result": "finalize_result",
+            },
         )
         graph.add_edge("finalize_result", END)
         return graph.compile()
@@ -1239,18 +2532,39 @@ class ResolutionWorkflow:
         for code in state["source_files"].values():
             extracted.update(filter_third_party_imports(extract_import_roots_from_code(code)))
         state["extracted_imports"] = sorted(extracted)
+        state["unsupported_imports"] = sorted({item for item in extracted if is_unsupported_import(item)})
+        state["ambiguous_imports"] = sorted(
+            {
+                item
+                for item in extracted
+                if is_ambiguous_import(item) and not runtime_package_alias(item)
+            }
+        )
         if state["mode"] == "gistable":
             source = state["source_files"].get("snippet.py", "")
-            profile, command = infer_benchmark_validation_profile(source, state["extracted_imports"])
+            validation_options, default_profile = build_benchmark_validation_options(source, state["extracted_imports"])
             if (
-                profile == "docker_cmd"
-                and not command
+                default_profile == "docker_cmd"
                 and state["benchmark_case"].case_source in {"all-gists", "competition-run"}
             ):
-                profile = "snippet_exec"
-                command = "python snippet.py"
-            state["current_runtime_profile"] = profile
-            state["current_validation_command"] = command
+                default_profile = "snippet_exec"
+                validation_options = [
+                    option
+                    for option in validation_options
+                    if option.get("profile") != "docker_cmd"
+                ]
+                validation_options.insert(
+                    0,
+                    {
+                        "profile": "snippet_exec",
+                        "command": "python snippet.py",
+                        "reason": "benchmark snippet execution default",
+                    },
+                )
+            state["validation_options"] = validation_options
+            state["default_validation_profile"] = default_profile
+            self._apply_validation_profile(state, default_profile)
+        self._apply_python_signal_guardrails(state)
         return state
 
     def extract_dynamic_imports(self, state: ResolutionState) -> ResolutionState:
@@ -1381,6 +2695,7 @@ class ResolutionWorkflow:
                 state["target_python"] = resolved_python_version
             if version_source:
                 state["python_version_source"] = version_source
+            self._refresh_deferred_python_fallback(state)
         state["structured_outputs"]["extract"] = llm_candidates
         candidate_sources: dict[str, set[str]] = {}
         candidate_confidence: dict[str, float] = {}
@@ -1413,16 +2728,30 @@ class ResolutionWorkflow:
             if item.get("evidence"):
                 candidate_reason[package] = "; ".join(str(entry) for entry in item.get("evidence", []))
 
-        candidates = [
-            InferenceCandidate(
-                package=package,
-                confidence=candidate_confidence.get(package, 1.0 if "llm" not in sources else 0.75),
-                sources=sorted(sources),
-                reason=candidate_reason.get(package, ""),
-                accepted=False,
+        candidates: list[InferenceCandidate] = []
+        for package, sources in sorted(candidate_sources.items(), key=lambda item: item[0].lower()):
+            blocked_reason = self._candidate_block_reason(state, package, sorted(sources))
+            if blocked_reason is not None:
+                if is_unsupported_import(package):
+                    state["unsupported_imports"] = sorted(set(state.get("unsupported_imports", [])) | {package})
+                if is_ambiguous_import(package) or is_trap_package_name(package):
+                    state["ambiguous_imports"] = sorted(set(state.get("ambiguous_imports", [])) | {package})
+                self._record_bad_initial_candidate(
+                    state,
+                    package=package,
+                    reason=blocked_reason,
+                    source=",".join(sorted(sources)),
+                )
+                continue
+            candidates.append(
+                InferenceCandidate(
+                    package=package,
+                    confidence=candidate_confidence.get(package, 1.0 if "llm" not in sources else 0.75),
+                    sources=sorted(sources),
+                    reason=candidate_reason.get(package, ""),
+                    accepted=False,
+                )
             )
-            for package, sources in sorted(candidate_sources.items(), key=lambda item: item[0].lower())
-        ]
         state["inference_candidates"] = candidates
         self._write_json_artifact(state, "package-candidates.json", [asdict(candidate) for candidate in candidates])
         return state
@@ -1501,9 +2830,7 @@ class ResolutionWorkflow:
         provenance = self._candidate_provenance_from([candidate.package for candidate in accepted], state.get("extracted_imports", []))
         for candidate in accepted:
             provenance[candidate.package] = candidate.sources[0] if candidate.sources else provenance.get(candidate.package, "llm")
-        state["inferred_packages"] = sorted(provenance, key=str.lower)
-        state["candidate_provenance"] = provenance
-        return state
+        return self._set_inferred_packages_from_provenance(state, provenance)
 
     def build_rag_context(self, state: ResolutionState) -> ResolutionState:
         if not self._is_research():
@@ -1534,9 +2861,7 @@ class ResolutionWorkflow:
                     "source": f"{self.settings.resolver}_static_imports",
                 }
             ]
-            state["inferred_packages"] = normalized
-            state["candidate_provenance"] = provenance
-            return state
+            return self._set_inferred_packages_from_provenance(state, provenance)
 
         if (
             extracted_imports
@@ -1554,9 +2879,7 @@ class ResolutionWorkflow:
                         "source": "fast_path_imports",
                     }
                 ]
-                state["inferred_packages"] = normalized
-                state["candidate_provenance"] = provenance
-                return state
+                return self._set_inferred_packages_from_provenance(state, provenance)
 
         inferred: set[str] = set()
         prompt_texts: list[str] = []
@@ -1593,6 +2916,7 @@ class ResolutionWorkflow:
                     state["target_python"] = resolved_python_version
                 if version_source:
                     state["python_version_source"] = version_source
+                self._refresh_deferred_python_fallback(state)
             for package in packages:
                 if package:
                     inferred.add(package)
@@ -1601,7 +2925,8 @@ class ResolutionWorkflow:
         state["model_outputs"]["extract"] = outputs
         if not inferred:
             inferred.update(extracted_imports)
-        provenance = self._candidate_provenance_from(sorted(inferred), extracted_imports)
+        inferred_candidates = self._backfill_runtime_alias_imports(sorted(inferred), extracted_imports)
+        provenance = self._candidate_provenance_from(inferred_candidates, extracted_imports)
         normalized = sorted(provenance, key=str.lower)
         if self.preset_config.accuracy_extract_cleanup and inferred and not normalized and extracted_imports:
             cleanup_prompt = (
@@ -1618,18 +2943,14 @@ class ResolutionWorkflow:
         if not normalized and extracted_imports:
             provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
             normalized = sorted(provenance, key=str.lower)
-        state["inferred_packages"] = normalized
-        state["candidate_provenance"] = provenance
-        return state
+        return self._set_inferred_packages_from_provenance(state, provenance)
 
     def _infer_packages_prompt_a_research(
         self, state: ResolutionState, extracted_imports: list[str]
     ) -> ResolutionState:
         if not self._uses_full_apd():
             provenance = self._candidate_provenance_from(extracted_imports, extracted_imports)
-            state["inferred_packages"] = sorted(provenance, key=str.lower)
-            state["candidate_provenance"] = provenance
-            return state
+            return self._set_inferred_packages_from_provenance(state, provenance)
 
         code = next(iter(state["source_files"].values()), "")
         repo_evidence_summary = json.dumps(state.get("repo_evidence", {}), indent=2)[:2000]
@@ -1698,9 +3019,11 @@ class ResolutionWorkflow:
                 state["target_python"] = resolved_python_version
             if version_source:
                 state["python_version_source"] = version_source
+            self._refresh_deferred_python_fallback(state)
         if not inferred:
             inferred = extracted_imports
-        provenance = self._candidate_provenance_from(inferred, extracted_imports)
+        inferred_candidates = self._backfill_runtime_alias_imports(inferred, extracted_imports)
+        provenance = self._candidate_provenance_from(inferred_candidates, extracted_imports)
         for entry in packages:
             normalized_name = next(
                 (package for package in provenance if normalize_package_name(package) == normalize_package_name(entry["package"])),
@@ -1708,9 +3031,7 @@ class ResolutionWorkflow:
             )
             if normalized_name:
                 provenance[normalized_name] = str(entry.get("source", provenance[normalized_name]) or provenance[normalized_name])
-        state["inferred_packages"] = sorted(provenance, key=str.lower)
-        state["candidate_provenance"] = provenance
-        return state
+        return self._set_inferred_packages_from_provenance(state, provenance)
 
     def retrieve_pypi_metadata(self, state: ResolutionState) -> ResolutionState:
         allowed_packages = state.get("inferred_packages", [])
@@ -1733,6 +3054,7 @@ class ResolutionWorkflow:
             return state
         options = []
         unresolved: list[str] = []
+        platform_notes: set[str] = set(state.get("platform_compatibility_notes", []))
         version_limit = self._version_option_limit(state.get("target_python", "3.12"))
         for package in packages:
             if not package:
@@ -1741,11 +3063,11 @@ class ResolutionWorkflow:
                 unresolved.append(package)
                 continue
             try:
-                option = self.pypi_store.get_version_options(
+                option = self._get_version_options_for_state(
+                    state,
                     package,
                     state["target_python"],
                     limit=version_limit,
-                    preset=self.settings.preset,
                 )
             except FileNotFoundError:
                 unresolved.append(package)
@@ -1753,14 +3075,22 @@ class ResolutionWorkflow:
             if not option.versions:
                 unresolved.append(package)
                 continue
+            for version, notes in option.platform_notes.items():
+                for note in notes:
+                    platform_notes.add(f"{option.package} {version}: {note}")
             options.append(option)
         state["version_options"] = options
         state["unresolved_packages"] = unresolved
+        state["platform_compatibility_notes"] = sorted(platform_notes)
         state["applied_compatibility_policy"] = {
             option.package: option.policy_notes for option in options if option.policy_notes
         }
+        self._apply_source_version_preferences(state)
         if self._is_research():
-            pypi_evidence = self._build_pypi_evidence_payload(options, unresolved)
+            pypi_evidence = self._build_pypi_evidence_payload(
+                state.get("version_options", []),
+                unresolved,
+            )
             state["pypi_evidence"] = pypi_evidence
             self._write_json_artifact(state, "pypi-evidence.json", pypi_evidence)
         return state
@@ -1831,12 +3161,46 @@ class ResolutionWorkflow:
                     }
                 )
                 continue
+            if is_unsupported_import(import_name):
+                rejected_aliases.append(
+                    {
+                        "import_name": import_name,
+                        "pypi_package": package,
+                        "reason": "unsupported_external_runtime",
+                    }
+                )
+                state["unsupported_imports"] = sorted(set(state.get("unsupported_imports", [])) | {import_name})
+                self._record_bad_initial_candidate(
+                    state,
+                    package=package,
+                    reason="unsupported_external_runtime",
+                    source="alias",
+                )
+                continue
+            blocked_reason = self._candidate_block_reason(state, package, ["alias"])
+            if blocked_reason is not None:
+                rejected_aliases.append(
+                    {
+                        "import_name": import_name,
+                        "pypi_package": package,
+                        "reason": blocked_reason,
+                    }
+                )
+                if is_ambiguous_import(package) or is_trap_package_name(package):
+                    state["ambiguous_imports"] = sorted(set(state.get("ambiguous_imports", [])) | {package})
+                self._record_bad_initial_candidate(
+                    state,
+                    package=package,
+                    reason=blocked_reason,
+                    source="alias",
+                )
+                continue
             try:
-                option = self.pypi_store.get_version_options(
+                option = self._get_version_options_for_state(
+                    state,
                     package,
                     state["target_python"],
                     limit=version_limit,
-                    preset=self.settings.preset,
                 )
             except FileNotFoundError:
                 rejected_aliases.append(
@@ -1918,31 +3282,98 @@ class ResolutionWorkflow:
             return state
         updated_options: list[PackageVersionOptions] = []
         top_k = self._constraint_top_k(state.get("target_python", "3.12"))
+        target_python = state.get("target_python", "3.12")
+        platform_notes: set[str] = set(state.get("platform_compatibility_notes", []))
+        metadata_enrichment: list[dict[str, Any]] = []
         for option in state.get("version_options", []):
-            release_requires_dist: dict[str, list[str]] = {}
-            for version in option.versions[:top_k]:
+            retained_versions: list[str] = []
+            retained_requires_python: dict[str, str] = {}
+            retained_requires_dist: dict[str, list[str]] = {}
+            retained_upload_time: dict[str, str] = {}
+            retained_platform_notes: dict[str, list[str]] = {}
+            dropped_versions: list[dict[str, str]] = []
+            metadata_cache: dict[str, dict[str, Any]] = {}
+
+            def load_release_metadata(version: str) -> dict[str, Any]:
+                cached = metadata_cache.get(version)
+                if cached is not None:
+                    return cached
                 release_files = self.pypi_store.release_files(option.package, version)
-                metadata = self.package_metadata_store.parse_release_metadata(
+                cached = self.package_metadata_store.parse_release_metadata(
                     option.package,
                     version,
                     release_files=release_files,
                 )
-                release_requires_dist[version] = [str(item) for item in metadata.get("requires_dist", [])]
+                metadata_cache[version] = cached
+                return cached
+
+            trusted_version_cap = max(top_k, self.settings.candidate_plan_count * 4)
+            for version in option.versions:
+                existing_requires_python = str(option.requires_python.get(version, "") or "").strip()
+                metadata: dict[str, Any] | None = None
+                requires_python = existing_requires_python
+                if not requires_python and len(retained_versions) < trusted_version_cap:
+                    metadata = load_release_metadata(version)
+                    requires_python = str(metadata.get("requires_python", "") or "").strip()
+                if requires_python and not self._requires_python_allows_target(requires_python, target_python):
+                    dropped_versions.append(
+                        {
+                            "version": version,
+                            "reason": f"metadata_requires_python:{requires_python}",
+                        }
+                    )
+                    platform_notes.add(
+                        f"{option.package} {version}: dropped after metadata Requires-Python {requires_python}"
+                    )
+                    continue
+                retained_versions.append(version)
+                retained_requires_python[version] = requires_python
+                retained_upload_time[version] = option.upload_time.get(version, "")
+                retained_platform_notes[version] = list(option.platform_notes.get(version, []))
+                if not requires_python and len(retained_versions) > trusted_version_cap:
+                    retained_platform_notes[version].append("metadata_not_scanned")
+                if metadata is None and len(retained_requires_dist) < top_k:
+                    metadata = load_release_metadata(version)
+                if metadata is not None:
+                    retained_requires_dist[version] = [str(item) for item in metadata.get("requires_dist", [])]
+                else:
+                    retained_requires_dist[version] = list(option.requires_dist.get(version, []))
+
+            metadata_enrichment.append(
+                {
+                    "package": option.package,
+                    "retained_versions": list(retained_versions),
+                    "dropped_versions": dropped_versions,
+                }
+            )
             updated_options.append(
                 PackageVersionOptions(
                     package=option.package,
-                    versions=option.versions,
-                    requires_python=option.requires_python,
-                    upload_time=option.upload_time,
+                    versions=retained_versions,
+                    requires_python=retained_requires_python,
+                    upload_time=retained_upload_time,
                     policy_notes=option.policy_notes,
-                    requires_dist={**option.requires_dist, **release_requires_dist},
+                    platform_notes=retained_platform_notes,
+                    requires_dist=retained_requires_dist,
                 )
             )
         if updated_options:
             state["version_options"] = updated_options
-            if state.get("pypi_evidence", {}).get("packages"):
-                for payload, option in zip(state["pypi_evidence"]["packages"], updated_options, strict=False):
-                    payload["requires_dist"] = option.requires_dist
+            state["platform_compatibility_notes"] = sorted(platform_notes)
+            state["applied_compatibility_policy"] = {
+                option.package: option.policy_notes for option in updated_options if option.policy_notes
+            }
+            self._apply_source_version_preferences(state)
+            pypi_evidence = self._build_pypi_evidence_payload(
+                state.get("version_options", []),
+                state.get("unresolved_packages", []),
+            )
+            existing_alias_resolution = state.get("pypi_evidence", {}).get("alias_resolution")
+            if existing_alias_resolution:
+                pypi_evidence["alias_resolution"] = existing_alias_resolution
+            pypi_evidence["metadata_enrichment"] = metadata_enrichment
+            state["pypi_evidence"] = pypi_evidence
+            self._write_json_artifact(state, "pypi-evidence.json", pypi_evidence)
         return state
 
     def build_constraint_pack(self, state: ResolutionState) -> ResolutionState:
@@ -1960,7 +3391,7 @@ class ResolutionWorkflow:
         pack = build_constraint_pack(
             state.get("version_options", []),
             target_python=state.get("target_python", "3.12"),
-            top_k=self._constraint_top_k(state.get("target_python", "3.12")),
+            top_k=None,
         )
         state["constraint_pack"] = pack
         state["version_conflict_notes"] = list(pack.conflict_notes)
@@ -2196,14 +3627,35 @@ class ResolutionWorkflow:
         if pack is None:
             state["structured_outputs"]["candidate_bundles"] = []
             return state
-        bundles = generate_candidate_bundles(pack)
+        bundles = generate_candidate_bundles(
+            pack,
+            version_cap_per_package=self._constraint_top_k(state.get("target_python", "3.12")),
+            preferred_versions_by_package=self._preferred_bundle_versions(state),
+        )
+        platform_notes_by_package = {
+            normalize_package_name(option.package): option.platform_notes
+            for option in state.get("version_options", [])
+        }
         payload = [
             {
                 "rank": index + 1,
-                "dependencies": [{"name": dependency.name, "version": dependency.version} for dependency in bundle],
+                "dependencies": [
+                    {
+                        "name": dependency.name,
+                        "version": dependency.version,
+                        "platform_notes": platform_notes_by_package.get(
+                            normalize_package_name(dependency.name),
+                            {},
+                        ).get(dependency.version, []),
+                    }
+                    for dependency in bundle
+                ],
             }
             for index, bundle in enumerate(bundles)
         ]
+        if not payload and state.get("version_conflict_notes"):
+            state["dependency_reason"] = "no_compatible_versions"
+            state["repair_skipped_reason"] = "no_conflict_free_candidate_bundle"
         state["structured_outputs"]["candidate_bundles"] = payload
         self._write_json_artifact(state, "candidate-bundles.json", payload)
         return state
@@ -2220,6 +3672,8 @@ class ResolutionWorkflow:
             return state
         allowed_versions = self._allowed_versions_map(state.get("version_options", []))
         allowed_packages = self._research_allowed_packages(state)
+        required_packages = set(allowed_versions)
+        source_compatibility_hints = self._source_compatibility_hint_summary(state)
         prompt_text = self._format_prompt(
             "version_negotiation.txt",
             target_python=state.get("target_python", ""),
@@ -2236,6 +3690,7 @@ class ResolutionWorkflow:
                 ],
                 indent=2,
             )[:2500],
+            source_compatibility_hints=source_compatibility_hints,
         )
         self._trace_request(state, "version", prompt_text)
         raw_output = self.prompt_runner.invoke_template(
@@ -2256,6 +3711,7 @@ class ResolutionWorkflow:
                     ],
                     indent=2,
                 )[:2500],
+                "source_compatibility_hints": source_compatibility_hints,
             },
         )
         self._trace_response(state, "version", raw_output)
@@ -2265,6 +3721,7 @@ class ResolutionWorkflow:
                 raw_output,
                 allowed_packages=allowed_packages,
                 allowed_versions=allowed_versions,
+                required_packages=required_packages,
             )
         except StructuredOutputError:
             cleaned_output = self._adjudicate_json(
@@ -2278,27 +3735,54 @@ class ResolutionWorkflow:
                     cleaned_output,
                     allowed_packages=allowed_packages,
                     allowed_versions=allowed_versions,
+                    required_packages=required_packages,
                 )
             except StructuredOutputError:
                 state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
                 plans = []
-        state["structured_outputs"]["version_negotiation"] = self._candidate_plan_payload(plans)
-        self._write_json_artifact(state, "version-negotiation.json", state["structured_outputs"]["version_negotiation"])
         if plans:
-            state["candidate_plans"] = plans
-            state["remaining_candidate_plans"] = list(plans)
+            retained_plans, strategy = self._augment_ranked_candidate_plans(
+                plans,
+                bundles=bundles,
+                max_plan_count=self.settings.candidate_plan_count,
+            )
+            state["structured_outputs"]["version_negotiation"] = {
+                "llm_selected_plans": self._candidate_plan_payload(plans),
+                "retained_candidate_plans": self._candidate_plan_payload(retained_plans),
+                "candidate_plan_strategy": strategy,
+            }
+            self._write_json_artifact(state, "version-negotiation.json", state["structured_outputs"]["version_negotiation"])
+            state["candidate_plans"] = retained_plans
+            state["remaining_candidate_plans"] = list(retained_plans)
             state["version_selection_source"] = "research_version_negotiation"
+            state["candidate_plan_strategy"] = strategy
             state["dependency_reason"] = "llm_version_selection"
+        else:
+            state["structured_outputs"]["version_negotiation"] = {
+                "llm_selected_plans": [],
+                "retained_candidate_plans": [],
+                "candidate_plan_strategy": "",
+            }
+            self._write_json_artifact(state, "version-negotiation.json", state["structured_outputs"]["version_negotiation"])
         return state
 
     def generate_candidate_plans(self, state: ResolutionState) -> ResolutionState:
         if not self._is_research():
             return state
-        if self._research_feature_enabled("version_negotiation") and state.get("candidate_plans"):
-            self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(state.get("candidate_plans", [])))
-            return state
 
         default_plans = self._default_research_plans(state)
+        if (
+            self._research_feature_enabled("version_negotiation")
+            and not state.get("structured_outputs", {}).get("candidate_bundles")
+            and state.get("dependency_reason") == "no_compatible_versions"
+        ):
+            default_plans = [
+                CandidatePlan(
+                    rank=1,
+                    reason="no conflict-free candidate bundles remain for the target python",
+                    dependencies=[],
+                )
+            ]
         options = state.get("version_options", [])
         if default_plans and (
             not options
@@ -2313,19 +3797,28 @@ class ResolutionWorkflow:
             state["candidate_plans"] = default_plans
             state["remaining_candidate_plans"] = list(default_plans)
             state["structured_outputs"]["candidate_plans"] = self._candidate_plan_payload(default_plans)
+            state["candidate_plan_strategy"] = "deterministic-fallback"
             self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(default_plans))
             return state
 
         if not options:
             state["candidate_plans"] = default_plans
             state["remaining_candidate_plans"] = list(default_plans)
+            state["candidate_plan_strategy"] = "deterministic-fallback" if default_plans else ""
             self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(default_plans))
             return state
 
         allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
         allowed_package_set = self._research_allowed_packages(state)
         allowed_versions = self._allowed_versions_map(options)
+        required_packages = set(allowed_versions)
         rag_context_summary = summarize_rag_context(state.get("rag_context", {}), limit=6000)
+        version_space_summary = self._planning_version_space_summary(state)
+        validation_options_summary = self._validation_options_summary(state)
+        candidate_bundle_hints = self._candidate_bundle_hint_summary(state)
+        source_compatibility_hints = self._source_compatibility_hint_summary(state)
+        conflict_notes_summary = self._conflict_note_summary(state)
+        allowed_runtime_profiles = {option.get("profile", "") for option in state.get("validation_options", []) if option.get("profile")}
         candidate_template = (
             "candidate_plans_v2.txt"
             if self._research_feature_enabled("transitive_conflicts")
@@ -2336,7 +3829,13 @@ class ResolutionWorkflow:
             candidate_template,
             target_python=state.get("target_python", ""),
             allowed_packages="\n".join(allowed_packages),
+            version_space=version_space_summary,
             rag_context=rag_context_summary,
+            validation_options=validation_options_summary,
+            default_validation_profile=state.get("default_validation_profile", ""),
+            candidate_bundle_hints=candidate_bundle_hints,
+            conflict_notes=conflict_notes_summary,
+            source_compatibility_hints=source_compatibility_hints,
             max_plan_count=self.settings.candidate_plan_count,
         )
         self._trace_request(state, "version", prompt_text)
@@ -2346,7 +3845,13 @@ class ResolutionWorkflow:
             {
                 "target_python": state.get("target_python", ""),
                 "allowed_packages": "\n".join(allowed_packages),
+                "version_space": version_space_summary,
                 "rag_context": rag_context_summary,
+                "validation_options": validation_options_summary,
+                "default_validation_profile": state.get("default_validation_profile", ""),
+                "candidate_bundle_hints": candidate_bundle_hints,
+                "conflict_notes": conflict_notes_summary,
+                "source_compatibility_hints": source_compatibility_hints,
                 "max_plan_count": self.settings.candidate_plan_count,
             },
         )
@@ -2360,6 +3865,8 @@ class ResolutionWorkflow:
                 raw_output,
                 allowed_packages=allowed_package_set,
                 allowed_versions=allowed_versions,
+                required_packages=required_packages,
+                allowed_runtime_profiles=allowed_runtime_profiles or None,
             )
         except StructuredOutputError:
             cleaned_output = self._adjudicate_json(
@@ -2373,6 +3880,8 @@ class ResolutionWorkflow:
                     cleaned_output,
                     allowed_packages=allowed_package_set,
                     allowed_versions=allowed_versions,
+                    required_packages=required_packages,
+                    allowed_runtime_profiles=allowed_runtime_profiles or None,
                 )
             except StructuredOutputError:
                 state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
@@ -2384,6 +3893,7 @@ class ResolutionWorkflow:
         state["candidate_plans"] = plans
         state["remaining_candidate_plans"] = list(plans)
         state["structured_outputs"]["candidate_plans"] = self._candidate_plan_payload(plans)
+        state["candidate_plan_strategy"] = "llm-selected"
         self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(plans))
         if not state.get("dependency_reason"):
             state["dependency_reason"] = "llm_version_selection"
@@ -2402,6 +3912,20 @@ class ResolutionWorkflow:
             state["selected_dependencies"] = []
             state["generated_requirements"] = "# no inferred third-party dependencies\n"
             return state
+        self._emit_activity(
+            state,
+            kind="candidate_plan_selected",
+            detail=(
+                f"Selected candidate plan rank {selected_plan.rank}: "
+                f"{self._summarize_dependency_pins(selected_plan.dependencies)}"
+                + (
+                    f" with runtime profile {selected_plan.runtime_profile}."
+                    if selected_plan.runtime_profile
+                    else ""
+                )
+            ),
+        )
+        self._apply_validation_profile(state, selected_plan.runtime_profile)
         state["selected_dependencies"] = [
             ResolvedDependency(name=dependency.name, version=dependency.version) for dependency in selected_plan.dependencies
         ]
@@ -2414,6 +3938,7 @@ class ResolutionWorkflow:
                 "rank": selected_plan.rank,
                 "reason": selected_plan.reason,
                 "dependencies": [dependency.pin() for dependency in selected_plan.dependencies],
+                "runtime_profile": selected_plan.runtime_profile,
             },
         )
         return state
@@ -2422,9 +3947,17 @@ class ResolutionWorkflow:
         if not self._is_research():
             return state
         state["repair_cycle_count"] = state.get("repair_cycle_count", 0) + 1
+        state["repair_model_concluded_impossible"] = False
+        state["repair_plan_unavailable_reason"] = ""
+        self._emit_activity(
+            state,
+            kind="repair_cycle_started",
+            detail=f"Starting repair cycle {state['repair_cycle_count']}.",
+        )
         allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
         allowed_package_set = self._research_allowed_packages(state)
         allowed_versions = self._allowed_versions_map(state.get("version_options", []))
+        required_packages = set(allowed_versions)
         previous_plan = "\n".join(dep.pin() for dep in state.get("selected_dependencies", []))
         attempted_plans = "\n".join(
             ", ".join(attempt.dependencies)
@@ -2432,6 +3965,14 @@ class ResolutionWorkflow:
             if attempt.dependencies
         )
         rag_context_summary = summarize_rag_context(state.get("rag_context", {}), limit=8000)
+        version_space_summary = self._planning_version_space_summary(state)
+        validation_options_summary = self._validation_options_summary(state)
+        source_compatibility_hints = self._source_compatibility_hint_summary(state)
+        allowed_runtime_profiles = {
+            option.get("profile", "")
+            for option in state.get("validation_options", [])
+            if option.get("profile")
+        }
         repair_template = "repair_attempt_v2.txt" if self._research_feature_enabled("repair_memory") else "repair_attempt.txt"
         feedback_summary = (
             summarize_feedback_memory(self.settings.workspace_memory_dir)
@@ -2442,10 +3983,14 @@ class ResolutionWorkflow:
             repair_template,
             target_python=state.get("target_python", ""),
             allowed_packages="\n".join(allowed_packages),
+            version_space=version_space_summary,
             previous_plan=previous_plan,
             attempted_plans=attempted_plans,
             error_details=state.get("last_error_details", ""),
             rag_context=rag_context_summary,
+            validation_options=validation_options_summary,
+            default_validation_profile=state.get("default_validation_profile", ""),
+            source_compatibility_hints=source_compatibility_hints,
             max_plan_count=min(2, self.settings.candidate_plan_count),
             repair_memory=json.dumps(asdict(state.get("repair_memory_summary") or RepairMemorySummary()), indent=2)[:2500],
             feedback_summary=json.dumps(feedback_summary, indent=2)[:2500],
@@ -2457,10 +4002,14 @@ class ResolutionWorkflow:
             {
                 "target_python": state.get("target_python", ""),
                 "allowed_packages": "\n".join(allowed_packages),
+                "version_space": version_space_summary,
                 "previous_plan": previous_plan,
                 "attempted_plans": attempted_plans,
                 "error_details": state.get("last_error_details", ""),
                 "rag_context": rag_context_summary,
+                "validation_options": validation_options_summary,
+                "default_validation_profile": state.get("default_validation_profile", ""),
+                "source_compatibility_hints": source_compatibility_hints,
                 "max_plan_count": min(2, self.settings.candidate_plan_count),
                 "repair_memory": json.dumps(asdict(state.get("repair_memory_summary") or RepairMemorySummary()), indent=2)[:2500],
                 "feedback_summary": json.dumps(feedback_summary, indent=2)[:2500],
@@ -2470,11 +4019,18 @@ class ResolutionWorkflow:
         state["prompt_history"]["prompt_c"].append(prompt_text)
         state["model_outputs"]["repair"].append({"attempt": state["current_attempt"], "output": raw_output})
         state["structured_outputs"]["repair_raw"] = raw_output
+        parser_failed = False
         try:
             repair_applicable, plans = parse_repair_plan_payload(
                 raw_output,
                 allowed_packages=allowed_package_set,
                 allowed_versions=allowed_versions,
+                required_packages=required_packages,
+                allowed_runtime_profiles=allowed_runtime_profiles or None,
+                previous_plan=[
+                    CandidateDependency(name=dependency.name, version=dependency.version)
+                    for dependency in state.get("selected_dependencies", [])
+                ],
             )
         except StructuredOutputError:
             cleaned_output = self._adjudicate_json(
@@ -2488,10 +4044,20 @@ class ResolutionWorkflow:
                     cleaned_output,
                     allowed_packages=allowed_package_set,
                     allowed_versions=allowed_versions,
+                    required_packages=required_packages,
+                    allowed_runtime_profiles=allowed_runtime_profiles or None,
+                    previous_plan=[
+                        CandidateDependency(name=dependency.name, version=dependency.version)
+                        for dependency in state.get("selected_dependencies", [])
+                    ],
                 )
             except StructuredOutputError:
                 state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
+                parser_failed = True
                 repair_applicable, plans = False, []
+
+        if plans:
+            plans = self._filter_novel_candidate_plans(state, plans)
 
         state["structured_outputs"]["repair"] = {
             "repair_applicable": repair_applicable,
@@ -2501,10 +4067,41 @@ class ResolutionWorkflow:
             state["repair_outcome"] = "repair_not_applicable"
             state["candidate_plans"] = []
             state["remaining_candidate_plans"] = []
+            state["candidate_plan_strategy"] = ""
+            if parser_failed:
+                state["repair_model_concluded_impossible"] = False
+                state["repair_plan_unavailable_reason"] = "repair_parse_failed"
+                state.pop("stop_reason", None)
+                detail = "Repair output was unusable; retrying repair if budget remains."
+            elif not repair_applicable:
+                state["repair_model_concluded_impossible"] = True
+                state["repair_plan_unavailable_reason"] = "model_not_applicable"
+                state["stop_reason"] = "ModelConcludedNoFix"
+                detail = "Repair model concluded no dependency-only fix is applicable."
+            else:
+                state["repair_model_concluded_impossible"] = False
+                state["repair_plan_unavailable_reason"] = "no_novel_plans"
+                state.pop("stop_reason", None)
+                detail = "Repair only proposed already-attempted plans; retrying repair if budget remains."
+            self._emit_activity(
+                state,
+                kind="repair_plan_unavailable",
+                detail=detail,
+            )
             return state
         state["repair_outcome"] = "llm_repair"
+        state["repair_model_concluded_impossible"] = False
+        state["repair_plan_unavailable_reason"] = ""
+        if state.get("stop_reason") == "ModelConcludedNoFix":
+            state.pop("stop_reason", None)
         state["candidate_plans"] = plans
         state["remaining_candidate_plans"] = list(plans)
+        state["candidate_plan_strategy"] = "llm-selected"
+        self._emit_activity(
+            state,
+            kind="repair_plan_ready",
+            detail=f"Repair proposed {len(plans)} fallback plan(s); selecting rank {plans[0].rank} next.",
+        )
         self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(plans))
         return state
 
@@ -2593,6 +4190,8 @@ class ResolutionWorkflow:
 
     def materialize_execution_context(self, state: ResolutionState) -> ResolutionState:
         state["current_attempt"] += 1
+        state["pending_native_retry"] = False
+        state["pending_python_fallback"] = False
         artifact_dir = Path(state["artifact_dir"])
         attempt_dir = artifact_dir / f"attempt_{state['current_attempt']:02d}"
         attempt_dir.mkdir(parents=True, exist_ok=True)
@@ -2600,6 +4199,7 @@ class ResolutionWorkflow:
 
         image_tag = f"pllm-{state['run_id']}-{state['case_id']}-{state['current_attempt']}"
         if state["mode"] == "gistable":
+            self._maybe_prefer_benchmark_target_python(state)
             context = self.docker_executor.prepare_benchmark_context(
                 state["benchmark_case"],
                 state["selected_dependencies"],
@@ -2608,6 +4208,9 @@ class ResolutionWorkflow:
                 state["target_python"],
                 state.get("current_validation_command") or None,
                 extra_system_packages=state.get("system_dependencies", []),
+                extra_bootstrap_pins=state.get("bootstrap_dependencies", []),
+                case_id=state["case_id"],
+                attempt_number=state["current_attempt"],
             )
             shutil.copy2(state["benchmark_case"].snippet_path, artifact_dir / "source.py")
         else:
@@ -2617,6 +4220,9 @@ class ResolutionWorkflow:
                 attempt_dir,
                 image_tag,
                 extra_system_packages=state.get("system_dependencies", []),
+                extra_bootstrap_pins=state.get("bootstrap_dependencies", []),
+                case_id=state["case_id"],
+                attempt_number=state["current_attempt"],
             )
             first_source = next(iter(state["source_files"].values()), "")
             (artifact_dir / "source.py").write_text(first_source, encoding="utf-8")
@@ -2632,12 +4238,22 @@ class ResolutionWorkflow:
             (artifact_dir / f"prompt_c_attempt_{index}.txt").write_text(prompt_c, encoding="utf-8")
         if self._is_research():
             self._write_json_artifact(state, "structured-outputs.json", state.get("structured_outputs", {}))
+        self._emit_activity(
+            state,
+            kind="docker_context_prepared",
+            detail=f"Prepared Docker context for attempt {state['current_attempt']}.",
+        )
         return state
 
     def execute_candidate(self, state: ResolutionState) -> ResolutionState:
         attempt_dir = Path(state["current_attempt_dir"])
         context = state["prepared_execution_context"]
         attempt_started_at = datetime.now(timezone.utc).isoformat()
+        self._emit_activity(
+            state,
+            kind="candidate_execution_started",
+            detail=f"Starting execution attempt {state['current_attempt']}.",
+        )
 
         result = self.docker_executor.execute(context)
         attempt_finished_at = datetime.now(timezone.utc).isoformat()
@@ -2678,9 +4294,24 @@ class ResolutionWorkflow:
 
     def classify_outcome(self, state: ResolutionState) -> ResolutionState:
         execution = state["last_execution"]
-        classified = classify_error(execution.build_log, execution.run_log, execution.exit_code)
+        classified = classify_error(
+            execution.build_log,
+            execution.run_log,
+            execution.exit_code,
+            build_succeeded=execution.build_succeeded,
+            run_succeeded=execution.run_succeeded,
+        )
+        state["pending_native_retry"] = False
+        state["pending_python_fallback"] = False
+        state["system_dependency_hints"] = list(state.get("system_dependency_hints", []))
+        state["bootstrap_dependencies"] = list(state.get("bootstrap_dependencies", []))
+        state["bootstrap_packages_attempted"] = list(state.get("bootstrap_packages_attempted", []))
         if not self._uses_full_apd():
             classified.dependency_retryable = False
+        error_focus = self._failure_focus(classified.message)
+        if error_focus:
+            classified.message = f"{classified.message}\n\nFailure focus: {error_focus}"
+        hints, suggested_packages, suggested_bootstrap_pins = self._native_retry_hints(classified.message)
         if self._research_feature_enabled("smart_repair_routing"):
             system_packages_injected = bool(
                 getattr(state.get("prepared_execution_context"), "system_packages", [])
@@ -2688,6 +4319,7 @@ class ResolutionWorkflow:
             retry_decision = classify_retry_decision(
                 classified.category,
                 system_packages_injected=system_packages_injected,
+                has_system_package_hints=bool(suggested_packages),
                 native_retry_used=sum(
                     1 for attempt in state.get("attempt_records", []) if attempt.error_category == "NativeBuildError"
                 ),
@@ -2695,14 +4327,114 @@ class ResolutionWorkflow:
             classified.dependency_retryable = retry_decision.repair_allowed or retry_decision.candidate_fallback_allowed
             classified.retry_severity = retry_decision.severity
         else:
-            retry_decision = None
-            if classified.dependency_retryable:
+            retry_decision = classify_retry_decision(classified.category) if self._uses_full_apd() else None
+            if retry_decision is not None:
+                classified.dependency_retryable = retry_decision.repair_allowed or retry_decision.candidate_fallback_allowed
+                classified.retry_severity = retry_decision.severity
+            elif classified.dependency_retryable:
                 classified.retry_severity = "repair_retryable"
+        if (
+            self._uses_full_apd()
+            and execution.build_succeeded
+            and not execution.run_succeeded
+            and state.get("deferred_target_python")
+            and not state.get("python_fallback_used")
+            and state["current_attempt"] < self.settings.max_attempts
+            and self._requires_python2_runtime_retry(classified.category, classified.message)
+        ):
+            self._activate_deferred_python_fallback(state)
+            classified.dependency_retryable = True
+            classified.retry_severity = "limited_retryable"
+            if retry_decision is not None:
+                retry_decision.repair_allowed = False
+                retry_decision.candidate_fallback_allowed = False
+                retry_decision.reason = "deferred-python-fallback"
+                retry_decision.native_retry_budget = 0
+                retry_decision.repair_retry_budget = 0
+        elif self._should_reserve_last_attempt_for_deferred_python_fallback(state, execution):
+            self._activate_deferred_python_fallback(state)
+            classified.dependency_retryable = True
+            classified.retry_severity = "limited_retryable"
+            if retry_decision is not None:
+                retry_decision.repair_allowed = False
+                retry_decision.candidate_fallback_allowed = False
+                retry_decision.reason = "reserved-deferred-python-fallback"
+                retry_decision.native_retry_budget = 0
+                retry_decision.repair_retry_budget = 0
+        else:
+            attempted_packages = list(state.get("system_packages_attempted", []))
+            attempted_bootstrap_pins = list(state.get("bootstrap_packages_attempted", []))
+            new_system_packages = [
+                package for package in suggested_packages if package not in attempted_packages
+            ]
+            new_bootstrap_pins = [
+                pin for pin in suggested_bootstrap_pins if pin not in attempted_bootstrap_pins
+            ]
+            if (
+                self._uses_full_apd()
+                and state.get("selected_dependencies")
+                and (
+                    classified.category in {"NativeBuildError", "SystemDependencyError"}
+                    or (classified.category == "PackageCompatibilityError" and new_bootstrap_pins)
+                )
+                and (new_system_packages or new_bootstrap_pins)
+                and state["current_attempt"] < self.settings.max_attempts
+            ):
+                merged_system_packages = list(state.get("system_dependencies", []))
+                for package in new_system_packages:
+                    if package not in merged_system_packages:
+                        merged_system_packages.append(package)
+                    attempted_packages.append(package)
+                merged_bootstrap_pins = list(state.get("bootstrap_dependencies", []))
+                for pin in new_bootstrap_pins:
+                    if pin not in merged_bootstrap_pins:
+                        merged_bootstrap_pins.append(pin)
+                    attempted_bootstrap_pins.append(pin)
+                state["system_dependencies"] = merged_system_packages
+                state["bootstrap_dependencies"] = merged_bootstrap_pins
+                state["system_packages_attempted"] = attempted_packages
+                state["bootstrap_packages_attempted"] = attempted_bootstrap_pins
+                state["system_dependency_hints"] = sorted(set(state.get("system_dependency_hints", [])) | set(hints))
+                state["pending_native_retry"] = True
+                classified.dependency_retryable = True
+                if retry_decision is not None:
+                    retry_decision.repair_allowed = False
+                    retry_decision.candidate_fallback_allowed = False
+                    retry_decision.reason = "deterministic-native-system-retry"
+                    retry_decision.native_retry_budget = max(0, retry_decision.native_retry_budget - 1)
+                classified.retry_severity = "limited_retryable"
+            elif (
+                retry_decision is not None
+                and classified.category in {"NativeBuildError", "SystemDependencyError"}
+                and self._uses_full_apd()
+                and state.get("selected_dependencies")
+            ):
+                retry_decision.candidate_fallback_allowed = (
+                    retry_decision.candidate_fallback_allowed or bool(state.get("remaining_candidate_plans"))
+                )
+                retry_decision.repair_allowed = True
+                retry_decision.repair_retry_budget = max(retry_decision.repair_retry_budget, 1)
+                if retry_decision.repair_allowed or retry_decision.candidate_fallback_allowed:
+                    retry_decision.reason = "build-log-guided-followup"
+                classified.dependency_retryable = (
+                    retry_decision.repair_allowed or retry_decision.candidate_fallback_allowed
+                )
+                classified.retry_severity = retry_decision.severity
         classified.image_tag = execution.image_tag
         state["last_execution"] = classified
         state["retry_decision"] = retry_decision
+        state["classifier_origin"] = classified.classifier_origin
         state["last_error_category"] = classified.category
         state["last_error_details"] = classified.message
+        failure_excerpt = self._failure_focus(classified.message) or self._activity_excerpt(classified.message)
+        self._emit_activity(
+            state,
+            kind="attempt_classified",
+            detail=(
+                f"Attempt {state['current_attempt']} classified as {classified.category}"
+                + (f": {failure_excerpt}" if failure_excerpt else ".")
+            ),
+        )
         latest_attempt = state["attempt_records"][-1]
         latest_attempt.error_category = classified.category
         latest_attempt.error_details = classified.message
@@ -2728,6 +4460,13 @@ class ResolutionWorkflow:
                     "repair_retry_budget": retry_decision.repair_retry_budget if retry_decision is not None else self.settings.repair_cycle_limit,
                     "native_retry_budget": retry_decision.native_retry_budget if retry_decision is not None else 0,
                     "reason": retry_decision.reason if retry_decision is not None else "legacy-retry-routing",
+                    "pending_native_retry": state.get("pending_native_retry", False),
+                    "pending_python_fallback": state.get("pending_python_fallback", False),
+                    "classifier_origin": classified.classifier_origin,
+                    "system_dependency_hints": list(state.get("system_dependency_hints", [])),
+                    "system_packages_attempted": list(state.get("system_packages_attempted", [])),
+                    "bootstrap_dependencies": list(state.get("bootstrap_dependencies", [])),
+                    "bootstrap_packages_attempted": list(state.get("bootstrap_packages_attempted", [])),
                 },
             )
             self._write_json_artifact(
@@ -2754,6 +4493,17 @@ class ResolutionWorkflow:
                         "wall_clock_seconds": latest_attempt.wall_clock_seconds,
                     },
                 )
+        next_step = (
+            route_after_research_classification(state, self.settings)
+            if self._is_research()
+            else route_after_classification(state, self.settings.max_attempts)
+        )
+        self._emit_post_classification_activity(
+            state,
+            category=classified.category,
+            next_step=next_step,
+            suggested_packages=suggested_packages + suggested_bootstrap_pins,
+        )
         return state
 
     def build_repair_memory_summary(self, state: ResolutionState) -> ResolutionState:
@@ -2783,7 +4533,17 @@ class ResolutionWorkflow:
         alias_retry = self._maybe_alias_retry(state)
         if alias_retry:
             state["repaired_dependency_lines"] = alias_retry
+            self._emit_activity(
+                state,
+                kind="repair_plan_ready",
+                detail="Alias retry produced an updated dependency plan.",
+            )
             return state
+        self._emit_activity(
+            state,
+            kind="repair_cycle_started",
+            detail=f"Starting repair cycle for attempt {state['current_attempt']}.",
+        )
         previous_packages = "\n".join(dep.pin() for dep in state["selected_dependencies"])
         error_details = state["last_error_details"]
         prompt_text = self._format_prompt(
@@ -2813,16 +4573,101 @@ class ResolutionWorkflow:
             )
             state["repaired_dependency_lines"] = [dependency.pin() for dependency in repaired_dependencies]
             state["repair_outcome"] = "llm_repair"
+            self._emit_activity(
+                state,
+                kind="repair_plan_ready",
+                detail=(
+                    "Repair proposed dependencies: "
+                    f"{', '.join(state['repaired_dependency_lines'][:3])}"
+                    + (f", +{len(state['repaired_dependency_lines']) - 3} more" if len(state["repaired_dependency_lines"]) > 3 else "")
+                ),
+            )
         except ValueError:
             state["repaired_dependency_lines"] = repaired_lines
             state["repair_outcome"] = "repair_not_applicable"
+            self._emit_activity(
+                state,
+                kind="repair_plan_unavailable",
+                detail="Repair response was not a valid dependency plan.",
+            )
         return state
+
+    def _terminal_outcome_without_execution(self, state: ResolutionState) -> ExecutionOutcome:
+        unsupported_imports = list(state.get("unsupported_imports", []))
+        ambiguous_imports = list(state.get("ambiguous_imports", []))
+        bad_candidates = list(state.get("bad_initial_candidates", []))
+        if unsupported_imports:
+            rendered = ", ".join(sorted(unsupported_imports))
+            return ExecutionOutcome(
+                success=False,
+                category="UnsupportedImportError",
+                message=f"Unsupported external-runtime imports: {rendered}",
+                build_succeeded=False,
+                run_succeeded=False,
+                dependency_retryable=False,
+                retry_severity="terminal",
+            )
+        if ambiguous_imports:
+            rendered = ", ".join(sorted(ambiguous_imports))
+            return ExecutionOutcome(
+                success=False,
+                category="AmbiguousImportError",
+                message=f"Ambiguous imports lacked safe PyPI evidence: {rendered}",
+                build_succeeded=False,
+                run_succeeded=False,
+                dependency_retryable=False,
+                retry_severity="terminal",
+            )
+        if state.get("dependency_reason") == "no_compatible_versions":
+            return ExecutionOutcome(
+                success=False,
+                category="ConstraintConflictError",
+                message="No compatible dependency versions remained after guarded selection.",
+                build_succeeded=False,
+                run_succeeded=False,
+                dependency_retryable=False,
+                retry_severity="terminal",
+            )
+        if bad_candidates:
+            details = "; ".join(
+                f"{entry.get('package', '')}:{entry.get('reason', '')}"
+                for entry in bad_candidates[:5]
+                if isinstance(entry, dict)
+            )
+            return ExecutionOutcome(
+                success=False,
+                category="CandidateResolutionError",
+                message=details or "No safe supported dependency candidates remained.",
+                build_succeeded=False,
+                run_succeeded=False,
+                dependency_retryable=False,
+                retry_severity="terminal",
+            )
+        return ExecutionOutcome(
+            success=False,
+            category="ResolutionError",
+            message="Workflow finalized before candidate execution.",
+            build_succeeded=False,
+            run_succeeded=False,
+            dependency_retryable=False,
+            retry_severity="terminal",
+        )
 
     def finalize_result(self, state: ResolutionState) -> ResolutionState:
         artifact_dir = Path(state["artifact_dir"])
-        execution = state["last_execution"]
+        execution = state.get("last_execution")
+        if execution is None:
+            execution = self._terminal_outcome_without_execution(state)
+            state["last_execution"] = execution
         case_finished_at = datetime.now(timezone.utc).isoformat()
         state["case_finished_at"] = case_finished_at
+        if not state.get("repair_skipped_reason") and not state.get("selected_dependencies"):
+            if state.get("unsupported_imports"):
+                state["repair_skipped_reason"] = "unsupported_imports_only"
+            elif state.get("ambiguous_imports"):
+                state["repair_skipped_reason"] = "ambiguous_imports_unresolved"
+            elif state.get("bad_initial_candidates"):
+                state["repair_skipped_reason"] = "no_supported_candidates"
         if state["attempt_records"]:
             latest_attempt_dir = Path(state["attempt_records"][-1].artifact_dir)
             for name in ("build.log", "run.log"):
@@ -2840,6 +4685,7 @@ class ResolutionWorkflow:
         )
 
         total_wall_clock = sum(attempt.wall_clock_seconds for attempt in state.get("attempt_records", []))
+        runtime_config = self.settings.effective_runtime_config()
         result = {
             "run_id": state["run_id"],
             "case_id": state["case_id"],
@@ -2852,11 +4698,25 @@ class ResolutionWorkflow:
             "research_bundle": state.get("research_bundle", "baseline"),
             "research_features": list(state.get("research_features", ())),
             "model_profile": self.settings.model_profile,
+            "effective_model_profile": runtime_config.get("effective_model_profile", self.settings.model_profile),
             "use_moe": self.settings.use_moe,
             "use_rag": self.settings.use_rag,
             "use_langchain": self.settings.use_langchain,
             "rag_mode": self.settings.rag_mode,
+            "effective_rag_mode": runtime_config.get("effective_rag_mode", self.settings.rag_mode),
             "structured_prompting": self.settings.structured_prompting,
+            "effective_structured_prompting": runtime_config.get(
+                "effective_structured_prompting",
+                self.settings.structured_prompting,
+            ),
+            "effective_repair_cycle_limit": runtime_config.get(
+                "effective_repair_cycle_limit",
+                self.settings.repair_cycle_limit,
+            ),
+            "effective_candidate_fallback_before_repair": runtime_config.get(
+                "effective_candidate_fallback_before_repair",
+                self.settings.allow_candidate_fallback_before_repair,
+            ),
             "extraction_model": self.settings.stage_model("extract"),
             "runner_model": self.settings.reasoning_model,
             "version_model": self.settings.stage_model("version"),
@@ -2869,18 +4729,35 @@ class ResolutionWorkflow:
             "benchmark_target_python": state.get("benchmark_target_python", ""),
             "inferred_target_python": state.get("inferred_target_python", ""),
             "python_version_source": state.get("python_version_source", ""),
+            "deferred_target_python": state.get("deferred_target_python", ""),
+            "python_fallback_used": bool(state.get("python_fallback_used", False)),
             "target_python": state.get("target_python", ""),
+            "runtime_profile": state.get("current_runtime_profile", ""),
+            "validation_command": state.get("current_validation_command", ""),
             "dependencies": [dependency.pin() for dependency in state.get("selected_dependencies", [])],
             "system_dependencies": list(state.get("system_dependencies", [])),
+            "bootstrap_dependencies": list(state.get("bootstrap_dependencies", [])),
+            "system_dependency_hints": list(state.get("system_dependency_hints", [])),
+            "system_packages_attempted": list(state.get("system_packages_attempted", [])),
+            "bootstrap_packages_attempted": list(state.get("bootstrap_packages_attempted", [])),
             "dependency_reason": state.get("dependency_reason", ""),
             "candidate_provenance": state.get("candidate_provenance", {}),
+            "unsupported_imports": list(state.get("unsupported_imports", [])),
+            "ambiguous_imports": list(state.get("ambiguous_imports", [])),
+            "bad_initial_candidates": list(state.get("bad_initial_candidates", [])),
+            "platform_compatibility_notes": list(state.get("platform_compatibility_notes", [])),
             "repair_outcome": state.get("repair_outcome", ""),
+            "repair_skipped_reason": state.get("repair_skipped_reason", ""),
             "version_selection_source": state.get("version_selection_source", ""),
+            "candidate_plan_strategy": state.get("candidate_plan_strategy", ""),
             "compatibility_policy": state.get("applied_compatibility_policy", {}),
             "retrieval_sources": ["pypi"] + (["repo_evidence"] if state.get("repo_evidence") else []),
             "candidate_plan_count": len(state.get("candidate_plans", [])),
             "selected_candidate_rank": state.get("selected_candidate_rank"),
             "selected_candidate_reason": state.get("selected_candidate_plan").reason if state.get("selected_candidate_plan") else "",
+            "selected_candidate_runtime_profile": (
+                state.get("selected_candidate_plan").runtime_profile if state.get("selected_candidate_plan") else ""
+            ),
             "repair_cycle_count": state.get("repair_cycle_count", 0),
             "research_path": state.get("research_path", False),
             "structured_prompt_failures": state.get("structured_prompt_failures", 0),
@@ -2893,6 +4770,8 @@ class ResolutionWorkflow:
             "version_negotiation_used": self._research_feature_enabled("version_negotiation"),
             "feedback_memory_used": self._research_feature_enabled("repair_feedback_loop"),
             "retry_severity": getattr(state.get("retry_decision"), "severity", execution.retry_severity),
+            "classifier_origin": getattr(execution, "classifier_origin", state.get("classifier_origin", "")),
+            "root_cause_bucket": self._root_cause_bucket(execution.category, execution.message),
             "strategy_type": state.get("strategy_history", [])[-1].strategy_type if state.get("strategy_history") else "",
             "wall_clock_seconds": total_wall_clock,
             "started_at": state.get("case_started_at", ""),

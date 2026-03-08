@@ -6,6 +6,7 @@ Return strict JSON only using this schema:
     {{
       "rank": 1,
       "reason": "short reason",
+      "runtime_profile": "import_statements",
       "dependencies": [
         {{
           "name": "package-name",
@@ -19,6 +20,11 @@ Return strict JSON only using this schema:
 Rules:
 - Return at most {max_plan_count} plans.
 - Use only the allowed packages and listed versions.
+- Each plan must include every resolved package that has compatible versions in the supplied evidence.
+- Do not assume packages are already installed; list every installable dependency explicitly.
+- If a safer validation profile is appropriate, set `runtime_profile` to one of the allowed validation profiles.
+- Treat advisory bundle hints as conflict-checked starting points unless the source compatibility hints or conflict notes justify a different family.
+- When source compatibility hints are present, prefer plans that satisfy those version families over newer incompatible-looking stacks.
 - Prefer stable versions and the best compatibility with the target Python version.
 - Each dependency must be formatted as {{name, version}}.
 - Ranks must start at 1 and be unique.
@@ -30,6 +36,24 @@ Target Python:
 
 Allowed packages:
 {allowed_packages}
+
+Version space:
+{version_space}
+
+Allowed validation profiles:
+{validation_options}
+
+Default validation profile:
+{default_validation_profile}
+
+Advisory bundle hints:
+{candidate_bundle_hints}
+
+Conflict notes:
+{conflict_notes}
+
+Source compatibility hints:
+{source_compatibility_hints}
 
 RAG context:
 {rag_context}

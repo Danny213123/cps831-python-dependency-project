@@ -190,6 +190,8 @@ def summarize_run(
     total_wall_clock = total_elapsed_seconds if total_elapsed_seconds is not None else summed_wall_clock
     transitions: dict[str, int] = {}
     dependency_reason_counts: dict[str, int] = {}
+    classifier_origin_counts: dict[str, int] = {}
+    root_cause_counts: dict[str, int] = {}
     def _meta(key: str, fallback: Any) -> Any:
         if results:
             return results[0].get(key, fallback)
@@ -204,6 +206,13 @@ def summarize_run(
     use_langchain = bool(_meta("use_langchain", True))
     rag_mode = str(_meta("rag_mode", "pypi"))
     structured_prompting = bool(_meta("structured_prompting", False))
+    effective_model_profile = str(_meta("effective_model_profile", model_profile))
+    effective_rag_mode = str(_meta("effective_rag_mode", rag_mode))
+    effective_structured_prompting = bool(_meta("effective_structured_prompting", structured_prompting))
+    effective_repair_cycle_limit = int(_meta("effective_repair_cycle_limit", 0) or 0)
+    effective_candidate_fallback_before_repair = bool(
+        _meta("effective_candidate_fallback_before_repair", False)
+    )
     research_bundle = str(_meta("research_bundle", "baseline"))
     raw_features = _meta("research_features", [])
     research_features = list(raw_features) if isinstance(raw_features, (list, tuple)) else []
@@ -229,12 +238,42 @@ def summarize_run(
     version_negotiation_case_count = sum(1 for item in results if bool(item.get("version_negotiation_used", False)))
     dynamic_import_case_count = sum(1 for item in results if bool(item.get("dynamic_import_candidates", False)))
     feedback_memory_case_count = sum(1 for item in results if bool(item.get("feedback_memory_used", False)))
+    unsupported_import_failures = sum(
+        1 for item in results if not item.get("success", False) and bool(item.get("unsupported_imports"))
+    )
+    bad_initial_candidate_failures = sum(
+        1 for item in results if not item.get("success", False) and bool(item.get("bad_initial_candidates"))
+    )
+    platform_compatibility_failures = sum(
+        1 for item in results if not item.get("success", False) and bool(item.get("platform_compatibility_notes"))
+    )
+    native_retry_success_count = sum(
+        1 for item in results if item.get("success", False) and bool(item.get("system_packages_attempted"))
+    )
+    effective_profiles = sorted(
+        {
+            str(item.get("effective_model_profile", "") or "").strip()
+            for item in results
+            if str(item.get("effective_model_profile", "") or "").strip()
+        }
+    )
+    model_mix_warning = (
+        f"mixed effective model profiles detected: {', '.join(effective_profiles)}"
+        if len(effective_profiles) > 1
+        else ""
+    )
     for item in results:
         key = f'{item.get("initial_eval", "")}->{item.get("final_error_category", "Success" if item["success"] else "UnknownError")}'
         transitions[key] = transitions.get(key, 0) + 1
         reason = item.get("dependency_reason")
         if reason:
             dependency_reason_counts[reason] = dependency_reason_counts.get(reason, 0) + 1
+        classifier_origin = str(item.get("classifier_origin", "") or "").strip()
+        if classifier_origin:
+            classifier_origin_counts[classifier_origin] = classifier_origin_counts.get(classifier_origin, 0) + 1
+        root_cause_bucket = str(item.get("root_cause_bucket", "") or "").strip()
+        if root_cause_bucket:
+            root_cause_counts[root_cause_bucket] = root_cause_counts.get(root_cause_bucket, 0) + 1
 
     summary = BenchmarkSummary(
         run_id=run_dir.name,
@@ -255,6 +294,11 @@ def summarize_run(
         use_langchain=use_langchain,
         rag_mode=rag_mode,
         structured_prompting=structured_prompting,
+        effective_model_profile=effective_model_profile,
+        effective_rag_mode=effective_rag_mode,
+        effective_structured_prompting=effective_structured_prompting,
+        effective_repair_cycle_limit=effective_repair_cycle_limit,
+        effective_candidate_fallback_before_repair=effective_candidate_fallback_before_repair,
         research_bundle=research_bundle,
         research_features=research_features,
         extraction_model=extraction_model,
@@ -281,6 +325,14 @@ def summarize_run(
         version_negotiation_case_count=version_negotiation_case_count,
         dynamic_import_case_count=dynamic_import_case_count,
         feedback_memory_case_count=feedback_memory_case_count,
+        unsupported_import_failures=unsupported_import_failures,
+        bad_initial_candidate_failures=bad_initial_candidate_failures,
+        platform_compatibility_failures=platform_compatibility_failures,
+        native_retry_success_count=native_retry_success_count,
+        model_mix_warning=model_mix_warning,
+        classifier_origin_counts=classifier_origin_counts,
+        deferred_python_fallback_cases=sum(1 for item in results if bool(item.get("python_fallback_used", False))),
+        root_cause_counts=root_cause_counts,
     )
     write_summary_artifacts(run_dir, results, summary)
     build_timeline_view(run_dir)
@@ -329,9 +381,14 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Research bundle: `{summary.research_bundle}`",
         f"- Research features: `{', '.join(summary.research_features) or 'none'}`",
         f"- Model profile: `{summary.model_profile}`",
+        f"- Effective model profile: `{summary.effective_model_profile}`",
         f"- Runtime: `{'moe' if summary.use_moe else 'single'}` / `{'rag' if summary.use_rag else 'no-rag'}` / `{'langchain' if summary.use_langchain else 'direct'}`",
         f"- RAG mode: `{summary.rag_mode}`",
+        f"- Effective RAG mode: `{summary.effective_rag_mode}`",
         f"- Structured prompting: `{'enabled' if summary.structured_prompting else 'disabled'}`",
+        f"- Effective structured prompting: `{'enabled' if summary.effective_structured_prompting else 'disabled'}`",
+        f"- Effective repair cycle limit: `{summary.effective_repair_cycle_limit}`",
+        f"- Effective candidate fallback before repair: `{summary.effective_candidate_fallback_before_repair}`",
         f"- Models: `{summary.extraction_model}` / `{summary.runner_model}` / `{summary.version_model}` / `{summary.repair_model}` / `{summary.adjudication_model}`",
         f"- Total cases: `{summary.total_cases}`",
         f"- Success rate: `{summary.success_rate:.2%}`",
@@ -350,8 +407,17 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Version negotiation cases: `{summary.version_negotiation_case_count}`",
         f"- Dynamic import cases: `{summary.dynamic_import_case_count}`",
         f"- Feedback memory cases: `{summary.feedback_memory_case_count}`",
+        f"- Unsupported import failures: `{summary.unsupported_import_failures}`",
+        f"- Bad initial candidate failures: `{summary.bad_initial_candidate_failures}`",
+        f"- Platform compatibility failures: `{summary.platform_compatibility_failures}`",
+        f"- Native retry recoveries: `{summary.native_retry_success_count}`",
+        f"- Deferred Python fallbacks used: `{summary.deferred_python_fallback_cases}`",
+        f"- Classifier origins: `{summary.classifier_origin_counts}`",
+        f"- Root cause buckets: `{summary.root_cause_counts}`",
         f"- Time to finish: `{summary.total_wall_clock_human}`",
     ]
+    if summary.model_mix_warning:
+        lines.append(f"- Warning: `{summary.model_mix_warning}`")
     (run_dir / "leaderboard.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     write_results_artifacts(run_dir, results)
 
@@ -389,10 +455,19 @@ def write_results_artifacts(run_dir: Path, results: list[dict[str, Any]]) -> Non
                 "dependency_reason": row.get("dependency_reason", ""),
                 "research_bundle": row.get("research_bundle", "baseline"),
                 "research_features": ",".join(str(item) for item in row.get("research_features", [])),
+                "effective_model_profile": row.get("effective_model_profile", ""),
+                "effective_rag_mode": row.get("effective_rag_mode", ""),
+                "effective_structured_prompting": row.get("effective_structured_prompting", False),
                 "selected_candidate_rank": row.get("selected_candidate_rank", ""),
                 "strategy_type": row.get("strategy_type", ""),
                 "retry_severity": row.get("retry_severity", ""),
+                "classifier_origin": row.get("classifier_origin", ""),
+                "root_cause_bucket": row.get("root_cause_bucket", ""),
+                "python_fallback_used": row.get("python_fallback_used", False),
                 "conflict_precheck_failed": row.get("conflict_precheck_failed", False),
+                "unsupported_imports": ",".join(str(item) for item in row.get("unsupported_imports", [])),
+                "ambiguous_imports": ",".join(str(item) for item in row.get("ambiguous_imports", [])),
+                "repair_skipped_reason": row.get("repair_skipped_reason", ""),
                 "wall_clock_seconds": row.get("wall_clock_seconds", 0.0),
                 "started_at": row.get("started_at", ""),
                 "finished_at": row.get("finished_at", ""),
@@ -416,10 +491,19 @@ def write_results_artifacts(run_dir: Path, results: list[dict[str, Any]]) -> Non
                 "dependency_reason",
                 "research_bundle",
                 "research_features",
+                "effective_model_profile",
+                "effective_rag_mode",
+                "effective_structured_prompting",
                 "selected_candidate_rank",
                 "strategy_type",
                 "retry_severity",
+                "classifier_origin",
+                "root_cause_bucket",
+                "python_fallback_used",
                 "conflict_precheck_failed",
+                "unsupported_imports",
+                "ambiguous_imports",
+                "repair_skipped_reason",
                 "wall_clock_seconds",
                 "started_at",
                 "finished_at",

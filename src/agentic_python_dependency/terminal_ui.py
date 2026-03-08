@@ -21,12 +21,14 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.layout.margins import ScrollbarMargin
 from prompt_toolkit.shortcuts import button_dialog, checkboxlist_dialog, input_dialog, message_dialog, radiolist_dialog
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Box, Frame
 
 from agentic_python_dependency.config import MODEL_PROFILE_DEFAULTS, Settings
 from agentic_python_dependency.presets import RESEARCH_BUNDLE_DEFAULTS, RESEARCH_FEATURES, PRESET_CONFIGS
+from agentic_python_dependency.router import OllamaStatsSnapshot, OllamaStatsTracker
 from agentic_python_dependency.tools.official_baselines import validate_pyego_runtime
 
 
@@ -93,6 +95,23 @@ def _format_eta(seconds: float | None) -> str:
     return _format_elapsed(seconds)
 
 
+def _format_tokens_per_second(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.1f} tok/s"
+
+
+def _fit_table_cell(value: str, width: int) -> str:
+    if width <= 0:
+        return ""
+    normalized = re.sub(r"\s+", " ", value).strip()
+    if len(normalized) <= width:
+        return normalized.ljust(width)
+    if width <= 3:
+        return normalized[:width]
+    return f"{normalized[: width - 3]}..."
+
+
 @dataclass
 class TerminalBenchmarkDashboard:
     refresh_interval: float = 0.2
@@ -110,21 +129,29 @@ class TerminalBenchmarkDashboard:
         self.research_features: tuple[str, ...] = ()
         self.benchmark_source = "all-gists"
         self.model_summary = "gemma-moe: gemma3:4b / gemma3:12b"
+        self.runtime_config: dict[str, object] = {}
         self.jobs = 1
         self.target = "benchmark"
         self.artifacts_dir = Path(".")
         self.current_cases: list[str] = []
+        self.current_case_activity: dict[str, dict[str, object]] = {}
+        self.recent_case_activity: list[dict[str, object]] = []
+        self.recent_case_results: list[dict[str, object]] = []
         self.last_case_id = ""
         self.last_status = ""
         self.started_at = time.monotonic()
         self.summary_path: Path | None = None
         self.warnings_path: Path | None = None
+        self.ollama_stats: OllamaStatsTracker | None = None
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._cancel_requested = False
+        self._hard_cancel_requested = False
+        self._hard_exit_callback: Callable[[], None] | None = None
         self._thread: threading.Thread | None = None
         self._app_thread: threading.Thread | None = None
         self._app: Application[None] | None = None
+        self._results_window: Window | None = None
         self._isatty = sys.stdin.isatty() and sys.stdout.isatty()
 
     def start(
@@ -146,6 +173,9 @@ class TerminalBenchmarkDashboard:
         target: str,
         artifacts_dir: Path,
         elapsed_seconds: float = 0.0,
+        ollama_stats: OllamaStatsTracker | None = None,
+        runtime_config: dict[str, object] | None = None,
+        completed_results: list[dict[str, object]] | None = None,
     ) -> None:
         self.run_id = run_id
         self.total = total
@@ -159,10 +189,13 @@ class TerminalBenchmarkDashboard:
         self.research_features = tuple(research_features)
         self.benchmark_source = benchmark_source
         self.model_summary = model_summary
+        self.runtime_config = dict(runtime_config or {})
         self.jobs = jobs
         self.target = target
         self.artifacts_dir = artifacts_dir
+        self.ollama_stats = ollama_stats
         self.started_at = time.monotonic() - elapsed_seconds
+        self.recent_case_results = [self._case_result_row(result) for result in (completed_results or [])[:200]]
         if self._isatty:
             self._start_prompt_toolkit_app()
         else:
@@ -181,9 +214,30 @@ class TerminalBenchmarkDashboard:
                 self.current_cases.append(case_id)
         self._refresh()
 
+    def case_event(self, case_id: str, *, attempt: int = 0, kind: str, detail: str) -> None:
+        with self._lock:
+            self.current_case_activity[case_id] = {
+                "case_id": case_id,
+                "attempt": attempt,
+                "kind": kind,
+                "detail": detail,
+            }
+            self.recent_case_activity.insert(
+                0,
+                {
+                    "case_id": case_id,
+                    "attempt": attempt,
+                    "kind": kind,
+                    "detail": detail,
+                },
+            )
+            del self.recent_case_activity[20:]
+        self._refresh()
+
     def advance(self, result: dict[str, object]) -> None:
         case_id = str(result.get("case_id", ""))
         success = bool(result.get("success", False))
+        row = self._case_result_row(result)
         with self._lock:
             self.completed = min(self.total, self.completed + 1)
             self.successes += int(success)
@@ -191,7 +245,37 @@ class TerminalBenchmarkDashboard:
             self.last_case_id = case_id
             self.last_status = "success" if success else str(result.get("final_error_category", "failure"))
             self.current_cases = [item for item in self.current_cases if item != case_id]
+            self.current_case_activity.pop(case_id, None)
+            self.recent_case_results = [item for item in self.recent_case_results if item.get("case_id") != case_id]
+            self.recent_case_results.insert(0, row)
+            del self.recent_case_results[200:]
         self._refresh()
+
+    @staticmethod
+    def _case_result_row(result: dict[str, object]) -> dict[str, object]:
+        success = bool(result.get("success", False))
+        attempts = int(result.get("attempts", 0) or 0)
+        target_python = str(result.get("target_python", "") or "")
+        wall_clock_seconds = float(result.get("wall_clock_seconds", 0.0) or 0.0)
+        error = "Success" if success else str(result.get("final_error_category", "failure") or "failure")
+        result_matches_csv = str(result.get("result_matches_csv", "") or "").strip().upper()
+        dependencies = result.get("dependencies", [])
+        if isinstance(dependencies, list):
+            dependency_preview = ", ".join(str(item) for item in dependencies[:3] if item)
+            if len(dependencies) > 3:
+                dependency_preview = f"{dependency_preview}, +{len(dependencies) - 3} more"
+        else:
+            dependency_preview = str(dependencies or "")
+        return {
+            "case_id": str(result.get("case_id", "") or ""),
+            "success": success,
+            "error": error,
+            "attempts": attempts,
+            "target_python": target_python,
+            "seconds": wall_clock_seconds,
+            "pllm_match": "MATCH" if result_matches_csv == "PASS" else ("MISS" if result_matches_csv == "FAIL" else "-"),
+            "dependencies": dependency_preview or "-",
+        }
 
     def finish(self, *, summary_path: Path, warnings_path: Path | None, status: str = "completed") -> None:
         self.summary_path = summary_path
@@ -216,9 +300,27 @@ class TerminalBenchmarkDashboard:
             self._cancel_requested = True
         self._refresh()
 
+    def request_hard_stop(self, *, invoke_callback: bool = True) -> None:
+        callback: Callable[[], None] | None
+        with self._lock:
+            self._cancel_requested = True
+            self._hard_cancel_requested = True
+            callback = self._hard_exit_callback
+        self._refresh()
+        if invoke_callback and callback is not None:
+            callback()
+
     def stop_requested(self) -> bool:
         with self._lock:
             return self._cancel_requested
+
+    def hard_stop_requested(self) -> bool:
+        with self._lock:
+            return self._hard_cancel_requested
+
+    def set_hard_exit_callback(self, callback: Callable[[], None] | None) -> None:
+        with self._lock:
+            self._hard_exit_callback = callback
 
     def _refresh(self) -> None:
         if self._isatty:
@@ -232,20 +334,85 @@ class TerminalBenchmarkDashboard:
 
         @bindings.add("c-c")
         def _request_stop(event) -> None:
-            self.request_stop()
+            if self.stop_requested():
+                self.request_hard_stop()
+            else:
+                self.request_stop()
+            event.app.invalidate()
+
+        @bindings.add("up")
+        def _scroll_up(event) -> None:
+            if self._results_window is None:
+                return
+            self._results_window.vertical_scroll = max(0, self._results_window.vertical_scroll - 1)
+            event.app.invalidate()
+
+        @bindings.add("down")
+        def _scroll_down(event) -> None:
+            if self._results_window is None:
+                return
+            self._results_window.vertical_scroll += 1
+            event.app.invalidate()
+
+        @bindings.add("pageup")
+        def _page_up(event) -> None:
+            if self._results_window is None:
+                return
+            self._results_window.vertical_scroll = max(0, self._results_window.vertical_scroll - 10)
+            event.app.invalidate()
+
+        @bindings.add("pagedown")
+        def _page_down(event) -> None:
+            if self._results_window is None:
+                return
+            self._results_window.vertical_scroll += 10
+            event.app.invalidate()
+
+        @bindings.add("home")
+        def _go_home(event) -> None:
+            if self._results_window is None:
+                return
+            self._results_window.vertical_scroll = 0
+            event.app.invalidate()
+
+        @bindings.add("end")
+        def _go_end(event) -> None:
+            if self._results_window is None:
+                return
+            self._results_window.vertical_scroll = max(0, len(self.recent_case_results) + 4)
             event.app.invalidate()
 
         control = FormattedTextControl(self._formatted_text, focusable=False)
+        self._results_window = Window(
+            content=FormattedTextControl(self._results_table_formatted_text, focusable=True),
+            always_hide_cursor=True,
+            wrap_lines=False,
+            right_margins=[ScrollbarMargin(display_arrows=True)],
+        )
         body = Box(
             body=Frame(
-                body=Window(content=control, always_hide_cursor=True, wrap_lines=False),
+                body=HSplit(
+                    [
+                        Window(
+                            content=control,
+                            always_hide_cursor=True,
+                            wrap_lines=False,
+                            dont_extend_height=True,
+                        ),
+                        Frame(
+                            body=self._results_window,
+                            title="Completed Cases (newest first; arrows/PageUp/PageDown/Home/End scroll)",
+                            style="class:frame",
+                        ),
+                    ]
+                ),
                 title="APDR Benchmark Dashboard",
                 style="class:frame",
             ),
             padding=1,
         )
         self._app = Application(
-            layout=Layout(HSplit([body])),
+            layout=Layout(HSplit([body]), focused_element=self._results_window),
             full_screen=True,
             mouse_support=False,
             style=DASHBOARD_STYLE,
@@ -267,6 +434,7 @@ class TerminalBenchmarkDashboard:
         seconds_per_case = _format_seconds_per_case(self._seconds_per_completed_case(elapsed_seconds))
         eta = _format_eta(self._eta_seconds(elapsed_seconds))
         bar = _format_progress_bar(self.completed, self.total)
+        ollama_snapshot = self.ollama_stats.snapshot() if self.ollama_stats is not None else OllamaStatsSnapshot()
         fragments: list[tuple[str, str]] = [
             ("class:headline", "APDR benchmark in progress\n"),
             ("class:muted", "Use Ctrl+C only if you intend to stop the benchmark process itself.\n\n"),
@@ -278,6 +446,8 @@ class TerminalBenchmarkDashboard:
             ("class:label", "Prompt       "), ("class:value", f"{self.prompt_profile}\n"),
             ("class:label", "Source       "), ("class:value", f"{self.benchmark_source}\n"),
             ("class:label", "Models       "), ("class:value", f"{getattr(self, 'model_summary', 'default')}\n"),
+            ("class:label", "Effective    "), ("class:value", f"{self._runtime_summary()}\n"),
+            ("class:label", "Ollama       "), ("class:value", f"{self._ollama_summary(ollama_snapshot)}\n"),
             ("class:label", "Jobs         "), ("class:value", f"{self.jobs}\n"),
             ("class:label", "Artifacts    "), ("class:value", f"{self.artifacts_dir}\n\n"),
             ("class:label", "Progress     "), ("class:accent", f"{self.completed}/{self.total} ({percent:5.1f}%)\n"),
@@ -303,17 +473,38 @@ class TerminalBenchmarkDashboard:
                     ("class:value", f"{', '.join(self.research_features)}\n"),
                 ]
             )
+        last_ollama = self._last_ollama_summary(ollama_snapshot)
+        if last_ollama is not None:
+            fragments.extend(
+                [
+                    ("class:label", "Last LLM     "),
+                    ("class:value", f"{last_ollama}\n"),
+                ]
+            )
         if self._cancel_requested:
             fragments.extend(
                 [
                     ("class:bad", "\nStop requested\n"),
-                    ("class:muted", "APDR will stop scheduling new cases and exit after the active work finishes.\n"),
+                    (
+                        "class:muted",
+                        "APDR will stop scheduling new cases and exit after the active work finishes. "
+                        "Press Ctrl+C again to hard quit immediately.\n",
+                    ),
                 ]
             )
         if self.current_cases:
             fragments.append(("class:label", "\nActive cases\n"))
             for case_id in self.current_cases[: min(6, len(self.current_cases))]:
-                fragments.append(("class:value", f"  • {case_id}\n"))
+                activity = self.current_case_activity.get(case_id)
+                if activity:
+                    detail = str(activity.get("detail", "") or "").replace("\n", " ").strip()
+                    kind = str(activity.get("kind", "") or "activity")
+                    attempt = int(activity.get("attempt", 0) or 0)
+                    if len(detail) > 92:
+                        detail = f"{detail[:89]}..."
+                    fragments.append(("class:value", f"  • {case_id} [a{attempt} {kind}] {detail}\n"))
+                else:
+                    fragments.append(("class:value", f"  • {case_id}\n"))
         elif self.last_case_id:
             fragments.extend(
                 [
@@ -321,6 +512,15 @@ class TerminalBenchmarkDashboard:
                     ("class:value", f"  • {self.last_case_id} ({self.last_status})\n"),
                 ]
             )
+        if self.recent_case_activity:
+            fragments.append(("class:label", "\nRecent activity\n"))
+            for item in self.recent_case_activity[: min(5, len(self.recent_case_activity))]:
+                case_id = str(item.get("case_id", "") or "")
+                kind = str(item.get("kind", "") or "activity")
+                detail = str(item.get("detail", "") or "").replace("\n", " ").strip()
+                if len(detail) > 92:
+                    detail = f"{detail[:89]}..."
+                fragments.append(("class:value", f"  • {case_id} [{kind}] {detail}\n"))
         if self.summary_path is not None:
             fragments.extend(
                 [
@@ -334,12 +534,75 @@ class TerminalBenchmarkDashboard:
         fragments.append(("", " " * trailing))
         return fragments
 
+    def _results_table_formatted_text(self) -> AnyFormattedText:
+        width = max(72, min(shutil.get_terminal_size((100, 24)).columns - 8, 156))
+        status_width = 4
+        case_width = 18
+        py_width = 6
+        attempts_width = 4
+        seconds_width = 7
+        match_width = 5
+        error_width = 18
+        fixed_width = status_width + case_width + py_width + attempts_width + seconds_width + match_width + error_width + 14
+        deps_width = max(20, width - fixed_width)
+        header = (
+            f"{_fit_table_cell('STAT', status_width)}  "
+            f"{_fit_table_cell('CASE ID', case_width)}  "
+            f"{_fit_table_cell('PY', py_width)}  "
+            f"{_fit_table_cell('TRY', attempts_width)}  "
+            f"{_fit_table_cell('SEC', seconds_width)}  "
+            f"{_fit_table_cell('PLLM', match_width)}  "
+            f"{_fit_table_cell('RESULT', error_width)}  "
+            f"{_fit_table_cell('DEPENDENCIES', deps_width)}"
+        )
+        divider = "-" * len(header)
+        fragments: list[tuple[str, str]] = [
+            ("class:label", f"{header}\n"),
+            ("class:muted", f"{divider}\n"),
+        ]
+        if not self.recent_case_results:
+            fragments.append(
+                (
+                    "class:muted",
+                    "No completed benchmark cases yet. Passed and failed cases will appear here as the run advances.\n",
+                )
+            )
+            return fragments
+        for row in self.recent_case_results:
+            status_text = "PASS" if bool(row.get("success", False)) else "FAIL"
+            status_style = "class:good" if status_text == "PASS" else "class:bad"
+            seconds = float(row.get("seconds", 0.0) or 0.0)
+            match_text = str(row.get("pllm_match", "-") or "-")
+            match_style = "class:accent" if match_text == "MATCH" else ("class:bad" if match_text == "MISS" else "class:muted")
+            fragments.extend(
+                [
+                    (status_style, _fit_table_cell(status_text, status_width)),
+                    ("", "  "),
+                    ("class:value", _fit_table_cell(str(row.get("case_id", "")), case_width)),
+                    ("", "  "),
+                    ("class:value", _fit_table_cell(str(row.get("target_python", "") or "-"), py_width)),
+                    ("", "  "),
+                    ("class:value", _fit_table_cell(str(row.get("attempts", "") or "-"), attempts_width)),
+                    ("", "  "),
+                    ("class:value", _fit_table_cell(f"{seconds:.1f}", seconds_width)),
+                    ("", "  "),
+                    (match_style, _fit_table_cell(match_text, match_width)),
+                    ("", "  "),
+                    ("class:value", _fit_table_cell(str(row.get("error", "")), error_width)),
+                    ("", "  "),
+                    ("class:value", _fit_table_cell(str(row.get("dependencies", "")), deps_width)),
+                    ("", "\n"),
+                ]
+            )
+        return fragments
+
     def _render_text(self, final: bool = False) -> None:
         percent = (self.completed / self.total * 100.0) if self.total else 100.0
         elapsed_seconds = time.monotonic() - self.started_at
         success_rate = _format_success_rate(self.successes, self.completed)
         seconds_per_case = _format_seconds_per_case(self._seconds_per_completed_case(elapsed_seconds))
         eta = _format_eta(self._eta_seconds(elapsed_seconds))
+        ollama_snapshot = self.ollama_stats.snapshot() if self.ollama_stats is not None else OllamaStatsSnapshot()
         lines = [
             "=" * 80,
             "APDR Benchmark Dashboard",
@@ -352,6 +615,8 @@ class TerminalBenchmarkDashboard:
             f"Prompt profile: {self.prompt_profile}",
             f"Benchmark source: {self.benchmark_source}",
             f"Models: {getattr(self, 'model_summary', 'default')}",
+            f"Effective runtime: {self._runtime_summary()}",
+            f"Ollama: {self._ollama_summary(ollama_snapshot)}",
             f"Jobs: {self.jobs}",
             f"Artifacts: {self.artifacts_dir}",
             "",
@@ -362,15 +627,53 @@ class TerminalBenchmarkDashboard:
             ),
             f"Speed: {seconds_per_case}    ETA: {eta}",
         ]
+        last_ollama = self._last_ollama_summary(ollama_snapshot)
+        if last_ollama is not None:
+            lines.append(f"Last LLM: {last_ollama}")
         if self.research_features:
             lines.append(f"Research features: {', '.join(self.research_features)}")
         if self._cancel_requested:
-            lines.append("Stop requested: APDR will stop after the current active cases finish.")
+            lines.append(
+                "Stop requested: APDR will stop after the current active cases finish. "
+                "Press Ctrl+C again to hard quit immediately."
+            )
         if self.current_cases:
             lines.append("Active cases:")
-            lines.extend(f"  - {case_id}" for case_id in self.current_cases[: min(6, len(self.current_cases))])
+            for case_id in self.current_cases[: min(6, len(self.current_cases))]:
+                activity = self.current_case_activity.get(case_id)
+                if activity:
+                    lines.append(
+                        "  - "
+                        f"{case_id} "
+                        f"[a{int(activity.get('attempt', 0) or 0)} {activity.get('kind', 'activity')}] "
+                        f"{activity.get('detail', '')}"
+                    )
+                else:
+                    lines.append(f"  - {case_id}")
         elif self.last_case_id:
             lines.append(f"Last completed: {self.last_case_id} ({self.last_status})")
+        if self.recent_case_activity:
+            lines.append("Recent activity:")
+            for item in self.recent_case_activity[: min(5, len(self.recent_case_activity))]:
+                lines.append(
+                    "  - "
+                    f"{item.get('case_id', '')} "
+                    f"[{item.get('kind', 'activity')}] "
+                    f"{item.get('detail', '')}"
+                )
+        if self.recent_case_results:
+            lines.append("")
+            lines.append("Recent completed cases:")
+            for row in self.recent_case_results[: min(8, len(self.recent_case_results))]:
+                status = "PASS" if bool(row.get("success", False)) else "FAIL"
+                lines.append(
+                    "  "
+                    f"{status} {row.get('case_id', '')} "
+                    f"py={row.get('target_python', '') or '-'} "
+                    f"try={row.get('attempts', '') or '-'} "
+                    f"pllm={row.get('pllm_match', '-') or '-'} "
+                    f"result={row.get('error', '')}"
+                )
         if final:
             lines.extend(
                 [
@@ -395,6 +698,55 @@ class TerminalBenchmarkDashboard:
         if seconds_per_case is None:
             return None
         return max(0.0, seconds_per_case * (self.total - self.completed))
+
+    @staticmethod
+    def _ollama_summary(snapshot: OllamaStatsSnapshot) -> str:
+        if snapshot.calls <= 0:
+            return "waiting for first response"
+        parts = [f"{snapshot.calls} calls"]
+        if snapshot.eval_tokens > 0 or snapshot.eval_duration_ns > 0:
+            parts.append(f"out {snapshot.eval_tokens} tok @ {_format_tokens_per_second(snapshot.eval_tokens_per_second)}")
+        if snapshot.prompt_tokens > 0 or snapshot.prompt_duration_ns > 0:
+            parts.append(f"prompt {snapshot.prompt_tokens} tok @ {_format_tokens_per_second(snapshot.prompt_tokens_per_second)}")
+        return ", ".join(parts)
+
+    @staticmethod
+    def _last_ollama_summary(snapshot: OllamaStatsSnapshot) -> str | None:
+        if snapshot.calls <= 0:
+            return None
+        model = snapshot.last_model or "unknown"
+        stage = snapshot.last_stage or "unknown"
+        return f"{stage} / {model} @ {_format_tokens_per_second(snapshot.last_eval_tokens_per_second)}"
+
+    def _runtime_summary(self) -> str:
+        model_profile = str(
+            self.runtime_config.get("effective_model_profile", self.runtime_config.get("model_profile", "default"))
+        )
+        rag_mode = str(self.runtime_config.get("effective_rag_mode", self.runtime_config.get("rag_mode", "pypi")))
+        structured = bool(
+            self.runtime_config.get(
+                "effective_structured_prompting",
+                self.runtime_config.get("structured_prompting", False),
+            )
+        )
+        repair_limit = int(
+            self.runtime_config.get(
+                "effective_repair_cycle_limit",
+                self.runtime_config.get("repair_cycle_limit", 0),
+            )
+            or 0
+        )
+        fallback = bool(
+            self.runtime_config.get(
+                "effective_candidate_fallback_before_repair",
+                self.runtime_config.get("allow_candidate_fallback_before_repair", False),
+            )
+        )
+        return (
+            f"profile={model_profile} rag={rag_mode} "
+            f"structured={'on' if structured else 'off'} "
+            f"repair={repair_limit} fallback={'on' if fallback else 'off'}"
+        )
 
 
 @dataclass
@@ -513,6 +865,19 @@ class TerminalUI:
         elif choice == "3":
             self._delete_saved_loadout()
         return 0
+
+    def _apply_preset_config(self, preset: str, *, prompt_profile_override: str | None = None) -> None:
+        preset_config = PRESET_CONFIGS[preset]
+        self.settings.preset = preset
+        self.settings.prompt_profile = prompt_profile_override or preset_config.prompt_profile
+        self.settings.max_attempts = preset_config.max_attempts
+        self.settings.default_module_grouping = preset_config.reporting_grouping
+        self.settings.rag_mode = preset_config.rag_mode
+        self.settings.structured_prompting = preset_config.structured_prompting
+        self.settings.candidate_plan_count = preset_config.candidate_plan_count
+        self.settings.allow_candidate_fallback_before_repair = preset_config.allow_candidate_fallback_before_repair
+        self.settings.repair_cycle_limit = preset_config.repair_cycle_limit
+        self.settings.repo_evidence_enabled = preset_config.repo_evidence_enabled
 
     def _run_menu(self) -> int:
         if self._use_prompt_toolkit:
@@ -766,11 +1131,8 @@ class TerminalUI:
             self.settings.resolver = saved_resolver
         saved_preset = str(run_entry.get("preset", "") or "")
         if saved_preset in PRESET_CONFIGS:
-            preset_config = PRESET_CONFIGS[saved_preset]
-            self.settings.preset = saved_preset
-            self.settings.prompt_profile = preset_config.prompt_profile
-            self.settings.max_attempts = preset_config.max_attempts
-            self.settings.default_module_grouping = preset_config.reporting_grouping
+            saved_prompt_profile = str(run_entry.get("prompt_profile", "") or "").strip() or None
+            self._apply_preset_config(saved_preset, prompt_profile_override=saved_prompt_profile)
         saved_bundle = str(run_entry.get("research_bundle", "") or "")
         if saved_bundle in RESEARCH_BUNDLE_DEFAULTS:
             self.settings.research_bundle = saved_bundle
@@ -782,6 +1144,12 @@ class TerminalUI:
         saved_benchmark_source = str(run_entry.get("benchmark_source", "") or "")
         if saved_benchmark_source in {"all-gists", "dockerized-gists", "competition-run"}:
             self.settings.benchmark_case_source = saved_benchmark_source
+        self.settings.apply_runtime_config(run_entry)
+        if self.settings.research_bundle not in RESEARCH_BUNDLE_DEFAULTS:
+            self.settings.research_bundle = "baseline"
+        self.settings.research_features = tuple(
+            feature for feature in self.settings.research_features if feature in RESEARCH_FEATURES
+        )
         if not self._validate_runtime_selection():
             return 1
         target = str(run_entry.get("target", "benchmark") or "benchmark")
@@ -1011,26 +1379,17 @@ class TerminalUI:
         return sorted(set(name for name in names if name))
 
     def _serialize_current_loadout(self) -> dict[str, object]:
-        return {
+        payload = {
             "resolver": self.settings.resolver,
             "preset": self.settings.preset,
             "prompt_profile": self.settings.prompt_profile,
             "benchmark_case_source": self.settings.benchmark_case_source,
-            "model_profile": self.settings.model_profile,
-            "use_moe": self.settings.use_moe,
-            "use_rag": self.settings.use_rag,
-            "use_langchain": self.settings.use_langchain,
-            "extraction_model": self.settings.extraction_model,
-            "reasoning_model": self.settings.reasoning_model,
-            "version_model": self.settings.version_model,
-            "repair_model": self.settings.repair_model,
-            "adjudication_model": self.settings.adjudication_model,
             "trace_llm": self.settings.trace_llm,
-            "research_bundle": self.settings.research_bundle,
-            "research_features": list(self.settings.research_features),
             "pyego_python": self.settings.pyego_python,
             "fresh_run": self._fresh_run,
         }
+        payload.update(self.settings.effective_runtime_config())
+        return payload
 
     def _apply_loadout(self, payload: dict[str, object]) -> None:
         resolver = str(payload.get("resolver", self.settings.resolver) or self.settings.resolver)
@@ -1039,11 +1398,8 @@ class TerminalUI:
 
         preset = str(payload.get("preset", self.settings.preset) or self.settings.preset)
         if preset in PRESET_CONFIGS:
-            preset_config = PRESET_CONFIGS[preset]
-            self.settings.preset = preset
-            self.settings.prompt_profile = str(payload.get("prompt_profile", preset_config.prompt_profile))
-            self.settings.max_attempts = preset_config.max_attempts
-            self.settings.default_module_grouping = preset_config.reporting_grouping
+            prompt_profile = str(payload.get("prompt_profile", "") or "").strip() or None
+            self._apply_preset_config(preset, prompt_profile_override=prompt_profile)
 
         benchmark_source = str(
             payload.get("benchmark_case_source", self.settings.benchmark_case_source)
@@ -1051,18 +1407,15 @@ class TerminalUI:
         )
         if benchmark_source in {"all-gists", "dockerized-gists", "competition-run"}:
             self.settings.benchmark_case_source = benchmark_source
+        self.settings.apply_runtime_config(payload)
+        effective_model_profile = str(
+            payload.get("effective_model_profile", payload.get("model_profile", self.settings.model_profile))
+            or self.settings.model_profile
+        )
+        if effective_model_profile in MODEL_PROFILE_DEFAULTS:
+            self.settings.model_profile = effective_model_profile
 
-        model_profile = str(payload.get("model_profile", self.settings.model_profile) or self.settings.model_profile)
-        if model_profile in MODEL_PROFILE_DEFAULTS:
-            self.settings.model_profile = model_profile
-
-        for key, attr in (
-            ("use_moe", "use_moe"),
-            ("use_rag", "use_rag"),
-            ("use_langchain", "use_langchain"),
-            ("trace_llm", "trace_llm"),
-            ("fresh_run", "_fresh_run"),
-        ):
+        for key, attr in (("trace_llm", "trace_llm"), ("fresh_run", "_fresh_run")):
             value = payload.get(key, None)
             if isinstance(value, bool):
                 if attr == "_fresh_run":
@@ -1070,27 +1423,15 @@ class TerminalUI:
                 else:
                     setattr(self.settings, attr, value)
 
-        for key, attr in (
-            ("extraction_model", "extraction_model"),
-            ("reasoning_model", "reasoning_model"),
-            ("version_model", "version_model"),
-            ("repair_model", "repair_model"),
-            ("adjudication_model", "adjudication_model"),
-            ("pyego_python", "pyego_python"),
-        ):
-            value = str(payload.get(key, "")).strip()
-            if value:
-                setattr(self.settings, attr, value)
+        pyego_python = str(payload.get("pyego_python", "")).strip()
+        if pyego_python:
+            self.settings.pyego_python = pyego_python
 
-        research_bundle = str(payload.get("research_bundle", self.settings.research_bundle) or self.settings.research_bundle)
-        if research_bundle in RESEARCH_BUNDLE_DEFAULTS:
-            self.settings.research_bundle = research_bundle
-
-        raw_features = payload.get("research_features", [])
-        if isinstance(raw_features, list):
-            self.settings.research_features = tuple(
-                feature for feature in raw_features if isinstance(feature, str) and feature in RESEARCH_FEATURES
-            )
+        if self.settings.research_bundle not in RESEARCH_BUNDLE_DEFAULTS:
+            self.settings.research_bundle = "baseline"
+        self.settings.research_features = tuple(
+            feature for feature in self.settings.research_features if feature in RESEARCH_FEATURES
+        )
 
         if self.settings.preset in {"research", "experimental"} and self.settings.resolver != "apdr":
             self.settings.resolver = "apdr"
@@ -1813,11 +2154,7 @@ class TerminalUI:
             if index < 0 or index >= len(PRESET_CONFIGS):
                 return
             selected = list(PRESET_CONFIGS)[index]
-        preset_config = PRESET_CONFIGS[selected]
-        self.settings.preset = selected
-        self.settings.prompt_profile = preset_config.prompt_profile
-        self.settings.max_attempts = preset_config.max_attempts
-        self.settings.default_module_grouping = preset_config.reporting_grouping
+        self._apply_preset_config(selected)
         if selected in {"research", "experimental"} and self.settings.resolver != "apdr":
             self.settings.resolver = "apdr"
         if selected != "research":
@@ -1856,11 +2193,7 @@ class TerminalUI:
             selected = visible_resolvers[index]
         self.settings.resolver = selected
         if selected != "apdr" and self.settings.preset in {"research", "experimental"}:
-            self.settings.preset = "accuracy"
-            preset_config = PRESET_CONFIGS["accuracy"]
-            self.settings.prompt_profile = preset_config.prompt_profile
-            self.settings.max_attempts = preset_config.max_attempts
-            self.settings.default_module_grouping = preset_config.reporting_grouping
+            self._apply_preset_config("accuracy")
             self.settings.research_bundle = "baseline"
             self.settings.research_features = ()
         message = f"Resolver switched to {selected}."

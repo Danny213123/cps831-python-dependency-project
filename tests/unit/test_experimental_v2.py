@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from pathlib import Path
 
 from agentic_python_dependency.config import Settings
-from agentic_python_dependency.graph import ResolutionWorkflow
+from agentic_python_dependency.graph import ResolutionWorkflow, route_after_research_classification
 from agentic_python_dependency.presets import resolve_research_features
-from agentic_python_dependency.state import BenchmarkCase, PackageVersionOptions
+from agentic_python_dependency.state import AttemptRecord, BenchmarkCase, CandidateDependency, CandidatePlan, ExecutionOutcome, PackageVersionOptions, ResolvedDependency
 from agentic_python_dependency.tools.constraint_pack import build_constraint_pack, generate_candidate_bundles
 from agentic_python_dependency.tools.dynamic_imports import collect_dynamic_import_candidates
 from agentic_python_dependency.tools.repo_aliases import build_repo_alias_candidates
 from agentic_python_dependency.tools.repair_feedback import append_feedback_event, summarize_feedback_memory
 from agentic_python_dependency.tools.retry_policy import classify_retry_decision
+from agentic_python_dependency.tools.rag_context import summarize_rag_context
 from agentic_python_dependency.tools.structured_outputs import (
     StructuredOutputError,
     parse_alias_resolution_payload,
+    parse_candidate_plan_payload,
+    parse_repair_plan_payload,
 )
 
 
@@ -69,6 +73,26 @@ class FakeAliasPyPIStore:
         if package == "python-memcached":
             return PackageVersionOptions(package="python-memcached", versions=["1.62"])
         raise FileNotFoundError(package)
+
+
+class TargetAwarePyPIStore:
+    def __init__(self, versions_by_target: dict[tuple[str, str], list[str]]):
+        self.versions_by_target = versions_by_target
+
+    def get_version_options(
+        self,
+        package: str,
+        target_python: str,
+        *,
+        limit: int = 20,
+        preset: str = "optimized",
+    ) -> PackageVersionOptions:
+        assert limit >= 1
+        assert preset
+        versions = self.versions_by_target.get((package, target_python))
+        if versions is None:
+            raise FileNotFoundError(package)
+        return PackageVersionOptions(package=package, versions=versions[:limit])
 
 
 def test_settings_from_env_resolves_research_bundle_and_feature_overrides(tmp_path: Path) -> None:
@@ -163,7 +187,7 @@ def test_build_constraint_pack_detects_python_intersection_and_pairwise_conflict
     assert pack.conflict_precheck_failed is True
     assert any(note.kind == "requires_python" for note in pack.conflict_notes)
     assert any(note.kind == "requires_dist" for note in pack.conflict_notes)
-    assert generate_candidate_bundles(pack)
+    assert not generate_candidate_bundles(pack)
 
 
 def test_build_constraint_pack_keeps_requires_dist_conflicts_non_terminal_when_python_intersection_is_valid() -> None:
@@ -190,6 +214,639 @@ def test_build_constraint_pack_keeps_requires_dist_conflicts_non_terminal_when_p
     assert any(note.kind == "requires_dist" for note in pack.conflict_notes)
 
 
+def test_generate_candidate_bundles_preserves_semantic_version_priority() -> None:
+    pack = build_constraint_pack(
+        [
+            PackageVersionOptions(
+                package="scrapy",
+                versions=["2.11.2", "2.10.1", "2.9.0"],
+                requires_python={
+                    "2.11.2": ">=3.8",
+                    "2.10.1": ">=3.8",
+                    "2.9.0": ">=3.8",
+                },
+            ),
+            PackageVersionOptions(
+                package="sip",
+                versions=["6.15.1", "6.8.6", "6.8.5"],
+                requires_python={
+                    "6.15.1": ">=3.8",
+                    "6.8.6": ">=3.8",
+                    "6.8.5": ">=3.8",
+                },
+            ),
+        ],
+        target_python="3.12",
+    )
+
+    bundles = generate_candidate_bundles(pack, beam_width=4)
+
+    assert [(dep.name, dep.version) for dep in bundles[0]] == [
+        ("scrapy", "2.11.2"),
+        ("sip", "6.15.1"),
+    ]
+    assert [(dep.name, dep.version) for dep in bundles[1]] == [
+        ("scrapy", "2.11.2"),
+        ("sip", "6.8.6"),
+    ]
+    assert [(dep.name, dep.version) for dep in bundles[2]] == [
+        ("scrapy", "2.10.1"),
+        ("sip", "6.15.1"),
+    ]
+
+
+def test_generate_candidate_bundles_filters_requires_dist_incompatible_combinations() -> None:
+    pack = build_constraint_pack(
+        [
+            PackageVersionOptions(
+                package="alpha",
+                versions=["2.0.0", "1.0.0"],
+                requires_python={
+                    "2.0.0": ">=3.8",
+                    "1.0.0": ">=3.8",
+                },
+                requires_dist={
+                    "2.0.0": ["beta>=2"],
+                    "1.0.0": ["beta<2"],
+                },
+            ),
+            PackageVersionOptions(
+                package="beta",
+                versions=["2.0.0", "1.0.0"],
+                requires_python={
+                    "2.0.0": ">=3.8",
+                    "1.0.0": ">=3.8",
+                },
+            ),
+        ],
+        target_python="3.12",
+    )
+
+    bundles = generate_candidate_bundles(pack, beam_width=8)
+
+    assert [[(dep.name, dep.version) for dep in bundle] for bundle in bundles] == [
+        [("alpha", "2.0.0"), ("beta", "2.0.0")],
+        [("alpha", "1.0.0"), ("beta", "1.0.0")],
+    ]
+
+
+def test_generate_candidate_bundles_avoids_lexicographic_beam_pruning() -> None:
+    keras_versions = [
+        "2.15.0",
+        "2.13.1",
+        "2.12.0",
+        "2.11.0",
+        "2.10.0",
+        "2.9.0",
+        "2.8.0",
+        "2.7.0",
+        "2.6.0",
+        "2.5.0",
+        "2.4.3",
+        "2.4.2",
+        "2.4.1",
+    ]
+    numpy_versions = [
+        "1.25.0",
+        "1.24.3",
+        "1.21.9",
+        "1.21.8",
+        "1.21.7",
+        "1.21.6",
+        "1.21.5",
+        "1.21.4",
+        "1.21.3",
+        "1.21.2",
+        "1.21.1",
+        "1.21.0",
+        "1.20.9",
+    ]
+    pack = build_constraint_pack(
+        [
+            PackageVersionOptions(
+                package="gym",
+                versions=["0.26.2"],
+                requires_python={"0.26.2": ">=3.8"},
+            ),
+            PackageVersionOptions(
+                package="keras",
+                versions=keras_versions,
+                requires_python={version: ">=3.8" for version in keras_versions},
+            ),
+            PackageVersionOptions(
+                package="numpy",
+                versions=numpy_versions,
+                requires_python={version: ">=3.8" for version in numpy_versions},
+            ),
+            PackageVersionOptions(
+                package="tensorflow",
+                versions=["2.13.1"],
+                requires_python={"2.13.1": ">=3.8"},
+                requires_dist={"2.13.1": ["keras<2.14,>=2.13.1", "numpy<=1.24.3,>=1.22"]},
+            ),
+        ],
+        target_python="3.12",
+        top_k=20,
+    )
+
+    bundles = generate_candidate_bundles(pack, beam_width=12, max_bundles=10)
+
+    assert [[(dep.name, dep.version) for dep in bundle] for bundle in bundles] == [
+        [
+            ("gym", "0.26.2"),
+            ("keras", "2.13.1"),
+            ("numpy", "1.24.3"),
+            ("tensorflow", "2.13.1"),
+        ]
+    ]
+
+
+def test_generate_candidate_bundles_prioritizes_source_compatible_versions_when_requested() -> None:
+    pack = build_constraint_pack(
+        [
+            PackageVersionOptions(
+                package="gym",
+                versions=["0.26.2", "0.26.1", "0.25.2"],
+                requires_python={version: ">=3.8" for version in ["0.26.2", "0.26.1", "0.25.2"]},
+            ),
+            PackageVersionOptions(
+                package="keras",
+                versions=["2.15.0", "2.13.1", "2.12.0", "2.11.0", "2.10.0", "2.9.0", "2.8.0", "2.7.0", "2.6.0", "2.4.3"],
+                requires_python={version: ">=3.8" for version in ["2.15.0", "2.13.1", "2.12.0", "2.11.0", "2.10.0", "2.9.0", "2.8.0", "2.7.0", "2.6.0", "2.4.3"]},
+            ),
+            PackageVersionOptions(
+                package="numpy",
+                versions=["1.24.3", "1.24.2", "1.24.1", "1.24.0", "1.23.5", "1.23.4", "1.23.3", "1.23.2", "1.23.1", "1.23.0", "1.22.4", "1.19.5"],
+                requires_python={version: ">=3.8" for version in ["1.24.3", "1.24.2", "1.24.1", "1.24.0", "1.23.5", "1.23.4", "1.23.3", "1.23.2", "1.23.1", "1.23.0", "1.22.4", "1.19.5"]},
+            ),
+            PackageVersionOptions(
+                package="tensorflow",
+                versions=["2.13.1", "2.13.0", "2.12.1", "2.12.0", "2.11.0", "2.10.1", "2.4.4"],
+                requires_python={version: ">=3.8" for version in ["2.13.1", "2.13.0", "2.12.1", "2.12.0", "2.11.0", "2.10.1", "2.4.4"]},
+                requires_dist={
+                    "2.13.1": ["keras<2.14,>=2.13.1", "numpy<=1.24.3,>=1.22"],
+                    "2.13.0": ["keras<2.14,>=2.13.1", "numpy<=1.24.3,>=1.22"],
+                    "2.12.1": ["keras<2.13,>=2.12.0", "numpy<1.24,>=1.22"],
+                    "2.12.0": ["keras<2.13,>=2.12.0", "numpy<1.24,>=1.22"],
+                    "2.11.0": ["keras<2.12,>=2.11.0", "numpy<1.24,>=1.20"],
+                    "2.10.1": ["keras<2.11,>=2.10.0", "numpy<1.24,>=1.20"],
+                    "2.4.4": ["keras<=2.4.3", "numpy<=1.19.5,>=1.19.2"],
+                },
+            ),
+        ],
+        target_python="3.8",
+        top_k=20,
+    )
+
+    bundles = generate_candidate_bundles(
+        pack,
+        beam_width=12,
+        max_bundles=3,
+        version_cap_per_package=12,
+        preferred_versions_by_package={
+            "gym": ["0.25.2"],
+            "keras": ["2.4.3"],
+            "numpy": ["1.19.5"],
+            "tensorflow": ["2.4.4"],
+        },
+    )
+
+    assert [(dep.name, dep.version) for dep in bundles[0]] == [
+        ("gym", "0.25.2"),
+        ("keras", "2.4.3"),
+        ("numpy", "1.19.5"),
+        ("tensorflow", "2.4.4"),
+    ]
+
+
+def test_retrieve_pypi_metadata_uses_benchmark_platform_override(tmp_path: Path) -> None:
+    class RecordingStore:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def get_version_options(
+            self,
+            package: str,
+            target_python: str,
+            *,
+            limit: int = 20,
+            preset: str = "optimized",
+            platform: str | None = None,
+        ) -> PackageVersionOptions:
+            self.calls.append(
+                {
+                    "package": package,
+                    "target_python": target_python,
+                    "limit": limit,
+                    "preset": preset,
+                    "platform": platform,
+                }
+            )
+            return PackageVersionOptions(package=package, versions=["2.4.4"])
+
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(settings, pypi_store=RecordingStore())
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import tensorflow\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-platform", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["inferred_packages"] = ["tensorflow"]
+    state["target_python"] = "3.8"
+
+    workflow.retrieve_pypi_metadata(state)
+
+    assert workflow.pypi_store.calls[0]["platform"] == "linux/amd64"
+
+
+def test_apply_source_version_preferences_annotates_legacy_keras_and_gym_versions_in_research(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(settings, pypi_store=FakePyPIStore())
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text(
+        "\n".join(
+            [
+                "import gym",
+                "from keras.layers import Dense, merge",
+                "from keras.models import Model",
+                "import tensorflow as tf",
+                "import numpy as np",
+                "state = env.reset()",
+                "new_state, reward, done, _ = env.step(action)",
+                "model = Model(input=state_in, output=out)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-legacy", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["inferred_packages"] = ["gym", "keras", "numpy", "tensorflow"]
+    state["version_options"] = [
+        PackageVersionOptions(package="gym", versions=["0.26.2", "0.26.1", "0.25.2"]),
+        PackageVersionOptions(package="keras", versions=["2.15.0", "2.13.1", "2.4.3", "2.4.2"]),
+        PackageVersionOptions(package="numpy", versions=["1.24.4", "1.24.3", "1.19.5", "1.19.4"]),
+        PackageVersionOptions(package="tensorflow", versions=["2.13.1", "2.10.1", "2.4.4", "2.4.3"]),
+    ]
+
+    workflow._apply_source_version_preferences(state)
+
+    versions_by_package = {option.package: option.versions for option in state["version_options"]}
+    assert versions_by_package["gym"] == ["0.26.2", "0.26.1", "0.25.2"]
+    assert versions_by_package["keras"] == ["2.15.0", "2.13.1", "2.4.3", "2.4.2"]
+    assert versions_by_package["numpy"] == ["1.24.4", "1.24.3", "1.19.5", "1.19.4"]
+    assert versions_by_package["tensorflow"] == ["2.13.1", "2.10.1", "2.4.4", "2.4.3"]
+    assert "source_compat_legacy_keras_api:<=2.4.3" in state["applied_compatibility_policy"]["keras"]
+
+
+def test_retrieve_version_specific_metadata_filters_versions_using_enriched_requires_python(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.research_features = ("transitive_conflicts",)
+    workflow = ResolutionWorkflow(settings, pypi_store=FakePyPIStore())
+
+    class MetadataStore:
+        @staticmethod
+        def parse_release_metadata(
+            package: str,
+            version: str,
+            *,
+            release_files: list[dict[str, str]] | None = None,
+        ) -> dict[str, object]:
+            assert package == "pymc3"
+            assert release_files
+            requires_python = {
+                "3.7": ">=3.5.4",
+                "3.6": ">=2.7",
+                "3.5": ">=2.7",
+            }[version]
+            return {
+                "package": package,
+                "version": version,
+                "top_level_modules": ["pymc3"],
+                "requires_dist": ["numpy>=1.13.0"],
+                "requires_python": requires_python,
+                "source": "wheel",
+            }
+
+    workflow.package_metadata_store = MetadataStore()
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import pymc3\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-enriched-python", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["target_python"] = "2.7.18"
+    state["version_options"] = [
+        PackageVersionOptions(
+            package="pymc3",
+            versions=["3.7", "3.6", "3.5"],
+            requires_python={"3.7": "", "3.6": ">=2.7", "3.5": ">=2.7"},
+            platform_notes={"3.7": ["source_only_native_risk"], "3.6": ["wheel_available"], "3.5": ["wheel_available"]},
+            requires_dist={"3.7": [], "3.6": [], "3.5": []},
+        )
+    ]
+
+    updated = workflow.retrieve_version_specific_metadata(state)
+
+    assert updated["version_options"][0].versions == ["3.6", "3.5"]
+    assert updated["version_options"][0].requires_python == {"3.6": ">=2.7", "3.5": ">=2.7"}
+    assert any(
+        note["version"] == "3.7"
+        for note in updated["pypi_evidence"]["metadata_enrichment"][0]["dropped_versions"]
+    )
+    assert any("pymc3 3.7: dropped after metadata Requires-Python >=3.5.4" in note for note in updated["platform_compatibility_notes"])
+
+
+def test_activate_deferred_python_fallback_rebuilds_with_metadata_filtered_versions(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.research_features = ("transitive_conflicts",)
+
+    class DeferredFallbackPyPIStore:
+        @staticmethod
+        def get_version_options(
+            package: str,
+            target_python: str,
+            *,
+            limit: int = 20,
+            preset: str = "optimized",
+        ) -> PackageVersionOptions:
+            assert target_python == "2.7.18"
+            assert limit >= 1
+            assert preset
+            if package != "pymc3":
+                raise FileNotFoundError(package)
+            return PackageVersionOptions(
+                package="pymc3",
+                versions=["3.7", "3.6", "3.5"],
+                requires_python={"3.7": "", "3.6": ">=2.7", "3.5": ">=2.7"},
+                requires_dist={"3.7": [], "3.6": [], "3.5": []},
+            )
+
+        @staticmethod
+        def release_files(package: str, version: str) -> list[dict[str, str]]:
+            assert package == "pymc3"
+            return [{"url": f"https://example.invalid/{package}/{version}.whl"}]
+
+    class MetadataStore:
+        @staticmethod
+        def parse_release_metadata(
+            package: str,
+            version: str,
+            *,
+            release_files: list[dict[str, str]] | None = None,
+        ) -> dict[str, object]:
+            assert package == "pymc3"
+            assert release_files
+            return {
+                "package": package,
+                "version": version,
+                "top_level_modules": ["pymc3"],
+                "requires_dist": ["numpy>=1.13.0"],
+                "requires_python": {
+                    "3.7": ">=3.5.4",
+                    "3.6": ">=2.7",
+                    "3.5": ">=2.7",
+                }[version],
+                "source": "wheel",
+            }
+
+    workflow = ResolutionWorkflow(settings, pypi_store=DeferredFallbackPyPIStore())
+    workflow.package_metadata_store = MetadataStore()
+    case_root = tmp_path / "case-deferred-fallback-filter"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import pymc3\nprint 'hello world'\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(
+            case_id="case-deferred-fallback-filter",
+            root_dir=case_root,
+            snippet_path=snippet,
+            case_source="all-gists",
+        )
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-deferred-fallback-filter")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["inferred_packages"] = ["pymc3"]
+    state["selected_dependencies"] = [ResolvedDependency(name="pymc3", version="3.7")]
+    state["target_python"] = "3.12"
+    state["deferred_target_python"] = "2.7.18"
+
+    workflow._activate_deferred_python_fallback(state)
+
+    assert state["target_python"] == "2.7.18"
+    assert state["python_version_source"] == "deferred_python_fallback"
+    assert state["python_fallback_used"] is True
+    assert state["pending_python_fallback"] is True
+    assert state["selected_dependencies"] == []
+    assert state["generated_requirements"] == "# pending model replan after deferred python fallback\n"
+
+
+def test_version_negotiation_retains_deterministic_fallback_plans(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+    settings.research_features = ("version_negotiation",)
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "version"
+            assert template == "version_negotiation.txt"
+            return (
+                '{"selected_bundles":['
+                '{"rank":1,"reason":"best bundle","dependencies":['
+                '{"name":"redis","version":"5.0.0"},'
+                '{"name":"sqlalchemy","version":"2.0.0"}'
+                "]}]}"
+            )
+
+    activity_events: list[tuple[str, int, str, str]] = []
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=PromptRunner(),
+        activity_callback=lambda case_id, attempt, kind, detail: activity_events.append((case_id, attempt, kind, detail)),
+    )
+    case_root = tmp_path / "case-negotiation"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import redis\nimport sqlalchemy\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-negotiation", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["target_python"] = "3.12"
+    state["inferred_packages"] = ["redis", "sqlalchemy"]
+    state["version_options"] = [
+        PackageVersionOptions(package="redis", versions=["5.0.0", "4.0.0"]),
+        PackageVersionOptions(package="sqlalchemy", versions=["2.0.0", "1.4.52"]),
+    ]
+    state["structured_outputs"] = {
+        "candidate_bundles": [
+            {
+                "rank": 1,
+                "dependencies": [
+                    {"name": "redis", "version": "5.0.0", "platform_notes": ["wheel_available"]},
+                    {"name": "sqlalchemy", "version": "2.0.0", "platform_notes": ["wheel_available"]},
+                ],
+            },
+            {
+                "rank": 2,
+                "dependencies": [
+                    {"name": "redis", "version": "4.0.0", "platform_notes": ["wheel_available"]},
+                    {"name": "sqlalchemy", "version": "2.0.0", "platform_notes": ["wheel_available"]},
+                ],
+            },
+            {
+                "rank": 3,
+                "dependencies": [
+                    {"name": "redis", "version": "5.0.0", "platform_notes": ["wheel_available"]},
+                    {"name": "sqlalchemy", "version": "1.4.52", "platform_notes": ["wheel_available"]},
+                ],
+            },
+        ]
+    }
+
+    updated = workflow.negotiate_version_bundles(state)
+
+    assert updated["candidate_plan_strategy"] == "llm+fallback-augmented"
+    assert len(updated["candidate_plans"]) == 3
+    assert [dependency.version for dependency in updated["candidate_plans"][0].dependencies] == ["5.0.0", "2.0.0"]
+    assert [dependency.version for dependency in updated["candidate_plans"][1].dependencies] == ["4.0.0", "2.0.0"]
+    assert updated["structured_outputs"]["version_negotiation"]["candidate_plan_strategy"] == "llm+fallback-augmented"
+
+
+def test_repair_prompt_receives_install_time_python_mismatch_details(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+    error_message = "ERROR: Package 'pymc3' requires a different Python: 2.7.18 not in '>=3.5.4'"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "repair"
+            assert error_message in variables["error_details"]
+            return (
+                '{"repair_applicable":true,"plans":['
+                '{"rank":1,"reason":"downgrade to a Python 2 compatible release","dependencies":['
+                '{"name":"pymc3","version":"3.6.1"}'
+                "]}]}"
+            )
+
+    activity_events: list[tuple[str, int, str, str]] = []
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=PromptRunner(),
+        activity_callback=lambda case_id, attempt, kind, detail: activity_events.append((case_id, attempt, kind, detail)),
+    )
+    case_root = tmp_path / "case-repair"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import pymc3\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-repair", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["target_python"] = "2.7.18"
+    state["current_attempt"] = 2
+    state["inferred_packages"] = ["pymc3"]
+    state["version_options"] = [
+        PackageVersionOptions(
+            package="pymc3",
+            versions=["3.6.1"],
+            requires_python={"3.6.1": ">=2.7"},
+        )
+    ]
+    state["selected_dependencies"] = [ResolvedDependency(name="pymc3", version="3.7")]
+    state["last_error_details"] = error_message
+
+    updated = workflow.repair_prompt_c_research(state)
+
+    assert updated["candidate_plan_strategy"] == "llm-selected"
+    assert updated["candidate_plans"][0].dependencies[0].version == "3.6.1"
+    assert updated["model_outputs"]["repair"]
+    event_kinds = [kind for _, _, kind, _ in activity_events]
+    assert "repair_cycle_started" in event_kinds
+    assert "repair_plan_ready" in event_kinds
+
+
+def test_repair_prompt_research_discards_already_attempted_plans(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "repair"
+            return (
+                '{"repair_applicable":true,"plans":['
+                '{"rank":1,"reason":"repeat prior downgrade","dependencies":['
+                '{"name":"rx","version":"1.6.1"},'
+                '{"name":"twisted","version":"19.10.0"}'
+                "]}]}"
+            )
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+    case_root = tmp_path / "case-duplicate-repair"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import rx\nimport twisted\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-duplicate-repair", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-duplicate-repair")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["target_python"] = "2.7.18"
+    state["current_attempt"] = 3
+    state["inferred_packages"] = ["rx", "twisted"]
+    state["version_options"] = [
+        PackageVersionOptions(package="rx", versions=["1.6.1"]),
+        PackageVersionOptions(package="twisted", versions=["19.10.0"]),
+    ]
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="rx", version="1.6.1"),
+        ResolvedDependency(name="twisted", version="19.10.0"),
+    ]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=2,
+            dependencies=["rx==1.6.1", "twisted==19.10.0"],
+            image_tag="img-2",
+            build_succeeded=True,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ImportError",
+            error_details="cannot import name Disposable",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_02"),
+        )
+    ]
+    state["last_error_details"] = "ImportError: cannot import name Disposable"
+
+    updated = workflow.repair_prompt_c_research(state)
+
+    assert updated["candidate_plans"] == []
+    assert updated["remaining_candidate_plans"] == []
+    assert updated["repair_model_concluded_impossible"] is False
+    assert updated["repair_plan_unavailable_reason"] == "no_novel_plans"
+
+
 def test_classify_retry_decision_limits_native_build_retries_once_system_packages_were_injected() -> None:
     first = classify_retry_decision("NativeBuildError", system_packages_injected=False, native_retry_used=0)
     second = classify_retry_decision("NativeBuildError", system_packages_injected=True, native_retry_used=1)
@@ -199,6 +856,515 @@ def test_classify_retry_decision_limits_native_build_retries_once_system_package
     assert first.repair_allowed is True
     assert second.candidate_fallback_allowed is False
     assert second.repair_allowed is False
+
+
+def test_classify_retry_decision_treats_build_timeout_as_limited_retryable() -> None:
+    decision = classify_retry_decision("BuildTimeoutError")
+
+    assert decision.severity == "limited_retryable"
+    assert decision.candidate_fallback_allowed is True
+    assert decision.repair_allowed is True
+
+
+def test_classify_retry_decision_routes_system_dependency_without_hints_to_repair_and_fallback() -> None:
+    decision = classify_retry_decision("SystemDependencyError", has_system_package_hints=False)
+
+    assert decision.severity == "repair_retryable"
+    assert decision.candidate_fallback_allowed is True
+    assert decision.repair_allowed is True
+
+
+def test_classify_retry_decision_defaults_unknown_errors_to_retryable() -> None:
+    decision = classify_retry_decision("UnknownError")
+
+    assert decision.severity == "repair_retryable"
+    assert decision.candidate_fallback_allowed is True
+    assert decision.repair_allowed is True
+
+
+def test_classify_outcome_uses_build_log_guided_followup_after_native_retry_is_exhausted(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.research_features = ("smart_repair_routing",)
+    activity_events: list[tuple[str, int, str, str]] = []
+    workflow = ResolutionWorkflow(
+        settings,
+        activity_callback=lambda case_id, attempt, kind, detail: activity_events.append((case_id, attempt, kind, detail)),
+    )
+
+    case_root = tmp_path / "case-native-followup"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import pymc3\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-native-followup", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    dependencies = [
+        "numpy==1.16.6",
+        "pandas==0.24.2",
+        "pymc3==3.6",
+        "scipy==1.2.2",
+        "theano==1.0.4",
+    ]
+    state["current_attempt"] = 3
+    state["selected_dependencies"] = [ResolvedDependency(name=item.split("==", 1)[0], version=item.split("==", 1)[1]) for item in dependencies]
+    state["remaining_candidate_plans"] = [
+        CandidatePlan(
+            rank=2,
+            reason="fallback",
+            dependencies=[
+                CandidateDependency(name="numpy", version="1.16.6"),
+                CandidateDependency(name="pandas", version="0.24.2"),
+                CandidateDependency(name="pymc3", version="3.6"),
+                CandidateDependency(name="scipy", version="1.2.2"),
+                CandidateDependency(name="theano", version="1.0.3"),
+            ],
+        )
+    ]
+    state["system_packages_attempted"] = [
+        "gfortran",
+        "libopenblas-dev",
+        "liblapack-dev",
+        "build-essential",
+        "gcc",
+        "g++",
+        "libhdf5-dev",
+    ]
+    state["prepared_execution_context"] = SimpleNamespace(system_packages=list(state["system_packages_attempted"]))
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=2,
+            dependencies=list(dependencies),
+            image_tag="img-2",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="NativeBuildError",
+            error_details="previous failure",
+            validation_command=None,
+            wall_clock_seconds=10.0,
+            artifact_dir=str(case_root / "attempt_02"),
+        ),
+        AttemptRecord(
+            attempt_number=3,
+            dependencies=list(dependencies),
+            image_tag="img-3",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="NativeBuildError",
+            error_details="current failure",
+            validation_command=None,
+            wall_clock_seconds=10.0,
+            artifact_dir=str(case_root / "attempt_03"),
+        ),
+    ]
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="NativeBuildError",
+        message="",
+        build_succeeded=False,
+        run_succeeded=False,
+        exit_code=1,
+        build_log=(
+            "ERROR: Failed building wheel for h5py\n"
+            "error: libhdf5.so: cannot open shared object file: No such file or directory"
+        ),
+        run_log="",
+        image_tag="img-3",
+    )
+
+    updated = workflow.classify_outcome(state)
+
+    assert updated["retry_decision"].reason == "build-log-guided-followup"
+    assert updated["retry_decision"].candidate_fallback_allowed is True
+    assert updated["retry_decision"].repair_allowed is True
+    assert updated["strategy_history"][-1].strategy_type == "same_plan_retry"
+    assert route_after_research_classification(updated, settings) == "select_next_candidate_plan"
+    event_kinds = [kind for _, _, kind, _ in activity_events]
+    assert "attempt_classified" in event_kinds
+    assert "candidate_fallback_planned" in event_kinds
+
+
+def test_classify_outcome_uses_native_retry_for_new_hdf5_hint(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.research_features = ("smart_repair_routing",)
+    activity_events: list[tuple[str, int, str, str]] = []
+    workflow = ResolutionWorkflow(
+        settings,
+        activity_callback=lambda case_id, attempt, kind, detail: activity_events.append((case_id, attempt, kind, detail)),
+    )
+
+    case_root = tmp_path / "case-hdf5-native-retry"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import pymc3\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-hdf5-native-retry", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-hdf5")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    dependencies = [
+        "numpy==1.16.6",
+        "pandas==0.24.2",
+        "pymc3==3.6",
+        "scipy==1.2.2",
+        "theano==1.0.2",
+    ]
+    state["current_attempt"] = 5
+    state["selected_dependencies"] = [ResolvedDependency(name=item.split("==", 1)[0], version=item.split("==", 1)[1]) for item in dependencies]
+    state["system_packages_attempted"] = [
+        "gfortran",
+        "libopenblas-dev",
+        "liblapack-dev",
+        "build-essential",
+        "gcc",
+        "g++",
+    ]
+    state["prepared_execution_context"] = SimpleNamespace(system_packages=list(state["system_packages_attempted"]))
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=5,
+            dependencies=list(dependencies),
+            image_tag="img-5",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="NativeBuildError",
+            error_details="current failure",
+            validation_command=None,
+            wall_clock_seconds=10.0,
+            artifact_dir=str(case_root / "attempt_05"),
+        ),
+    ]
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="NativeBuildError",
+        message="",
+        build_succeeded=False,
+        run_succeeded=False,
+        exit_code=1,
+        build_log=(
+            "ERROR: Failed building wheel for h5py\n"
+            "error: libhdf5.so: cannot open shared object file: No such file or directory"
+        ),
+        run_log="",
+        image_tag="img-5",
+    )
+
+    updated = workflow.classify_outcome(state)
+
+    assert updated["pending_native_retry"] is True
+    assert "libhdf5-dev" in updated["system_packages_attempted"]
+    assert "libhdf5-dev" in updated["system_dependencies"]
+    assert updated["retry_decision"].reason == "deterministic-native-system-retry"
+    assert route_after_research_classification(updated, settings) == "retry_current_plan"
+    event_kinds = [kind for _, _, kind, _ in activity_events]
+    assert "attempt_classified" in event_kinds
+    assert "native_retry_planned" in event_kinds
+
+
+def test_classify_outcome_uses_bootstrap_retry_for_missing_typing_backport(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.research_features = ("smart_repair_routing",)
+    workflow = ResolutionWorkflow(settings)
+
+    case_root = tmp_path / "case-typing-bootstrap"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import twisted\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-typing-bootstrap", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-typing")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["current_attempt"] = 1
+    state["selected_dependencies"] = [ResolvedDependency(name="twisted", version="19.10.0")]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=1,
+            dependencies=["twisted==19.10.0"],
+            image_tag="img-1",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ExecutionFailed",
+            error_details="",
+            validation_command=None,
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_01"),
+        )
+    ]
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="ExecutionFailed",
+        message="Execution failed.",
+        build_succeeded=False,
+        run_succeeded=False,
+        exit_code=1,
+        build_log="ImportError: No module named typing",
+        run_log="",
+        image_tag="img-1",
+    )
+
+    updated = workflow.classify_outcome(state)
+
+    assert updated["pending_native_retry"] is True
+    assert updated["bootstrap_dependencies"] == ["typing==3.10.0.0"]
+    assert updated["bootstrap_packages_attempted"] == ["typing==3.10.0.0"]
+    assert route_after_research_classification(updated, settings) == "retry_current_plan"
+
+
+def test_workflow_prefers_benchmark_python_when_selected_dependencies_are_directly_compatible(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(
+        settings,
+        pypi_store=TargetAwarePyPIStore(
+            {
+                ("scrapy", "3.12"): ["2.11.2", "2.10.1", "2.9.0"],
+            }
+        ),
+    )
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(
+            case_id="case-benchmark-target-preference",
+            root_dir=tmp_path,
+            snippet_path=tmp_path / "snippet.py",
+            dockerfile_path=tmp_path / "Dockerfile",
+        )
+    )
+    state["source_files"] = {"snippet.py": "import scrapy\n"}
+    state["extracted_imports"] = ["scrapy"]
+    state["selected_dependencies"] = [workflow._deterministic_dependencies([PackageVersionOptions(package="scrapy", versions=["2.11.2"])])[0]]
+    state["benchmark_target_python"] = "3.12"
+    state["target_python"] = "3.8"
+    state["python_version_source"] = "llm_prompt_a"
+
+    workflow._maybe_prefer_benchmark_target_python(state)
+
+    assert state["target_python"] == "3.12"
+    assert state["python_version_source"] == "benchmark_dockerfile_preferred_compatible"
+
+
+def test_extract_imports_records_deferred_python_fallback_for_gist_py2_syntax(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(settings)
+    case_root = tmp_path / "case-py2-guardrail"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    dockerfile = case_root / "Dockerfile"
+    snippet.write_text("import requests\nprint 'hello world'\n", encoding="utf-8")
+    dockerfile.write_text("", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(
+            case_id="case-py2-guardrail",
+            root_dir=case_root,
+            snippet_path=snippet,
+            dockerfile_path=dockerfile,
+            case_source="competition-run",
+            initial_eval="ImportError",
+        )
+    )
+
+    state = workflow.load_target(state)
+    state = workflow.extract_imports(state)
+
+    assert state["benchmark_target_python"] == "3.12"
+    assert state["target_python"] == "3.12"
+    assert state["deferred_target_python"] == "2.7.18"
+    assert state["python_version_source"] == "benchmark_default"
+
+
+def test_classify_outcome_activates_deferred_python_fallback_after_runtime_syntax_error(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(
+        settings,
+        pypi_store=TargetAwarePyPIStore({("requests", "2.7.18"): ["2.20.1"]}),
+    )
+    case_root = tmp_path / "case-py2-fallback"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import requests\nprint 'hello world'\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-py2-fallback", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-py2-fallback")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["extracted_imports"] = ["requests"]
+    state["inferred_packages"] = ["requests"]
+    state["current_attempt"] = 1
+    state["benchmark_target_python"] = "3.12"
+    state["target_python"] = "3.12"
+    state["deferred_target_python"] = "2.7.18"
+    state["selected_dependencies"] = [ResolvedDependency(name="requests", version="2.32.3")]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=1,
+            dependencies=["requests==2.32.3"],
+            image_tag="img-1",
+            build_succeeded=True,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ExecutionFailed",
+            error_details="",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_01"),
+        )
+    ]
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="ExecutionFailed",
+        message="Execution failed.",
+        build_succeeded=True,
+        run_succeeded=False,
+        exit_code=1,
+        build_log="",
+        run_log="SyntaxError: invalid syntax",
+        image_tag="img-1",
+    )
+
+    updated = workflow.classify_outcome(state)
+
+    assert updated["pending_python_fallback"] is True
+    assert updated["target_python"] == "2.7.18"
+    assert updated["python_version_source"] == "deferred_python_fallback"
+    assert updated["python_fallback_used"] is True
+    assert updated["selected_dependencies"] == []
+    assert updated["classifier_origin"] == "run"
+    assert route_after_research_classification(updated, settings) == "replan_after_python_fallback"
+
+
+def test_classify_outcome_reserves_last_attempt_for_deferred_python_fallback_after_build_only_failures(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.max_attempts = 3
+    workflow = ResolutionWorkflow(settings)
+    case_root = tmp_path / "case-py2-build-fallback"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import pymc3\nprint 'hello world'\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-py2-build-fallback", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-py2-build-fallback")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["target_python"] = "3.8"
+    state["deferred_target_python"] = "2.7.18"
+    state["current_attempt"] = 2
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="numpy", version="1.24.4"),
+        ResolvedDependency(name="pymc3", version="3.11.5"),
+        ResolvedDependency(name="scipy", version="1.10.0"),
+    ]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=1,
+            dependencies=["numpy==1.24.4", "pymc3==3.11.6", "scipy==1.10.1"],
+            image_tag="img-1",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ResolutionError",
+            error_details="ResolutionImpossible",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_01"),
+        ),
+        AttemptRecord(
+            attempt_number=2,
+            dependencies=["numpy==1.24.4", "pymc3==3.11.5", "scipy==1.10.0"],
+            image_tag="img-2",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ExecutionFailed",
+            error_details="",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_02"),
+        ),
+    ]
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="ExecutionFailed",
+        message="Execution failed.",
+        build_succeeded=False,
+        run_succeeded=False,
+        exit_code=1,
+        build_log="ERROR: ResolutionImpossible",
+        run_log="",
+        image_tag="img-2",
+    )
+
+    updated = workflow.classify_outcome(state)
+
+    assert updated["pending_python_fallback"] is True
+    assert updated["target_python"] == "2.7.18"
+    assert updated["python_fallback_used"] is True
+    assert updated["retry_decision"].reason == "reserved-deferred-python-fallback"
+    assert route_after_research_classification(updated, settings) == "replan_after_python_fallback"
+
+
+def test_replan_after_python_fallback_uses_model_selected_plan_and_runtime_profile(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+    settings.research_features = ()
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "version"
+            assert template == "candidate_plans.txt"
+            assert "2.20.1" in variables["version_space"]
+            return (
+                '{"plans":[{"rank":1,"reason":"py2 compatible requests line","runtime_profile":"import_statements",'
+                '"dependencies":[{"name":"requests","version":"2.20.1"}]}]}'
+            )
+
+        @staticmethod
+        def invoke_text(stage: str, prompt_text: str) -> str:
+            raise AssertionError("Adjudication should not be needed in this test")
+
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=PromptRunner(),
+        pypi_store=TargetAwarePyPIStore({("requests", "2.7.18"): ["2.20.1", "2.18.0"]}),
+    )
+    case_root = tmp_path / "case-py2-replan"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import requests\nprint 'hello world'\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-py2-replan", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-py2-replan")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["extracted_imports"] = ["requests"]
+    state["inferred_packages"] = ["requests"]
+    state["target_python"] = "2.7.18"
+    state["pending_python_fallback"] = True
+    state["validation_options"] = [
+        {"profile": "snippet_exec", "command": "python snippet.py", "reason": "default"},
+        {"profile": "import_statements", "command": "python - <<'PY'\nprint('imports-ok')\nPY", "reason": "safe"},
+    ]
+    state["default_validation_profile"] = "snippet_exec"
+    state["current_runtime_profile"] = "snippet_exec"
+    state["current_validation_command"] = "python snippet.py"
+
+    updated = workflow.replan_after_python_fallback(state)
+
+    assert updated["pending_python_fallback"] is False
+    assert [dependency.pin() for dependency in updated["selected_dependencies"]] == ["requests==2.20.1"]
+    assert updated["selected_candidate_plan"].runtime_profile == "import_statements"
+    assert updated["current_runtime_profile"] == "import_statements"
 
 
 def test_feedback_memory_summary_aggregates_workspace_local_history(tmp_path: Path) -> None:
@@ -253,25 +1419,36 @@ def test_research_prompt_templates_render_without_format_key_errors(tmp_path: Pa
             "candidate_plans_v2.txt",
             target_python="3.12",
             allowed_packages="PyYAML",
+            version_space="{}",
             rag_context="{}",
+            validation_options="[]",
+            default_validation_profile="docker_cmd",
+            candidate_bundle_hints="{}",
+            conflict_notes="[]",
+            source_compatibility_hints="[]",
             max_plan_count=3,
         ),
         "repair_attempt_v2": workflow._format_prompt(
             "repair_attempt_v2.txt",
             target_python="3.12",
             allowed_packages="PyYAML",
+            version_space="{}",
             previous_plan="PyYAML==6.0.2",
             attempted_plans="",
             error_details="ModuleNotFoundError",
             repair_memory="{}",
             feedback_summary="{}",
             rag_context="{}",
+            validation_options="[]",
+            default_validation_profile="docker_cmd",
+            source_compatibility_hints="[]",
         ),
         "version_negotiation": workflow._format_prompt(
             "version_negotiation.txt",
             target_python="3.12",
             candidate_bundles="[]",
             conflict_notes="[]",
+            source_compatibility_hints="[]",
             repo_evidence="{}",
         ),
         "resolve_aliases": workflow._format_prompt(
@@ -283,6 +1460,27 @@ def test_research_prompt_templates_render_without_format_key_errors(tmp_path: Pa
 
     assert all(rendered.values())
     assert "Target Python:" not in rendered["package_inference"]
+
+
+def test_format_prompt_backfills_optional_research_variables(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+    workflow = ResolutionWorkflow(settings)
+
+    rendered = workflow._format_prompt(
+        "candidate_plans_v2.txt",
+        target_python="3.12",
+        allowed_packages="PyYAML",
+        version_space="{}",
+        rag_context="{}",
+        validation_options="[]",
+        default_validation_profile="docker_cmd",
+        candidate_bundle_hints="{}",
+        source_compatibility_hints="[]",
+        max_plan_count=3,
+    )
+
+    assert "Conflict notes:" in rendered
 
 
 def test_parse_alias_resolution_payload_is_strict() -> None:
@@ -325,3 +1523,296 @@ def test_resolve_aliases_converts_unresolved_imports_to_validated_packages(tmp_p
     assert "memcache" not in updated["inferred_packages"]
     assert updated["version_options"][0].package == "python-memcached"
     assert updated["candidate_provenance"]["python-memcached"] == "alias"
+
+
+def test_research_extract_backfills_known_runtime_aliases_omitted_by_llm(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "extract"
+            assert template == "initial_imports.txt"
+            assert "memcache" in variables["extracted_imports"]
+            return (
+                '{"packages":['
+                '{"package":"redis","confidence":1.0,"source":"import","evidence":["import redis"]}'
+                '],"python_version":"3.12"}'
+            )
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import memcache\nimport redis\n", encoding="utf-8")
+    case = BenchmarkCase(case_id="case-1", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    state = workflow.initial_state_for_case(case, run_id="run-1")
+    state["source_files"] = {"snippet.py": "import memcache\nimport redis\n"}
+    state["extracted_imports"] = ["memcache", "redis"]
+    state["repo_evidence"] = {}
+
+    updated = workflow._infer_packages_prompt_a_research(state, state["extracted_imports"])
+
+    assert updated["inferred_packages"] == ["python-memcached", "redis"]
+    assert updated["candidate_provenance"]["python-memcached"] == "alias"
+
+
+def test_finalize_result_handles_unsupported_imports_without_execution(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(settings)
+
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("from PyQt4 import QtGui\nimport maya.OpenMayaUI as mui\n", encoding="utf-8")
+    case = BenchmarkCase(case_id="case-unsupported", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    state = workflow.initial_state_for_case(case, run_id="run-1")
+    state["artifact_dir"] = str(tmp_path / "artifacts")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["unsupported_imports"] = ["PyQt4", "maya"]
+    state["selected_dependencies"] = []
+    state["candidate_plans"] = [CandidatePlan(rank=1, reason="imports require unsupported external runtime packages", dependencies=[])]
+    state["selected_candidate_plan"] = state["candidate_plans"][0]
+    state["dependency_reason"] = "unsupported_imports"
+    state["repair_skipped_reason"] = "unsupported_imports_only"
+
+    final_state = workflow.finalize_result(state)
+
+    assert final_state["final_result"]["success"] is False
+    assert final_state["final_result"]["final_error_category"] == "UnsupportedImportError"
+    assert final_state["final_result"]["dependency_reason"] == "unsupported_imports"
+    assert final_state["final_result"]["repair_skipped_reason"] == "unsupported_imports_only"
+
+
+def test_parse_candidate_plan_payload_rejects_missing_required_packages() -> None:
+    raw_output = (
+        '{"plans":[{"rank":1,"reason":"short reason","dependencies":'
+        '[{"name":"redis","version":"5.0.0"}]}]}'
+    )
+
+    try:
+        parse_candidate_plan_payload(
+            raw_output,
+            allowed_packages={"redis", "sqlalchemy"},
+            allowed_versions={"redis": {"5.0.0"}, "sqlalchemy": {"2.0.0"}},
+            required_packages={"redis", "sqlalchemy"},
+        )
+    except StructuredOutputError as exc:
+        assert "missing required packages" in str(exc)
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Missing required packages should raise StructuredOutputError.")
+
+
+def test_parse_candidate_plan_payload_rejects_duplicate_normalized_packages() -> None:
+    raw_output = (
+        '{"plans":[{"rank":1,"reason":"duplicate package","dependencies":'
+        '[{"name":"GitPython","version":"3.1.18"},{"name":"gitpython","version":"3.1.18"}]}]}'
+    )
+
+    try:
+        parse_candidate_plan_payload(
+            raw_output,
+            allowed_packages={"gitpython"},
+            allowed_versions={"gitpython": {"3.1.18"}},
+            required_packages={"gitpython"},
+        )
+    except StructuredOutputError as exc:
+        assert "duplicates another package after normalization" in str(exc)
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Duplicate normalized packages should raise StructuredOutputError.")
+
+
+def test_parse_candidate_plan_payload_accepts_runtime_profile() -> None:
+    raw_output = (
+        '{"plans":[{"rank":1,"reason":"safer validation","runtime_profile":"import_statements","dependencies":'
+        '[{"name":"tensorflow","version":"2.12.1"}]}]}'
+    )
+
+    plans = parse_candidate_plan_payload(
+        raw_output,
+        allowed_packages={"tensorflow"},
+        allowed_versions={"tensorflow": {"2.12.1"}},
+        required_packages={"tensorflow"},
+        allowed_runtime_profiles={"docker_cmd", "import_statements"},
+    )
+
+    assert plans[0].runtime_profile == "import_statements"
+
+
+def test_parse_repair_plan_payload_merges_partial_repairs_and_skips_invalid_plans() -> None:
+    raw_output = (
+        '{"repair_applicable":true,"plans":['
+        '{"rank":1,"reason":"downgrade tensorflow","dependencies":[{"name":"tensorflow","version":"2.12.0"}]},'
+        '{"rank":2,"reason":"invalid helper","dependencies":[{"name":"python","version":"3.7"}]},'
+        '{"rank":3,"reason":"switch validation only","runtime_profile":"import_smoke","dependencies":[]}'
+        "]}"
+    )
+
+    repair_applicable, plans = parse_repair_plan_payload(
+        raw_output,
+        allowed_packages={"gym", "keras", "numpy", "tensorflow"},
+        allowed_versions={
+            "gym": {"0.25.2"},
+            "keras": {"2.11.0"},
+            "numpy": {"1.24.1"},
+            "tensorflow": {"2.13.1", "2.12.0"},
+        },
+        required_packages={"gym", "keras", "numpy", "tensorflow"},
+        allowed_runtime_profiles={"import_smoke", "import_statements"},
+        previous_plan=[
+            CandidateDependency(name="gym", version="0.25.2"),
+            CandidateDependency(name="keras", version="2.11.0"),
+            CandidateDependency(name="numpy", version="1.24.1"),
+            CandidateDependency(name="tensorflow", version="2.13.1"),
+        ],
+    )
+
+    assert repair_applicable is True
+    assert len(plans) == 2
+    assert [dependency.pin() for dependency in plans[0].dependencies] == [
+        "gym==0.25.2",
+        "keras==2.11.0",
+        "numpy==1.24.1",
+        "tensorflow==2.12.0",
+    ]
+    assert plans[1].runtime_profile == "import_smoke"
+
+
+def test_build_constraint_pack_uses_full_version_space_for_python_intersection() -> None:
+    pack = build_constraint_pack(
+        [
+            PackageVersionOptions(
+                package="tensorflow",
+                versions=["2.12.1", "2.11.0", "1.15.5"],
+                requires_python={
+                    "2.12.1": ">=3.8",
+                    "2.11.0": ">=3.8",
+                    "1.15.5": ">=2.7",
+                },
+            )
+        ],
+        target_python="2.7.18",
+    )
+
+    assert pack.python_intersection_valid is True
+    assert pack.candidate_versions["tensorflow"] == ["2.12.1", "2.11.0", "1.15.5"]
+
+
+def test_summarize_rag_context_keeps_high_signal_fields_within_limit() -> None:
+    summary = summarize_rag_context(
+        {
+            "target_python": "2.7.18",
+            "research_bundle": "enhanced",
+            "research_features": ["transitive_conflicts", "python_constraint_intersection"],
+            "imports": ["numpy", "tensorflow", "Image"],
+            "inferred_packages": ["numpy", "tensorflow"],
+            "unresolved_packages": ["Image"],
+            "repo_evidence": {
+                "mode": "gistable",
+                "dockerfile_summary": "FROM python:2.7.18-slim",
+                "source_summary": "import tensorflow as tf",
+            },
+            "pypi_evidence": {
+                "packages": [
+                    {
+                        "package": "tensorflow",
+                        "versions": ["0.12.0"],
+                        "requires_dist": {"0.12.0": ["keras>=3.10.0", "numpy>=1.26.0"]},
+                    }
+                ],
+                "alias_resolution": {"resolved_aliases": [{"import_name": "memcache", "pypi_package": "python-memcached"}]},
+            },
+            "version_summaries": [
+                {
+                    "package": "tensorflow",
+                    "versions": ["0.12.0", "0.11.0"],
+                    "requires_python": {"0.12.0": ">=2.7"},
+                    "requires_dist": {"0.12.0": ["keras>=3.10.0", "numpy>=1.26.0"]},
+                    "policy_notes": [],
+                }
+            ],
+            "version_conflict_notes": [
+                {
+                    "package": "tensorflow",
+                    "related_package": "numpy",
+                    "kind": "requires_dist",
+                    "reason": "tensorflow has conflicting numpy constraints",
+                    "severity": "warning",
+                }
+            ],
+        },
+        limit=700,
+    )
+
+    assert len(summary) <= 700
+    assert '"package_versions"' in summary
+    assert '"alias_resolution"' in summary
+    assert '"version_conflict_notes"' in summary
+    assert "tensorflow" in summary
+    assert "keras>=3.10.0" in summary
+    assert '"pypi_evidence"' not in summary
+
+
+def test_generate_candidate_plans_falls_back_when_llm_omits_required_packages(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "version"
+            assert template in {"candidate_plans.txt", "candidate_plans_v2.txt"}
+            return (
+                '{"plans":[{"rank":1,"reason":"bad partial plan","dependencies":'
+                '[{"name":"redis","version":"5.0.0"}]}]}'
+            )
+
+        @staticmethod
+        def invoke_text(stage: str, prompt_text: str) -> str:
+            assert stage == "adjudicate"
+            return (
+                '{"plans":[{"rank":1,"reason":"bad partial plan","dependencies":'
+                '[{"name":"redis","version":"5.0.0"}]}]}'
+            )
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import redis\nimport sqlalchemy\n", encoding="utf-8")
+    case = BenchmarkCase(case_id="case-1", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    state = workflow.initial_state_for_case(case, run_id="run-1")
+    state["source_files"] = {"snippet.py": "import redis\nimport sqlalchemy\n"}
+    state["target_python"] = "3.12"
+    state["current_attempt"] = 0
+    state["inferred_packages"] = ["redis", "sqlalchemy"]
+    state["version_options"] = [
+        PackageVersionOptions(package="redis", versions=["5.0.0", "4.0.0"]),
+        PackageVersionOptions(package="sqlalchemy", versions=["2.0.0", "1.4.52"]),
+    ]
+    state["rag_context"] = {
+        "target_python": "3.12",
+        "imports": ["redis", "sqlalchemy"],
+        "inferred_packages": ["redis", "sqlalchemy"],
+        "version_summaries": [
+            {"package": "redis", "versions": ["5.0.0", "4.0.0"], "requires_dist": {}, "policy_notes": []},
+            {"package": "sqlalchemy", "versions": ["2.0.0", "1.4.52"], "requires_dist": {}, "policy_notes": []},
+        ],
+    }
+
+    updated = workflow.generate_candidate_plans(state)
+
+    assert [dependency.name for dependency in updated["candidate_plans"][0].dependencies] == ["redis", "sqlalchemy"]
+    assert updated["structured_prompt_failures"] == 1

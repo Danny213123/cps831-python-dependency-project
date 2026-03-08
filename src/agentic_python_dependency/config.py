@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -29,6 +30,7 @@ ModelProfileName = Literal[
     "qwen35-9b",
     "qwen35-moe-lite",
     "gpt-oss-20b",
+    "mistral-nemo-12b",
     "custom",
 ]
 
@@ -38,6 +40,7 @@ MODEL_PROFILE_DEFAULTS: dict[ModelProfileName, tuple[str, str]] = {
     "qwen35-9b": ("qwen3.5:9b", "qwen3.5:9b"),
     "qwen35-moe-lite": ("qwen3.5:0.8b", "qwen3.5:4b"),
     "gpt-oss-20b": ("gpt-oss:20b", "gpt-oss:20b"),
+    "mistral-nemo-12b": ("mistral-nemo:12b", "mistral-nemo:12b"),
     "custom": ("gemma3:4b", "gemma3:12b"),
 }
 
@@ -84,10 +87,8 @@ def parse_path_list(value: str) -> tuple[Path, ...]:
 
 def default_competition_result_csvs(project_root: Path) -> tuple[Path, ...]:
     candidates = [
-        project_root / "data" / "benchmarks" / "gistable" / "competition" / "pyego_results.csv",
-        project_root / "data" / "benchmarks" / "gistable" / "competition" / "summary-all-runs.csv",
-        Path.home() / "Downloads" / "pyego_results.csv",
-        Path.home() / "Downloads" / "summary-all-runs.csv",
+        project_root / "data" / "benchmarks" / "gistable" / "competition" / "hard-gists-l10-r1-10-final.csv",
+        Path.home() / "Downloads" / "hard-gists-l10-r1-10-final.csv",
     ]
     deduped: list[Path] = []
     seen: set[Path] = set()
@@ -133,6 +134,7 @@ class Settings:
     competition_case_ids_file: Path = Path("competition/competition-case-ids.txt")
     ollama_base_url: str = "http://127.0.0.1:11434"
     docker_host: str = ""
+    benchmark_platform: str = "linux/amd64"
     resolver: ResolverName = "apdr"
     model_profile: ModelProfileName = "gemma-moe"
     use_moe: bool = True
@@ -298,6 +300,7 @@ class Settings:
             readpye_language_dir=readpye_language_dir,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
             docker_host=os.getenv("DOCKER_HOST", ""),
+            benchmark_platform=(os.getenv("APDR_BENCHMARK_PLATFORM", "linux/amd64") or "").strip(),
             resolver=resolver,
             benchmark_case_source=benchmark_case_source,
             competition_result_csvs=competition_result_csvs,
@@ -374,3 +377,135 @@ class Settings:
 
     def research_feature_enabled(self, feature: ResearchFeatureName | str) -> bool:
         return feature in self.research_features
+
+    def effective_runtime_config(self) -> dict[str, object]:
+        stage_models = self.active_stage_models()
+        return {
+            "effective_model_profile": self.model_profile,
+            "effective_rag_mode": self.rag_mode,
+            "effective_structured_prompting": self.structured_prompting,
+            "effective_repair_cycle_limit": self.repair_cycle_limit,
+            "effective_candidate_fallback_before_repair": self.allow_candidate_fallback_before_repair,
+            "model_profile": self.model_profile,
+            "use_moe": self.use_moe,
+            "use_rag": self.use_rag,
+            "use_langchain": self.use_langchain,
+            "extraction_model": stage_models["extract"],
+            "runner_model": stage_models["runner"],
+            "version_model": stage_models["version"],
+            "repair_model": stage_models["repair"],
+            "adjudication_model": stage_models["adjudicate"],
+            "rag_mode": self.rag_mode,
+            "structured_prompting": self.structured_prompting,
+            "candidate_plan_count": self.candidate_plan_count,
+            "allow_candidate_fallback_before_repair": self.allow_candidate_fallback_before_repair,
+            "repair_cycle_limit": self.repair_cycle_limit,
+            "repo_evidence_enabled": self.repo_evidence_enabled,
+            "benchmark_platform": self.benchmark_platform,
+            "research_bundle": self.research_bundle,
+            "research_features": list(self.research_features),
+        }
+
+    def apply_runtime_config(self, payload: Mapping[str, object]) -> None:
+        def _get(*keys: str) -> object | None:
+            for key in keys:
+                if key in payload:
+                    return payload[key]
+            return None
+
+        model_profile = _get("effective_model_profile", "model_profile")
+        if isinstance(model_profile, str) and model_profile in MODEL_PROFILE_DEFAULTS:
+            self.model_profile = model_profile
+
+        for key in ("use_moe", "use_rag", "use_langchain", "structured_prompting", "repo_evidence_enabled"):
+            value = _get(key)
+            if isinstance(value, bool):
+                setattr(self, key, value)
+
+        rag_mode = _get("effective_rag_mode", "rag_mode")
+        if isinstance(rag_mode, str) and rag_mode:
+            self.rag_mode = rag_mode
+
+        candidate_plan_count = _get("candidate_plan_count")
+        if isinstance(candidate_plan_count, int):
+            self.candidate_plan_count = candidate_plan_count
+
+        repair_cycle_limit = _get("effective_repair_cycle_limit", "repair_cycle_limit")
+        if isinstance(repair_cycle_limit, int):
+            self.repair_cycle_limit = repair_cycle_limit
+
+        candidate_fallback = _get(
+            "effective_candidate_fallback_before_repair",
+            "allow_candidate_fallback_before_repair",
+        )
+        if isinstance(candidate_fallback, bool):
+            self.allow_candidate_fallback_before_repair = candidate_fallback
+
+        benchmark_platform = _get("benchmark_platform")
+        if isinstance(benchmark_platform, str):
+            self.benchmark_platform = benchmark_platform.strip()
+
+        for key, attr in (
+            ("extraction_model", "extraction_model"),
+            ("runner_model", "reasoning_model"),
+            ("reasoning_model", "reasoning_model"),
+            ("version_model", "version_model"),
+            ("repair_model", "repair_model"),
+            ("adjudication_model", "adjudication_model"),
+        ):
+            value = _get(key)
+            if isinstance(value, str) and value.strip():
+                setattr(self, attr, value.strip())
+
+        research_bundle = _get("research_bundle")
+        if isinstance(research_bundle, str) and research_bundle:
+            self.research_bundle = research_bundle
+
+        research_features = _get("research_features")
+        if isinstance(research_features, (list, tuple)):
+            self.research_features = tuple(
+                str(feature) for feature in research_features if isinstance(feature, str)
+            )
+
+    def runtime_config_mismatches(self, payload: Mapping[str, object]) -> list[str]:
+        current = self.effective_runtime_config()
+        mismatches: list[str] = []
+        for key, current_value in current.items():
+            if key not in payload:
+                continue
+            saved_value = payload[key]
+            if isinstance(current_value, list):
+                if not isinstance(saved_value, (list, tuple)) or list(saved_value) != current_value:
+                    mismatches.append(f"{key}: saved={saved_value!r} current={current_value!r}")
+                continue
+            if isinstance(current_value, bool):
+                if bool(saved_value) != current_value:
+                    mismatches.append(f"{key}: saved={saved_value!r} current={current_value!r}")
+                continue
+            if isinstance(current_value, int):
+                try:
+                    normalized_saved = int(saved_value)  # type: ignore[arg-type]
+                except (TypeError, ValueError):
+                    mismatches.append(f"{key}: saved={saved_value!r} current={current_value!r}")
+                    continue
+                if normalized_saved != current_value:
+                    mismatches.append(f"{key}: saved={saved_value!r} current={current_value!r}")
+                continue
+            if str(saved_value) != str(current_value):
+                mismatches.append(f"{key}: saved={saved_value!r} current={current_value!r}")
+        return mismatches
+
+    def validate_benchmark_runtime(self) -> list[str]:
+        errors: list[str] = []
+        if self.preset == "research" and self.research_bundle == "full":
+            if not self.use_rag:
+                errors.append("research/full requires RAG to remain enabled")
+            if self.rag_mode != "hybrid":
+                errors.append("research/full requires rag_mode=hybrid")
+            if not self.structured_prompting:
+                errors.append("research/full requires structured_prompting=true")
+            if self.repair_cycle_limit <= 0:
+                errors.append("research/full requires repair_cycle_limit>0")
+            if not self.allow_candidate_fallback_before_repair:
+                errors.append("research/full requires candidate fallback before repair")
+        return errors

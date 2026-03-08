@@ -23,8 +23,8 @@ def run():
 
 
 def test_normalize_candidate_packages_applies_alias_map() -> None:
-    normalized = normalize_candidate_packages(["yaml", "PIL", "requests"])
-    assert normalized == ["Pillow", "PyYAML", "requests"]
+    normalized = normalize_candidate_packages(["yaml", "PIL", "memcache", "requests", "skimage"])
+    assert normalized == ["Pillow", "python-memcached", "PyYAML", "requests", "scikit-image"]
 
 
 def test_normalize_candidate_packages_filters_stdlib_and_unanchored_noise() -> None:
@@ -75,3 +75,12 @@ def test_normalize_candidate_packages_with_sources_tracks_aliases() -> None:
     normalized = normalize_candidate_packages_with_sources(["yaml", "requests"], extracted_imports=["yaml", "requests"])
 
     assert normalized == {"PyYAML": "alias", "requests": "extracted"}
+
+
+def test_normalize_candidate_packages_with_sources_blocks_unsupported_and_trap_imports() -> None:
+    normalized = normalize_candidate_packages_with_sources(
+        ["objc", "Foundation", "PyQt4", "nomad"],
+        extracted_imports=["objc", "Foundation", "PyQt4", "nomad"],
+    )
+
+    assert normalized == {"pyobjc": "alias", "python-nomad": "alias"}

@@ -35,6 +35,11 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
                 "prompt_profile": "optimized-strict",
                 "rag_mode": "hybrid",
                 "structured_prompting": True,
+                "effective_model_profile": "mistral-nemo-12b",
+                "effective_rag_mode": "hybrid",
+                "effective_structured_prompting": True,
+                "effective_repair_cycle_limit": 2,
+                "effective_candidate_fallback_before_repair": True,
                 "dependency_reason": "deterministic_version_selector",
                 "candidate_provenance": {"PyYAML": "alias"},
                 "dependencies": ["PyYAML==6.0.2"],
@@ -43,6 +48,10 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
                 "selected_candidate_rank": 2,
                 "repair_cycle_count": 1,
                 "structured_prompt_failures": 0,
+                "system_packages_attempted": ["libxcb1"],
+                "classifier_origin": "run",
+                "root_cause_bucket": "tensorflow_api_drift",
+                "python_fallback_used": True,
             }
         ),
         encoding="utf-8",
@@ -54,11 +63,17 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
     assert summary.prompt_profile == "optimized-strict"
     assert summary.rag_mode == "hybrid"
     assert summary.structured_prompting is True
+    assert summary.effective_model_profile == "mistral-nemo-12b"
+    assert summary.effective_repair_cycle_limit == 2
+    assert summary.native_retry_success_count == 1
     assert summary.research_case_count == 1
     assert summary.candidate_plan_attempts == 3
     assert summary.average_candidate_rank_selected == 2.0
     assert summary.repair_cycle_count == 1
     assert summary.dependency_reason_counts == {"deterministic_version_selector": 1}
+    assert summary.classifier_origin_counts == {"run": 1}
+    assert summary.root_cause_counts == {"tensorflow_api_drift": 1}
+    assert summary.deferred_python_fallback_cases == 1
     assert (run_dir / "results.csv").exists()
     assert (run_dir / "results.md").exists()
     assert "PyYAML" in (run_dir / "results.md").read_text(encoding="utf-8")

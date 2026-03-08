@@ -164,7 +164,7 @@ PRESET_CONFIGS: dict[PresetName, PresetConfig] = {
     "research": PresetConfig(
         name="research",
         prompt_profile="research-rag",
-        max_attempts=6,
+        max_attempts=15,
         compatibility_policy="full",
         version_prompt_mode="accuracy",
         allow_adjudication=True,

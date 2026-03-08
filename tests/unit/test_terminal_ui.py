@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 
 from agentic_python_dependency.config import Settings
+from agentic_python_dependency.router import OllamaInvocationStats, OllamaStatsTracker
 from agentic_python_dependency.terminal_ui import TerminalBenchmarkDashboard, TerminalUI
 
 
@@ -63,6 +64,40 @@ def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
     assert settings.preset == "accuracy"
     assert settings.prompt_profile == "optimized-strict"
     assert settings.max_attempts == 5
+
+
+def test_terminal_ui_switching_to_research_applies_full_preset_runtime_config(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    inputs = iter(["4", "2", "7", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert settings.preset == "research"
+    assert settings.prompt_profile == "research-rag"
+    assert settings.max_attempts == 15
+    assert settings.rag_mode == "hybrid"
+    assert settings.structured_prompting is True
+    assert settings.candidate_plan_count == 3
+    assert settings.allow_candidate_fallback_before_repair is True
+    assert settings.repair_cycle_limit == 2
+    assert settings.repo_evidence_enabled is True
 
 
 def test_terminal_ui_switching_to_experimental_forces_apdr_resolver(tmp_path: Path, monkeypatch) -> None:
@@ -673,6 +708,54 @@ def test_terminal_ui_can_resume_saved_benchmark_run(tmp_path: Path, monkeypatch)
     assert isinstance(kwargs["observer"], TerminalBenchmarkDashboard)
 
 
+def test_terminal_ui_resume_research_run_restores_full_preset_runtime_config(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    benchmark_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    inputs = iter(["2", "3", "1", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    run_dir = settings.artifacts_dir / "run123"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run-state.json").write_text(
+        (
+            '{"run_id":"run123","status":"paused","target":"full","jobs":1,'
+            '"completed":3,"total":30,"preset":"research","prompt_profile":"research-rag"}'
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run_benchmark(*args, **kwargs):
+        benchmark_calls.append((args, kwargs))
+        return 0
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=fake_run_benchmark,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        timeline_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert benchmark_calls
+    assert settings.preset == "research"
+    assert settings.prompt_profile == "research-rag"
+    assert settings.rag_mode == "hybrid"
+    assert settings.structured_prompting is True
+    assert settings.allow_candidate_fallback_before_repair is True
+    assert settings.repair_cycle_limit == 2
+
+
 def test_terminal_ui_reports_when_no_resumable_runs_exist(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
@@ -959,11 +1042,78 @@ def test_terminal_benchmark_dashboard_tracks_state(monkeypatch) -> None:
     assert dashboard.failures == 0
     assert dashboard.last_case_id == "case-2"
     assert dashboard.current_cases == []
+    assert dashboard.recent_case_results
+    assert dashboard.recent_case_results[0]["case_id"] == "case-2"
+    assert dashboard.recent_case_results[0]["success"] is True
+
+
+def test_terminal_benchmark_dashboard_preloads_completed_results_on_start(monkeypatch) -> None:
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
+
+    dashboard.start(
+        run_id="run123",
+        total=5,
+        completed=2,
+        successes=1,
+        failures=1,
+        resolver="apdr",
+        preset="research",
+        prompt_profile="research-rag",
+        model_summary="mistral-nemo-12b",
+        jobs=1,
+        target="full",
+        artifacts_dir=Path("/tmp/run123"),
+        completed_results=[
+            {
+                "case_id": "case-newer",
+                "success": False,
+                "attempts": 3,
+                "target_python": "2.7.18",
+                "wall_clock_seconds": 12.5,
+                "final_error_category": "ImportError",
+                "result_matches_csv": "PASS",
+                "dependencies": ["rx==1.2.4", "twisted==19.10.0"],
+            },
+            {
+                "case_id": "case-older",
+                "success": True,
+                "attempts": 1,
+                "target_python": "3.12",
+                "wall_clock_seconds": 3.2,
+                "result_matches_csv": "FAIL",
+                "dependencies": ["requests==2.32.3"],
+            },
+        ],
+    )
+    dashboard._stop_event.set()
+    if dashboard._thread is not None:
+        dashboard._thread.join(timeout=0.2)
+
+    assert [row["case_id"] for row in dashboard.recent_case_results[:2]] == ["case-newer", "case-older"]
+    assert dashboard.recent_case_results[0]["pllm_match"] == "MATCH"
+    assert dashboard.recent_case_results[1]["pllm_match"] == "MISS"
+    rendered = "".join(fragment for _, fragment in dashboard._results_table_formatted_text())
+    assert "case-newer" in rendered
+    assert "case-older" in rendered
+    assert "MATCH" in rendered
+    assert "MISS" in rendered
 
 
 def test_terminal_benchmark_dashboard_reports_rate_speed_and_eta(monkeypatch) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
+    stats = OllamaStatsTracker()
+    stats.record(
+        OllamaInvocationStats(
+            stage="repair",
+            model="gemma3:12b",
+            prompt_eval_count=20,
+            prompt_eval_duration_ns=100_000_000,
+            eval_count=45,
+            eval_duration_ns=900_000_000,
+        )
+    )
 
     dashboard.start(
         run_id="run123",
@@ -979,6 +1129,7 @@ def test_terminal_benchmark_dashboard_reports_rate_speed_and_eta(monkeypatch) ->
         target="smoke30",
         artifacts_dir=Path("/tmp/run123"),
         elapsed_seconds=40.0,
+        ollama_stats=stats,
     )
     dashboard._stop_event.set()
     if dashboard._thread is not None:
@@ -990,6 +1141,95 @@ def test_terminal_benchmark_dashboard_reports_rate_speed_and_eta(monkeypatch) ->
     assert "Success rate: 75.0%" in rendered
     assert "Speed: 10.0s/case" in rendered
     assert "ETA: 00:01:00" in rendered
+    assert "1 calls, out 45 tok @ 50.0 tok/s" in rendered
+    assert "repair / gemma3:12b @ 50.0 tok/s" in rendered
+
+
+def test_terminal_benchmark_dashboard_renders_recent_case_table(monkeypatch) -> None:
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
+
+    dashboard.start(
+        run_id="run123",
+        total=4,
+        completed=0,
+        successes=0,
+        failures=0,
+        resolver="apdr",
+        preset="research",
+        prompt_profile="research-rag",
+        model_summary="mistral-nemo-12b",
+        jobs=1,
+        target="full",
+        artifacts_dir=Path("/tmp/run123"),
+    )
+    dashboard.advance(
+        {
+            "case_id": "case-pass",
+            "success": True,
+            "attempts": 1,
+            "target_python": "3.12",
+            "wall_clock_seconds": 5.2,
+            "result_matches_csv": "PASS",
+            "dependencies": ["requests==2.32.3"],
+        }
+    )
+    dashboard.advance(
+        {
+            "case_id": "case-fail",
+            "success": False,
+            "attempts": 2,
+            "target_python": "3.8",
+            "wall_clock_seconds": 11.4,
+            "final_error_category": "NativeBuildError",
+            "result_matches_csv": "FAIL",
+            "dependencies": ["scrapy==2.9.0", "Twisted==25.5.0"],
+        }
+    )
+    dashboard._stop_event.set()
+    if dashboard._thread is not None:
+        dashboard._thread.join(timeout=0.2)
+
+    rendered = "".join(fragment for _, fragment in dashboard._results_table_formatted_text())
+
+    assert "STAT" in rendered
+    assert "PLLM" in rendered
+    assert "DEPENDENCIES" in rendered
+    assert "FAIL" in rendered
+    assert "PASS" in rendered
+    assert "MATCH" in rendered
+    assert "MISS" in rendered
+    assert rendered.index("case-fail") < rendered.index("case-pass")
+    assert "NativeBuildError" in rendered
+
+
+def test_terminal_benchmark_dashboard_renders_case_activity(monkeypatch) -> None:
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
+
+    dashboard.start(
+        run_id="run123",
+        total=4,
+        completed=0,
+        successes=0,
+        failures=0,
+        resolver="apdr",
+        preset="research",
+        prompt_profile="research-rag",
+        model_summary="mistral-nemo-12b",
+        jobs=1,
+        target="full",
+        artifacts_dir=Path("/tmp/run123"),
+    )
+    dashboard.case_started("case-1")
+    dashboard.case_event("case-1", attempt=1, kind="docker_build_start", detail="Starting docker build.")
+
+    rendered = "".join(fragment for _, fragment in dashboard._formatted_text())
+
+    assert "Active cases" in rendered
+    assert "docker_build_start" in rendered
+    assert "Starting docker build." in rendered
+    assert "Recent activity" in rendered
 
 
 def test_terminal_benchmark_dashboard_can_request_stop(monkeypatch) -> None:
@@ -1002,3 +1242,17 @@ def test_terminal_benchmark_dashboard_can_request_stop(monkeypatch) -> None:
     dashboard.request_stop()
 
     assert dashboard.stop_requested() is True
+
+
+def test_terminal_benchmark_dashboard_can_request_hard_stop(monkeypatch) -> None:
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
+    invoked: list[str] = []
+    dashboard.set_hard_exit_callback(lambda: invoked.append("exit"))
+
+    dashboard.request_hard_stop()
+
+    assert dashboard.stop_requested() is True
+    assert dashboard.hard_stop_requested() is True
+    assert invoked == ["exit"]

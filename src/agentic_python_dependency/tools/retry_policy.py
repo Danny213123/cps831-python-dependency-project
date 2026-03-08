@@ -7,18 +7,12 @@ def classify_retry_decision(
     category: str,
     *,
     system_packages_injected: bool = False,
+    has_system_package_hints: bool = False,
     native_retry_used: int = 0,
 ) -> RetryDecision:
     terminal_categories = {
-        "RequiresPythonError",
-        "SyntaxError",
-        "EnvironmentError",
-        "LocalModuleMismatch",
-        "NameError",
-        "ArgumentContractError",
-        "DisplayRuntimeError",
-        "ServiceTimeoutError",
-        "TimeoutError",
+        "UnsupportedImportError",
+        "AmbiguousImportError",
         "ConstraintConflictError",
     }
     repair_retryable = {"ModuleNotFoundError", "ImportError", "ResolutionError"}
@@ -63,12 +57,42 @@ def classify_retry_decision(
             native_retry_budget=max(0, 1 - native_retry_used),
             reason="native-build-limited-retry",
         )
+    if category == "SystemDependencyError":
+        if not has_system_package_hints:
+            return RetryDecision(
+                category=category,
+                severity="repair_retryable",
+                repair_allowed=True,
+                candidate_fallback_allowed=True,
+                repair_retry_budget=1,
+                native_retry_budget=0,
+                reason="system-dependency-no-hints",
+            )
+        return RetryDecision(
+            category=category,
+            severity="limited_retryable",
+            repair_allowed=not system_packages_injected,
+            candidate_fallback_allowed=False,
+            repair_retry_budget=0 if system_packages_injected else 1,
+            native_retry_budget=max(0, 1 - native_retry_used),
+            reason="system-dependency-limited-retry",
+        )
+    if category == "BuildTimeoutError":
+        return RetryDecision(
+            category=category,
+            severity="limited_retryable",
+            repair_allowed=True,
+            candidate_fallback_allowed=True,
+            repair_retry_budget=1,
+            native_retry_budget=0,
+            reason="build-timeout-may-need-lighter-plan",
+        )
     return RetryDecision(
         category=category,
-        severity="terminal",
-        repair_allowed=False,
-        candidate_fallback_allowed=False,
-        repair_retry_budget=0,
+        severity="repair_retryable",
+        repair_allowed=True,
+        candidate_fallback_allowed=True,
+        repair_retry_budget=2,
         native_retry_budget=0,
-        reason="fallback-terminal",
+        reason="retry-by-default-unless-impossible",
     )

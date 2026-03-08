@@ -9,8 +9,13 @@ from pathlib import Path
 RUNTIME_ALIASES = {
     "PIL": "Pillow",
     "cv2": "opencv-python",
+    "memcache": "python-memcached",
+    "objc": "pyobjc",
+    "gi": "PyGObject",
+    "nomad": "python-nomad",
     "yaml": "PyYAML",
     "bs4": "beautifulsoup4",
+    "skimage": "scikit-image",
     "sklearn": "scikit-learn",
     "dateutil": "python-dateutil",
     "Crypto": "pycryptodome",
@@ -23,6 +28,33 @@ RUNTIME_ALIASES = {
     "dns": "dnspython",
     "git": "GitPython",
     "OpenGL": "PyOpenGL",
+}
+
+AMBIGUOUS_IMPORTS = {
+    "Foundation",
+    "google",
+    "scene",
+    "sound",
+    "taggit",
+    "imagekit",
+}
+
+UNSUPPORTED_IMPORTS = {
+    "PyQt4",
+    "idaapi",
+    "Rhino",
+    "scriptcontext",
+    "sublime",
+    "c4d",
+    "maya",
+}
+
+TRAP_PACKAGE_NAMES = {
+    "Foundation",
+    "google",
+    "scene",
+    "sound",
+    "maya",
 }
 
 IGNORED_DIRS = {".git", ".venv", "venv", "build", "dist", "site-packages", "__pycache__"}
@@ -68,10 +100,25 @@ def _normalize_name(value: str) -> str:
 
 
 ALIASES_BY_NORMALIZED = {_normalize_name(key): value for key, value in RUNTIME_ALIASES.items()}
+AMBIGUOUS_IMPORTS_BY_NORMALIZED = {_normalize_name(value) for value in AMBIGUOUS_IMPORTS}
+UNSUPPORTED_IMPORTS_BY_NORMALIZED = {_normalize_name(value) for value in UNSUPPORTED_IMPORTS}
+TRAP_PACKAGES_BY_NORMALIZED = {_normalize_name(value) for value in TRAP_PACKAGE_NAMES}
 
 
 def runtime_package_alias(value: str) -> str | None:
     return ALIASES_BY_NORMALIZED.get(_normalize_name(value))
+
+
+def is_ambiguous_import(value: str) -> bool:
+    return _normalize_name(value) in AMBIGUOUS_IMPORTS_BY_NORMALIZED
+
+
+def is_unsupported_import(value: str) -> bool:
+    return _normalize_name(value) in UNSUPPORTED_IMPORTS_BY_NORMALIZED
+
+
+def is_trap_package_name(value: str) -> bool:
+    return _normalize_name(value) in TRAP_PACKAGES_BY_NORMALIZED
 
 
 def looks_like_package_name(value: str) -> bool:
@@ -182,6 +229,12 @@ def normalize_candidate_packages_with_sources(
         if not looks_like_package_name(alias):
             continue
         normalized_alias = _normalize_name(alias)
+        if normalized_package in UNSUPPORTED_IMPORTS_BY_NORMALIZED or normalized_alias in UNSUPPORTED_IMPORTS_BY_NORMALIZED:
+            continue
+        if normalized_package in AMBIGUOUS_IMPORTS_BY_NORMALIZED and normalized_alias == normalized_package:
+            continue
+        if normalized_alias in TRAP_PACKAGES_BY_NORMALIZED and normalized_alias == normalized_package:
+            continue
         if package in STDLIB_MODULES or alias in STDLIB_MODULES:
             continue
         if normalized_package in REJECTED_PACKAGES or normalized_alias in REJECTED_PACKAGES:

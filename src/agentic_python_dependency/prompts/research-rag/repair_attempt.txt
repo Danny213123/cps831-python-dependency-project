@@ -7,6 +7,7 @@ Return strict JSON only using this schema:
     {{
       "rank": 1,
       "reason": "short reason",
+      "runtime_profile": "import_statements",
       "dependencies": [
         {{
           "name": "package-name",
@@ -26,6 +27,10 @@ If dependency changes will not help, return:
 Rules:
 - Use only the allowed packages and listed versions.
 - Return at most {max_plan_count} plans.
+- You may return either the full install set or only the packages that change relative to the previous plan; omitted packages will be preserved from the previous plan.
+- Do not assume packages are already installed; list every installable dependency explicitly.
+- If changing validation strategy is more appropriate than changing dependencies, you may keep the same dependencies and set a different allowed `runtime_profile`.
+- When source compatibility hints are present, prefer repairs that move toward those version families.
 - Prefer the smallest change from the previous plan that addresses the error.
 - Do not introduce unrelated packages.
 - Do not return markdown, code fences, or commentary.
@@ -35,6 +40,18 @@ Target Python:
 
 Allowed packages:
 {allowed_packages}
+
+Version space:
+{version_space}
+
+Allowed validation profiles:
+{validation_options}
+
+Default validation profile:
+{default_validation_profile}
+
+Source compatibility hints:
+{source_compatibility_hints}
 
 Previous plan:
 {previous_plan}

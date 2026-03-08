@@ -2,7 +2,14 @@ import json
 from pathlib import Path
 
 from agentic_python_dependency.config import Settings
-from agentic_python_dependency.web_dashboard import get_case_detail, get_home_payload, get_run_detail, list_runs
+from agentic_python_dependency.web_dashboard import (
+    get_case_detail,
+    get_home_payload,
+    get_run_detail,
+    ingest_network_case_bundle,
+    ingest_network_run_state,
+    list_runs,
+)
 
 
 def make_settings(tmp_path: Path) -> Settings:
@@ -99,6 +106,17 @@ def test_get_run_detail_merges_case_runtime_rows(tmp_path: Path) -> None:
                 "effective_structured_prompting": True,
                 "effective_repair_cycle_limit": 2,
                 "effective_candidate_fallback_before_repair": True,
+                "hardware_info": {
+                    "host": "bench-host",
+                    "os": "macOS 15.0",
+                    "cpu": "Apple M4 Pro",
+                    "gpu": "Apple M4 Pro",
+                    "memory": "48.0 GiB",
+                    "memory_bytes": 48 * 1024**3,
+                    "logical_cores": 14,
+                    "machine": "arm64",
+                    "platform": "macOS-15.0-arm64",
+                },
             }
         ),
         encoding="utf-8",
@@ -136,6 +154,8 @@ def test_get_run_detail_merges_case_runtime_rows(tmp_path: Path) -> None:
 
     assert payload is not None
     assert payload["run"]["runId"] == "run123"
+    assert payload["run"]["hardware"]["cpu"] == "Apple M4 Pro"
+    assert payload["run"]["hardware"]["memory"] == "48.0 GiB"
     assert payload["activeCases"] == ["case-2"]
     assert payload["cases"][0]["pllmMatch"] == "MATCH"
     assert payload["cases"][0]["dependencyPreview"] == "requests==2.32.3, urllib3==2.2.2"
@@ -200,3 +220,79 @@ def test_get_case_detail_groups_attempt_activity_and_files(tmp_path: Path) -> No
     assert payload["attempts"][0]["llmFailureAnalysisModel"] == "mistral-nemo:12b"
     assert payload["attempts"][0]["activity"][0]["kind"] == "docker_build_start"
     assert payload["attempts"][0]["files"][0]["path"] == "attempt_01/build.log"
+
+
+def test_remote_ingested_runs_are_listed_and_readable(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    ingest_network_run_state(
+        settings,
+        "windows-box",
+        "run999",
+        {
+            "run_id": "run999",
+            "status": "running",
+            "resolver": "apdr",
+            "preset": "research",
+            "prompt_profile": "research-rag",
+            "research_bundle": "baseline",
+            "benchmark_source": "competition-run",
+            "target": "full",
+            "total": 8,
+            "completed": 2,
+            "successes": 1,
+            "failures": 1,
+            "source_label": "windows-box",
+        },
+    )
+    ingest_network_case_bundle(
+        settings,
+        "windows-box",
+        "run999",
+        "case-remote",
+        {
+            "result": {
+                "case_id": "case-remote",
+                "success": False,
+                "attempts": 1,
+                "target_python": "3.12",
+                "wall_clock_seconds": 9.8,
+                "final_error_category": "ImportError",
+                "dependencies": ["sip==6.8.1"],
+                "attempt_records": [
+                    {
+                        "attempt_number": 1,
+                        "dependencies": ["sip==6.8.1"],
+                        "build_succeeded": True,
+                        "run_succeeded": False,
+                        "error_category": "ImportError",
+                        "error_details": "No module named sip",
+                        "artifact_dir": "attempt_01",
+                    }
+                ],
+            },
+            "files": [
+                {
+                    "path": "activity.log",
+                    "content": "[2026-03-08T17:00:00+00:00] case=case-remote attempt=1 kind=docker_run_finish Container run failed.\n",
+                },
+                {"path": "attempt_01/build.log", "content": "build output"},
+                {"path": "attempt_01/run.log", "content": "run output"},
+            ],
+        },
+    )
+
+    runs = list_runs(settings)
+
+    remote = next(run for run in runs if run["sourceType"] == "remote")
+    assert remote["runKey"] == "remote:windows-box:run999"
+    assert remote["sourceLabel"] == "windows-box"
+
+    detail = get_run_detail(settings, remote["runKey"])
+    assert detail is not None
+    assert detail["run"]["sourceLabel"] == "windows-box"
+    assert detail["cases"][0]["caseId"] == "case-remote"
+
+    case_detail = get_case_detail(settings, remote["runKey"], "case-remote")
+    assert case_detail is not None
+    assert case_detail["source"]["sourceType"] == "remote"
+    assert case_detail["attempts"][0]["files"][0]["path"] == "attempt_01/build.log"

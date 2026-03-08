@@ -485,6 +485,10 @@ class TerminalBenchmarkDashboard:
             ("class:muted", "Use Ctrl+C only if you intend to stop the benchmark process itself.\n\n"),
             ("class:label", "Run ID       "), ("class:value", f"{self.run_id}\n"),
             ("class:label", "Version      "), ("class:value", f"{self.app_version}\n"),
+            ("class:label", "OS           "), ("class:value", f"{self._hardware_field('os')}\n"),
+            ("class:label", "CPU          "), ("class:value", f"{self._hardware_field('cpu')}\n"),
+            ("class:label", "GPU          "), ("class:value", f"{self._hardware_field('gpu')}\n"),
+            ("class:label", "Memory       "), ("class:value", f"{self._hardware_field('memory')}\n"),
             ("class:label", "Target       "), ("class:value", f"{self.target}\n"),
             ("class:label", "Resolver     "), ("class:value", f"{self.resolver}\n"),
             ("class:label", "Preset       "), ("class:value", f"{self.preset}\n"),
@@ -666,6 +670,10 @@ class TerminalBenchmarkDashboard:
             "=" * 80,
             f"Run ID: {self.run_id}",
             f"Version: {self.app_version}",
+            f"OS: {self._hardware_field('os')}",
+            f"CPU: {self._hardware_field('cpu')}",
+            f"GPU: {self._hardware_field('gpu')}",
+            f"Memory: {self._hardware_field('memory')}",
             f"Target: {self.target}",
             f"Resolver: {self.resolver}",
             f"Preset: {self.preset}",
@@ -811,6 +819,13 @@ class TerminalBenchmarkDashboard:
             f"structured={'on' if structured else 'off'} "
             f"repair={repair_limit} fallback={'on' if fallback else 'off'}"
         )
+
+    def _hardware_field(self, key: str) -> str:
+        hardware = self.runtime_config.get("hardware_info", {})
+        if not isinstance(hardware, dict):
+            return "unknown"
+        value = str(hardware.get(key, "") or "").strip()
+        return value or "unknown"
 
 
 @dataclass

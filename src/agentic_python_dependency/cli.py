@@ -5,8 +5,11 @@ import contextlib
 import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from functools import lru_cache
 import json
 import os
+import platform
+import socket
 import shutil
 import subprocess
 import sys
@@ -17,6 +20,7 @@ import urllib.request
 import warnings
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import quote
 from uuid import uuid4
 
 from agentic_python_dependency.activity import CaseActivityTracker
@@ -102,6 +106,202 @@ def format_model_summary(settings: Settings) -> str:
         f"repair={stage_models['repair']} "
         f"adjudicate={stage_models['adjudicate']}"
     )
+
+
+def _run_probe(command: list[str], *, timeout: float = 1.5) -> str:
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return completed.stdout.strip()
+
+
+def _first_non_empty_line(output: str) -> str:
+    for line in output.splitlines():
+        value = line.strip()
+        if value:
+            return value
+    return ""
+
+
+def _parse_labeled_line(output: str, labels: tuple[str, ...]) -> str:
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        for label in labels:
+            prefix = f"{label}:"
+            if line.lower().startswith(prefix.lower()):
+                value = line.split(":", 1)[1].strip()
+                if value:
+                    return value
+    return ""
+
+
+def _dedupe_non_empty(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        item = str(value or "").strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
+
+
+def _format_memory_gib(total_bytes: int) -> str:
+    if total_bytes <= 0:
+        return ""
+    gib = total_bytes / float(1024**3)
+    return f"{gib:.1f} GiB"
+
+
+def _detect_total_memory_bytes() -> int:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            status = MemoryStatus()
+            status.dwLength = ctypes.sizeof(MemoryStatus)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):  # type: ignore[attr-defined]
+                return int(status.ullTotalPhys)
+        except Exception:
+            return 0
+        return 0
+    try:
+        pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+    except (AttributeError, OSError, ValueError):
+        return 0
+    if not isinstance(pages, int) or not isinstance(page_size, int) or pages <= 0 or page_size <= 0:
+        return 0
+    return pages * page_size
+
+
+def _detect_cpu_model() -> str:
+    if sys.platform == "darwin":
+        sysctl_brand = _run_probe(["sysctl", "-n", "machdep.cpu.brand_string"])
+        if sysctl_brand:
+            return _first_non_empty_line(sysctl_brand)
+        hardware = _run_probe(["system_profiler", "SPHardwareDataType", "-detailLevel", "mini"], timeout=2.5)
+        parsed = _parse_labeled_line(hardware, ("Chip", "Processor Name"))
+        if parsed:
+            return parsed
+    elif sys.platform == "win32":
+        for candidate in (
+            os.environ.get("PROCESSOR_IDENTIFIER", ""),
+            _parse_labeled_line(_run_probe(["wmic", "cpu", "get", "name", "/value"]), ("Name",)),
+            _first_non_empty_line(
+                _run_probe(
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        "(Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)",
+                    ],
+                    timeout=2.0,
+                )
+            ),
+        ):
+            if candidate:
+                return _first_non_empty_line(candidate)
+    else:
+        cpuinfo = Path("/proc/cpuinfo")
+        if cpuinfo.exists():
+            parsed = _parse_labeled_line(cpuinfo.read_text(encoding="utf-8", errors="replace"), ("model name", "Hardware"))
+            if parsed:
+                return parsed
+    return _first_non_empty_line(platform.processor()) or platform.machine() or ""
+
+
+def _detect_gpu_summary() -> str:
+    nvidia = _run_probe(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], timeout=1.5)
+    if nvidia:
+        return ", ".join(_dedupe_non_empty([line.strip() for line in nvidia.splitlines()]))
+    if sys.platform == "darwin":
+        displays = _run_probe(["system_profiler", "SPDisplaysDataType", "-detailLevel", "mini"], timeout=2.5)
+        parsed: list[str] = []
+        for label in ("Chipset Model", "Chip"):
+            for raw_line in displays.splitlines():
+                line = raw_line.strip()
+                prefix = f"{label}:"
+                if line.lower().startswith(prefix.lower()):
+                    value = line.split(":", 1)[1].strip()
+                    if value:
+                        parsed.append(value)
+        if parsed:
+            return ", ".join(_dedupe_non_empty(parsed))
+    elif sys.platform == "win32":
+        wmic_output = _run_probe(["wmic", "path", "win32_VideoController", "get", "name"], timeout=2.0)
+        names = [
+            line.strip()
+            for line in wmic_output.splitlines()
+            if line.strip() and line.strip().lower() != "name"
+        ]
+        if names:
+            return ", ".join(_dedupe_non_empty(names))
+        powershell_output = _run_probe(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name)",
+            ],
+            timeout=2.0,
+        )
+        names = [line.strip() for line in powershell_output.splitlines() if line.strip()]
+        if names:
+            return ", ".join(_dedupe_non_empty(names))
+    else:
+        lspci_output = _run_probe(["lspci"], timeout=1.5)
+        names = []
+        for line in lspci_output.splitlines():
+            lowered = line.lower()
+            if "vga compatible controller" in lowered or "3d controller" in lowered or "display controller" in lowered:
+                names.append(line.split(":", 2)[-1].strip())
+        if names:
+            return ", ".join(_dedupe_non_empty(names))
+    return ""
+
+
+@lru_cache(maxsize=1)
+def collect_hardware_info() -> dict[str, object]:
+    total_memory_bytes = _detect_total_memory_bytes()
+    logical_cores = os.cpu_count() or 0
+    system = platform.system() or ""
+    release = platform.release() or ""
+    os_label = " ".join(part for part in (system, release) if part).strip() or platform.platform(aliased=True, terse=True)
+    return {
+        "host": socket.gethostname() or "",
+        "os": os_label,
+        "platform": platform.platform(aliased=True, terse=True),
+        "machine": platform.machine() or "",
+        "cpu": _detect_cpu_model(),
+        "logical_cores": logical_cores,
+        "memory": _format_memory_gib(total_memory_bytes),
+        "memory_bytes": total_memory_bytes,
+        "gpu": _detect_gpu_summary(),
+    }
 
 
 def summary_defaults_from_settings(settings: Settings) -> dict[str, object]:
@@ -290,6 +490,22 @@ def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
         f"- Last status: `{payload.get('last_status', '') or 'none'}`",
         "",
     ]
+    hardware_info = payload.get("hardware_info", {})
+    if isinstance(hardware_info, dict) and hardware_info:
+        lines.extend(
+            [
+                "## Hardware",
+                "",
+                f"- Host: `{hardware_info.get('host', '') or 'unknown'}`",
+                f"- OS: `{hardware_info.get('os', '') or 'unknown'}`",
+                f"- CPU: `{hardware_info.get('cpu', '') or 'unknown'}`",
+                f"- GPU: `{hardware_info.get('gpu', '') or 'unknown'}`",
+                f"- Memory: `{hardware_info.get('memory', '') or 'unknown'}`",
+                f"- Logical cores: `{hardware_info.get('logical_cores', '') or 'unknown'}`",
+                f"- Machine: `{hardware_info.get('machine', '') or 'unknown'}`",
+                "",
+            ]
+        )
     ollama_snapshot = OllamaStatsSnapshot.from_payload(payload.get("ollama_stats", {}))
     if ollama_snapshot.calls:
         lines.extend(
@@ -351,11 +567,97 @@ def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
     (run_dir / "run-state.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+def _dashboard_source_id(value: str) -> str:
+    cleaned = "".join(char if char.isalnum() or char in "._-" else "_" for char in str(value or "").strip())
+    return cleaned.strip("._") or "unknown"
+
+
+def _collect_case_bundle_files(case_dir: Path, *, max_bytes: int = 2_000_000) -> list[dict[str, str]]:
+    files: list[dict[str, str]] = []
+    if not case_dir.exists():
+        return files
+    for path in sorted(case_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(case_dir).as_posix()
+        if relative == "result.json":
+            continue
+        try:
+            if path.stat().st_size > max_bytes:
+                continue
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        files.append({"path": relative, "content": content})
+    return files
+
+
+class NetworkDashboardSink:
+    def __init__(self, base_url: str, *, source_label: str | None = None, timeout: float = 1.5):
+        self.base_url = str(base_url or "").rstrip("/")
+        self.source_label = str(source_label or socket.gethostname() or "remote")
+        self.source_id = _dashboard_source_id(self.source_label)
+        self.timeout = timeout
+        self._warned = False
+
+    def _post_json(self, path: str, payload: dict[str, object]) -> None:
+        request = urllib.request.Request(
+            f"{self.base_url}{path}",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout):
+                return
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            if not self._warned:
+                print(f"[WARN] remote dashboard sync failed: {exc}", file=sys.stderr)
+                self._warned = True
+
+    def sync_run_state(self, payload: dict[str, object]) -> None:
+        run_id = str(payload.get("run_id", "") or "").strip()
+        if not self.base_url or not run_id:
+            return
+        body = dict(payload)
+        body["source_label"] = self.source_label
+        self._post_json(
+            f"/api/ingest/runs/{quote(self.source_id, safe='')}/{quote(run_id, safe='')}/state",
+            body,
+        )
+
+    def sync_case_result(self, run_dir: Path, result: dict[str, object]) -> None:
+        run_id = run_dir.name
+        case_id = str(result.get("case_id", "") or "").strip()
+        if not self.base_url or not run_id or not case_id:
+            return
+        case_dir = run_dir / case_id
+        body = {
+            "result": result,
+            "files": _collect_case_bundle_files(case_dir),
+        }
+        self._post_json(
+            (
+                f"/api/ingest/runs/{quote(self.source_id, safe='')}/"
+                f"{quote(run_id, safe='')}/cases/{quote(case_id, safe='')}"
+            ),
+            body,
+        )
+
+
 class PersistentBenchmarkObserver:
-    def __init__(self, inner: BenchmarkObserver, run_dir: Path, restored_state: dict[str, object] | None = None):
+    def __init__(
+        self,
+        inner: BenchmarkObserver,
+        run_dir: Path,
+        restored_state: dict[str, object] | None = None,
+        *,
+        remote_sink: NetworkDashboardSink | None = None,
+    ):
         self.inner = inner
         self.run_dir = run_dir
         self.restored_state = restored_state or {}
+        self.remote_sink = remote_sink
         self.ollama_stats = OllamaStatsTracker(self.restored_state.get("ollama_stats"))
         self.activity_tracker = CaseActivityTracker(
             self.restored_state.get("current_case_activity"),
@@ -434,6 +736,11 @@ class PersistentBenchmarkObserver:
             "llm_wall_clock_seconds_total": float(self.restored_state.get("llm_wall_clock_seconds_total", 0.0) or 0.0),
             "image_cache_hits": int(self.restored_state.get("image_cache_hits", 0) or 0),
             "build_skips": int(self.restored_state.get("build_skips", 0) or 0),
+            "hardware_info": (
+                dict(restored_hardware)
+                if isinstance((restored_hardware := self.restored_state.get("hardware_info", {})), dict) and restored_hardware
+                else collect_hardware_info()
+            ),
         }
 
     def _elapsed_seconds(self) -> float:
@@ -449,6 +756,8 @@ class PersistentBenchmarkObserver:
         self.payload["elapsed_seconds"] = self._elapsed_seconds()
         self.payload["last_updated_at"] = datetime.now(timezone.utc).isoformat()
         write_run_state(self.run_dir, self.payload)
+        if self.remote_sink is not None:
+            self.remote_sink.sync_run_state(self.payload)
 
     def _append_activity_log(self, case_id: str, *, attempt: int, kind: str, detail: str) -> None:
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -483,6 +792,8 @@ class PersistentBenchmarkObserver:
     ) -> None:
         del elapsed_seconds, ollama_stats
         runtime_payload = dict(runtime_config or {})
+        if "hardware_info" not in runtime_payload:
+            runtime_payload["hardware_info"] = dict(self.payload.get("hardware_info", {}))
         self.payload.update(
             {
                 "run_id": run_id,
@@ -529,6 +840,9 @@ class PersistentBenchmarkObserver:
         if runtime_payload:
             self.payload.update(runtime_payload)
         self._persist(status="running")
+        if self.remote_sink is not None:
+            for result in completed_results or []:
+                self.remote_sink.sync_case_result(self.run_dir, result)
         self.inner.start(
             run_id=run_id,
             total=total,
@@ -596,6 +910,8 @@ class PersistentBenchmarkObserver:
         self.payload["last_status"] = "success" if success else str(result.get("final_error_category", "failure"))
         self.activity_tracker.finish_case(case_id)
         self._persist()
+        if self.remote_sink is not None:
+            self.remote_sink.sync_case_result(self.run_dir, result)
         self.inner.advance(result)
 
     def stop_requested(self) -> bool:
@@ -1009,6 +1325,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Path to a repo-tracked competition gist-id filter file. "
             "When --benchmark-source competition-run is used, APDR falls back to this file if CSVs are unavailable."
+        ),
+    )
+    parser.add_argument(
+        "--dashboard-url",
+        default=os.getenv("APDR_DASHBOARD_URL"),
+        help=(
+            "Optional URL for a central APDR web dashboard ingest endpoint "
+            "(for example http://192.168.1.10:8765). Benchmark runs will stream run-state and case results there."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1575,6 +1899,7 @@ def run_benchmark(
     *,
     notify_paths: bool = True,
     fresh_run: bool = False,
+    dashboard_url: str | None = None,
 ) -> int:
     if run_id and not fresh_run:
         restored_state = load_run_state(settings.artifacts_dir / run_id)
@@ -1597,6 +1922,7 @@ def run_benchmark(
         notify_paths=notify_paths,
         fresh_run=fresh_run,
         target_label=subset or ("full" if full else "benchmark"),
+        dashboard_url=dashboard_url,
     )
 
 
@@ -1612,6 +1938,7 @@ def run_case_batch(
     notify_paths: bool = True,
     fresh_run: bool = False,
     target_label: str = "benchmark",
+    dashboard_url: str | None = None,
 ) -> int:
     runtime_dataset = dataset or GistableDataset(settings)
     if dataset is None:
@@ -1750,7 +2077,13 @@ def run_case_batch(
         return 2
 
     inner_observer = observer or BenchmarkProgress(active_run_id, len(case_ids), completed=len(completed_case_ids))
-    progress_observer = PersistentBenchmarkObserver(inner_observer, run_dir, restored_state)
+    remote_sink = NetworkDashboardSink(dashboard_url) if dashboard_url else None
+    progress_observer = PersistentBenchmarkObserver(
+        inner_observer,
+        run_dir,
+        restored_state,
+        remote_sink=remote_sink,
+    )
     progress_observer.start(
         run_id=active_run_id,
         total=len(case_ids),
@@ -2083,10 +2416,28 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "smoke":
         ensure_smoke_subset(settings, args.ref, "smoke30")
-        return run_benchmark(settings, args.ref, "smoke30", False, args.run_id, args.jobs, fresh_run=args.fresh_run)
+        return run_benchmark(
+            settings,
+            args.ref,
+            "smoke30",
+            False,
+            args.run_id,
+            args.jobs,
+            fresh_run=args.fresh_run,
+            dashboard_url=args.dashboard_url,
+        )
 
     if args.command == "full":
-        return run_benchmark(settings, args.ref, None, True, args.run_id, args.jobs, fresh_run=args.fresh_run)
+        return run_benchmark(
+            settings,
+            args.ref,
+            None,
+            True,
+            args.run_id,
+            args.jobs,
+            fresh_run=args.fresh_run,
+            dashboard_url=args.dashboard_url,
+        )
 
     if args.command == "solve":
         return run_project(settings, args.path, args.validation_command, args.run_id, fresh_run=args.fresh_run)
@@ -2143,10 +2494,20 @@ def main(argv: list[str] | None = None) -> int:
                 args.run_id,
                 args.jobs,
                 fresh_run=args.fresh_run,
+                dashboard_url=args.dashboard_url,
             )
         if args.benchmark_command == "full":
             _notify_path("Benchmark dataset ready", dataset.fetch(args.ref))
-            return run_benchmark(settings, args.ref, None, True, args.run_id, args.jobs, fresh_run=args.fresh_run)
+            return run_benchmark(
+                settings,
+                args.ref,
+                None,
+                True,
+                args.run_id,
+                args.jobs,
+                fresh_run=args.fresh_run,
+                dashboard_url=args.dashboard_url,
+            )
         if args.benchmark_command == "run":
             if args.subset == "smoke30":
                 ensure_smoke_subset(settings, args.ref, "smoke30")
@@ -2158,6 +2519,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.run_id,
                 args.jobs,
                 fresh_run=args.fresh_run,
+                dashboard_url=args.dashboard_url,
             )
 
     if args.command == "case" and args.case_command == "run":

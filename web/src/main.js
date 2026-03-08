@@ -174,6 +174,10 @@ function formatOllamaSummary(stats) {
   return parts.join(", ");
 }
 
+function hardwareValue(value) {
+  return value ? String(value) : "-";
+}
+
 function formatLastLlm(stats) {
   if (!stats || !Number(stats.calls || 0)) {
     return "";
@@ -260,21 +264,31 @@ function renderRuns() {
   const fragment = document.createDocumentFragment();
   for (const run of state.runs) {
     const option = document.createElement("option");
-    option.value = run.runId;
-    option.textContent = `${run.runId} [${run.status}] ${run.completed}/${run.total} ${run.successRate.toFixed(1)}%`;
-    if (run.runId === state.selectedRunId) {
+    option.value = run.runKey || run.runId;
+    const sourcePrefix = run.sourceLabel ? `${run.sourceLabel} • ` : "";
+    option.textContent = `${sourcePrefix}${run.runId} [${run.status}] ${run.completed}/${run.total} ${run.successRate.toFixed(1)}%`;
+    if ((run.runKey || run.runId) === state.selectedRunId) {
       option.selected = true;
     }
     fragment.appendChild(option);
   }
   ui.runSelect.appendChild(fragment);
-  ui.selectedRunId.textContent = state.selectedRunId || "none";
+  const selected = state.runs.find((run) => (run.runKey || run.runId) === state.selectedRunId);
+  ui.selectedRunId.textContent = selected ? `${selected.sourceLabel || "local"} / ${selected.runId}` : "none";
 }
 
 function renderRunInfo(run) {
+  const hardware = run.hardware || {};
   const fields = [
     ["Run ID", run.runId],
+    ["Device", run.sourceLabel ? `${run.sourceLabel} (${run.sourceType || "local"})` : run.sourceType || "local"],
     ["Version", run.appVersion || state.home?.version || "unknown"],
+    ["OS", hardwareValue(hardware.os)],
+    ["CPU", hardwareValue(hardware.cpu)],
+    ["GPU", hardwareValue(hardware.gpu)],
+    ["Memory", hardwareValue(hardware.memory)],
+    ["Arch", hardwareValue(hardware.machine)],
+    ["Cores", hardware.logicalCores ? String(hardware.logicalCores) : "-"],
     ["Target", run.target],
     ["Resolver", run.resolver],
     ["Preset", run.preset],
@@ -373,7 +387,9 @@ async function ensureCaseDetail(caseId) {
   if (state.caseDetails.has(caseId)) {
     return state.caseDetails.get(caseId);
   }
-  const payload = await fetchJson(`/api/runs/${state.selectedRunId}/cases/${caseId}`);
+  const payload = await fetchJson(
+    `/api/runs/${encodeURIComponent(state.selectedRunId)}/cases/${encodeURIComponent(caseId)}`,
+  );
   state.caseDetails.set(caseId, payload);
   return payload;
 }
@@ -565,8 +581,8 @@ function renderSelectedRun() {
     run.status === "running" ? "APDR benchmark in progress" : `APDR benchmark ${run.status}`;
   ui.heroRunSubtitle.textContent =
     run.status === "running"
-      ? "Use Ctrl-C only if you intend to stop the benchmark process itself."
-      : `Run ${run.runId} is ${run.status}. Inspect results and attempt timelines below.`;
+      ? `Use Ctrl-C only if you intend to stop the benchmark process itself. Source: ${run.sourceLabel || "local"}.`
+      : `Run ${run.runId} on ${run.sourceLabel || "local"} is ${run.status}. Inspect results and attempt timelines below.`;
   renderRunInfo(run);
   renderProgress(run);
   renderActivityList(
@@ -588,7 +604,7 @@ function renderSelectedRun() {
       )}] ${escapeHtml(item.detail || "")}`,
   );
   renderCases();
-  document.title = `APDR Benchmark Dashboard • ${run.runId}`;
+  document.title = `APDR Benchmark Dashboard • ${run.sourceLabel || "local"} • ${run.runId}`;
 }
 
 function renderErrorState(error) {
@@ -606,10 +622,10 @@ async function loadRuns() {
   const payload = await fetchJson("/api/runs");
   state.runs = payload.runs || [];
   if (!state.selectedRunId && state.runs.length) {
-    state.selectedRunId = state.runs[0].runId;
+    state.selectedRunId = state.runs[0].runKey || state.runs[0].runId;
   }
-  if (state.selectedRunId && !state.runs.some((run) => run.runId === state.selectedRunId)) {
-    state.selectedRunId = state.runs[0]?.runId || "";
+  if (state.selectedRunId && !state.runs.some((run) => (run.runKey || run.runId) === state.selectedRunId)) {
+    state.selectedRunId = state.runs[0]?.runKey || state.runs[0]?.runId || "";
   }
   renderRuns();
 }
@@ -620,7 +636,7 @@ async function loadSelectedRun() {
     renderSelectedRun();
     return;
   }
-  const payload = await fetchJson(`/api/runs/${state.selectedRunId}`);
+  const payload = await fetchJson(`/api/runs/${encodeURIComponent(state.selectedRunId)}`);
   state.selectedRun = payload;
   renderSelectedRun();
 }

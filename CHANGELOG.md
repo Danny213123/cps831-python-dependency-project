@@ -7,6 +7,25 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-03-08
+
+### Added
+
+- Added hardware-aware benchmark metadata capture so runs now persist host, OS, CPU, GPU, memory, architecture, and logical-core information in run state and expose it through the dashboard APIs.
+- Added cross-device dashboard ingest so a central web server can receive live benchmark state and completed case results streamed from benchmarks running on other machines.
+- Added network-aware run labeling in the web UI so remotely ingested runs display their originating device directly in the run selector and run details.
+
+### Changed
+
+- Updated the web benchmark visualization to show hardware information alongside the existing run metadata, making cross-machine comparisons easier during live benchmarking.
+- Updated the terminal benchmark header and saved run-state markdown to include hardware information for the machine executing the benchmark.
+- Extended benchmark run payloads so streamed remote runs keep their machine context and stay consistent with locally hosted runs.
+
+### Fixed
+
+- Fixed central-dashboard visibility for runs executed on another device by adding explicit run-state and case-result ingestion endpoints instead of assuming all benchmarks write to the local artifacts directory.
+- Fixed restored benchmark payload behavior so missing or empty hardware metadata falls back to a fresh local probe instead of persisting blank fields.
+
 ## [2.2.0] - 2026-03-08
 
 ### Added

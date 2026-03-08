@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentic-python-dependency"
-version = "2.2.0"
+version = "2.3.0"
 description = "PLLM-inspired agentic Python dependency resolver."
 readme = "README.md"
 requires-python = ">=3.12"

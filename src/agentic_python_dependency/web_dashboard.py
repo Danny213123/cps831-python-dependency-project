@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import mimetypes
+import re
 import signal
 import socket
 import tomllib
@@ -12,7 +13,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 from agentic_python_dependency.config import Settings
 
@@ -23,6 +24,64 @@ def _repo_root() -> Path:
 
 def _web_root() -> Path:
     return _repo_root() / "web"
+
+
+def _network_runs_root(settings: Settings) -> Path:
+    return settings.artifacts_dir / "_network"
+
+
+def _safe_component(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "").strip())
+    return cleaned.strip("._") or "unknown"
+
+
+def _local_source_label() -> str:
+    return socket.gethostname() or "local"
+
+
+def _make_run_key(source_type: str, run_id: str, source_id: str = "") -> str:
+    if source_type == "remote":
+        return f"remote:{source_id}:{run_id}"
+    return f"local:{run_id}"
+
+
+def _parse_run_key(run_key: str) -> tuple[str, str, str]:
+    raw = str(run_key or "").strip()
+    if raw.startswith("remote:"):
+        _, remainder = raw.split("remote:", 1)
+        source_id, _, run_id = remainder.partition(":")
+        return "remote", source_id, run_id
+    if raw.startswith("local:"):
+        return "local", "", raw.split("local:", 1)[1]
+    return "local", "", raw
+
+
+def _resolve_run_location(settings: Settings, run_key: str) -> dict[str, Any] | None:
+    source_type, source_id, run_id = _parse_run_key(run_key)
+    if source_type == "remote":
+        run_dir = _network_runs_root(settings) / _safe_component(source_id) / _safe_component(run_id)
+        if not run_dir.exists():
+            return None
+        state = _read_json(run_dir / "run-state.json")
+        return {
+            "runKey": _make_run_key("remote", run_id, source_id),
+            "runId": run_id,
+            "runDir": run_dir,
+            "sourceType": "remote",
+            "sourceId": source_id,
+            "sourceLabel": str(state.get("source_label", "") or source_id or "remote"),
+        }
+    local_dir = settings.artifacts_dir / run_id
+    if not local_dir.exists():
+        return None
+    return {
+        "runKey": _make_run_key("local", run_id),
+        "runId": run_id,
+        "runDir": local_dir,
+        "sourceType": "local",
+        "sourceId": "local",
+        "sourceLabel": _local_source_label(),
+    }
 
 
 def _resolve_apdr_version() -> str:
@@ -94,6 +153,23 @@ def _latest_timestamp(*values: object) -> str:
     return max(timestamps) if timestamps else ""
 
 
+def _hardware_payload(state: dict[str, Any]) -> dict[str, Any]:
+    hardware = state.get("hardware_info", {})
+    if not isinstance(hardware, dict):
+        return {}
+    return {
+        "host": str(hardware.get("host", "") or ""),
+        "os": str(hardware.get("os", "") or ""),
+        "platform": str(hardware.get("platform", "") or ""),
+        "machine": str(hardware.get("machine", "") or ""),
+        "cpu": str(hardware.get("cpu", "") or ""),
+        "gpu": str(hardware.get("gpu", "") or ""),
+        "memory": str(hardware.get("memory", "") or ""),
+        "memoryBytes": _safe_int(hardware.get("memory_bytes", 0)),
+        "logicalCores": _safe_int(hardware.get("logical_cores", 0)),
+    }
+
+
 def _case_summary_payload(result: dict[str, Any], runtime_row: dict[str, str] | None = None) -> dict[str, Any]:
     runtime_row = runtime_row or {}
     dependencies = result.get("dependencies", [])
@@ -160,16 +236,98 @@ def _file_entry(run_id: str, case_id: str, relative_path: str, *, label: str | N
     return {
         "label": label or relative_path,
         "path": relative_path,
-        "url": f"/api/runs/{run_id}/cases/{case_id}/artifacts/{relative_path}",
+        "url": (
+            f"/api/runs/{quote(run_id, safe='')}/cases/{quote(case_id, safe='')}/"
+            f"artifacts/{quote(relative_path, safe='/')}"
+        ),
     }
+
+
+def ingest_network_run_state(settings: Settings, source_id: str, run_id: str, payload: dict[str, Any]) -> Path:
+    run_dir = _network_runs_root(settings) / _safe_component(source_id) / _safe_component(run_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    stored = dict(payload)
+    stored["source_type"] = "remote"
+    stored["source_id"] = source_id
+    stored["source_label"] = str(payload.get("source_label", "") or source_id)
+    if not stored.get("run_id"):
+        stored["run_id"] = run_id
+    (run_dir / "run-state.json").write_text(json.dumps(stored, indent=2), encoding="utf-8")
+    return run_dir
+
+
+def ingest_network_case_bundle(
+    settings: Settings,
+    source_id: str,
+    run_id: str,
+    case_id: str,
+    payload: dict[str, Any],
+) -> Path:
+    run_dir = _network_runs_root(settings) / _safe_component(source_id) / _safe_component(run_id)
+    case_dir = run_dir / _safe_component(case_id)
+    case_dir.mkdir(parents=True, exist_ok=True)
+    result = payload.get("result", {})
+    if isinstance(result, dict) and result:
+        (case_dir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    for item in payload.get("files", []):
+        if not isinstance(item, dict):
+            continue
+        relative_path = str(item.get("path", "") or "").strip()
+        if not relative_path:
+            continue
+        target = (case_dir / relative_path).resolve()
+        try:
+            target.relative_to(case_dir.resolve())
+        except ValueError:
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(str(item.get("content", "") or ""), encoding="utf-8")
+    return case_dir
+
+
+def _iter_run_locations(settings: Settings) -> list[dict[str, Any]]:
+    locations: list[dict[str, Any]] = []
+    for run_dir in sorted(settings.artifacts_dir.glob("*")):
+        if not run_dir.is_dir() or run_dir.name.startswith("_"):
+            continue
+        locations.append(
+            {
+                "runKey": _make_run_key("local", run_dir.name),
+                "runId": run_dir.name,
+                "runDir": run_dir,
+                "sourceType": "local",
+                "sourceId": "local",
+                "sourceLabel": _local_source_label(),
+            }
+        )
+    network_root = _network_runs_root(settings)
+    if network_root.exists():
+        for source_dir in sorted(network_root.glob("*")):
+            if not source_dir.is_dir():
+                continue
+            for run_dir in sorted(source_dir.glob("*")):
+                if not run_dir.is_dir():
+                    continue
+                state = _read_json(run_dir / "run-state.json")
+                source_id = source_dir.name
+                locations.append(
+                    {
+                        "runKey": _make_run_key("remote", run_dir.name, source_id),
+                        "runId": run_dir.name,
+                        "runDir": run_dir,
+                        "sourceType": "remote",
+                        "sourceId": source_id,
+                        "sourceLabel": str(state.get("source_label", "") or source_id),
+                    }
+                )
+    return locations
 
 
 def list_runs(settings: Settings) -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
     app_version = _resolve_apdr_version()
-    for run_dir in sorted(settings.artifacts_dir.glob("*")):
-        if not run_dir.is_dir():
-            continue
+    for location in _iter_run_locations(settings):
+        run_dir = Path(location["runDir"])
         state = _read_json(run_dir / "run-state.json")
         summary = _read_json(run_dir / "summary.json")
         if not state and not summary:
@@ -184,7 +342,8 @@ def list_runs(settings: Settings) -> list[dict[str, Any]]:
         failures = _safe_int(state.get("failures", summary.get("failures", 0)))
         runs.append(
             {
-                "runId": run_dir.name,
+                "runKey": str(location["runKey"]),
+                "runId": str(location["runId"]),
                 "status": str(state.get("status", "completed" if summary else "unknown") or "unknown"),
                 "resolver": str(state.get("resolver", summary.get("resolver", "apdr")) or "apdr"),
                 "preset": str(state.get("preset", summary.get("preset", "optimized")) or "optimized"),
@@ -210,6 +369,10 @@ def list_runs(settings: Settings) -> list[dict[str, Any]]:
                 "buildSkips": _safe_int(state.get("build_skips", summary.get("build_skips", 0))),
                 "modelSummary": str(state.get("model_summary", "") or ""),
                 "appVersion": app_version,
+                "sourceType": str(location["sourceType"]),
+                "sourceId": str(location["sourceId"]),
+                "sourceLabel": str(location["sourceLabel"]),
+                "hardware": _hardware_payload(state),
                 "lastCaseId": str(state.get("last_case_id", "") or ""),
                 "lastStatus": str(state.get("last_status", "") or ""),
                 "lastUpdatedAt": _latest_timestamp(state.get("last_updated_at"), state.get("started_at")),
@@ -221,9 +384,10 @@ def list_runs(settings: Settings) -> list[dict[str, Any]]:
 
 
 def get_run_detail(settings: Settings, run_id: str) -> dict[str, Any] | None:
-    run_dir = settings.artifacts_dir / run_id
-    if not run_dir.exists():
+    location = _resolve_run_location(settings, run_id)
+    if location is None:
         return None
+    run_dir = Path(location["runDir"])
     state = _read_json(run_dir / "run-state.json")
     summary = _read_json(run_dir / "summary.json")
     runtime_rows = _read_runtime_row_lookup(run_dir)
@@ -240,7 +404,8 @@ def get_run_detail(settings: Settings, run_id: str) -> dict[str, Any] | None:
     failures = _safe_int(state.get("failures", summary.get("failures", 0)))
     return {
         "run": {
-            "runId": run_id,
+            "runKey": str(location["runKey"]),
+            "runId": str(location["runId"]),
             "status": str(state.get("status", "completed" if summary else "unknown") or "unknown"),
             "resolver": str(state.get("resolver", summary.get("resolver", "apdr")) or "apdr"),
             "preset": str(state.get("preset", summary.get("preset", "optimized")) or "optimized"),
@@ -262,6 +427,10 @@ def get_run_detail(settings: Settings, run_id: str) -> dict[str, Any] | None:
             "buildSkips": _safe_int(state.get("build_skips", summary.get("build_skips", 0))),
             "modelSummary": str(state.get("model_summary", "") or ""),
             "appVersion": _resolve_apdr_version(),
+            "sourceType": str(location["sourceType"]),
+            "sourceId": str(location["sourceId"]),
+            "sourceLabel": str(location["sourceLabel"]),
+            "hardware": _hardware_payload(state),
             "runtimeConfig": {
                 "effectiveModelProfile": state.get("effective_model_profile", state.get("model_profile", "")),
                 "effectiveRagMode": state.get("effective_rag_mode", state.get("rag_mode", "")),
@@ -300,8 +469,11 @@ def get_run_detail(settings: Settings, run_id: str) -> dict[str, Any] | None:
 
 
 def get_case_detail(settings: Settings, run_id: str, case_id: str) -> dict[str, Any] | None:
-    run_dir = settings.artifacts_dir / run_id
-    case_dir = run_dir / case_id
+    location = _resolve_run_location(settings, run_id)
+    if location is None:
+        return None
+    run_dir = Path(location["runDir"])
+    case_dir = run_dir / (_safe_component(case_id) if location["sourceType"] == "remote" else case_id)
     if not case_dir.exists():
         return None
     result = _read_json(case_dir / "result.json")
@@ -365,6 +537,13 @@ def get_case_detail(settings: Settings, run_id: str, case_id: str) -> dict[str, 
             top_files.append(_file_entry(run_id, case_id, name))
     payload = {
         "case": _case_summary_payload(result, runtime_row),
+        "source": {
+            "runKey": str(location["runKey"]),
+            "runId": str(location["runId"]),
+            "sourceType": str(location["sourceType"]),
+            "sourceId": str(location["sourceId"]),
+            "sourceLabel": str(location["sourceLabel"]),
+        },
         "result": result,
         "attempts": attempts,
         "activity": activity_events,
@@ -375,7 +554,11 @@ def get_case_detail(settings: Settings, run_id: str, case_id: str) -> dict[str, 
 
 
 def read_case_artifact(settings: Settings, run_id: str, case_id: str, relative_path: str) -> tuple[bytes, str] | None:
-    case_dir = (settings.artifacts_dir / run_id / case_id).resolve()
+    location = _resolve_run_location(settings, run_id)
+    if location is None:
+        return None
+    case_component = _safe_component(case_id) if location["sourceType"] == "remote" else case_id
+    case_dir = (Path(location["runDir"]) / case_component).resolve()
     target = (case_dir / relative_path).resolve()
     try:
         target.relative_to(case_dir)
@@ -565,6 +748,13 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             return
         self._handle_frontend(parsed.path)
 
+    def do_POST(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if not parsed.path.startswith("/api/"):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        self._handle_api_post(parsed.path)
+
     def _handle_api(self, path: str) -> None:
         if path == "/api/health":
             self._send_json({"ok": True, "timestamp": datetime.utcnow().isoformat() + "Z"})
@@ -608,6 +798,40 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(data)
                     return
+        self.send_error(HTTPStatus.NOT_FOUND)
+
+    def _read_json_body(self) -> dict[str, Any] | None:
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+        except ValueError:
+            length = 0
+        if length <= 0:
+            return {}
+        try:
+            raw = self.rfile.read(length)
+            payload = json.loads(raw.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _handle_api_post(self, path: str) -> None:
+        segments = [segment for segment in path.split("/") if segment]
+        if len(segments) >= 6 and segments[1] == "ingest" and segments[2] == "runs":
+            source_id = _safe_component(unquote(segments[3]))
+            run_id = _safe_component(unquote(segments[4]))
+            body = self._read_json_body()
+            if body is None:
+                self.send_error(HTTPStatus.BAD_REQUEST)
+                return
+            if len(segments) == 6 and segments[5] == "state":
+                ingest_network_run_state(self.settings, source_id, run_id, body)
+                self._send_json({"ok": True})
+                return
+            if len(segments) == 7 and segments[5] == "cases":
+                case_id = unquote(segments[6])
+                ingest_network_case_bundle(self.settings, source_id, run_id, case_id, body)
+                self._send_json({"ok": True})
+                return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def _handle_frontend(self, path: str) -> None:

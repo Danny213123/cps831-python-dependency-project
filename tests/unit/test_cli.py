@@ -6,7 +6,9 @@ import pytest
 
 from agentic_python_dependency.cli import (
     BenchmarkProgress,
+    NetworkDashboardSink,
     PersistentBenchmarkObserver,
+    _collect_case_bundle_files,
     build_runtime_comparison_row,
     build_parser,
     collect_doctor_report,
@@ -75,6 +77,55 @@ def test_web_parser_accepts_host_and_port() -> None:
     assert args.command == "web"
     assert args.host == "0.0.0.0"
     assert args.port == 9000
+
+
+def test_parser_accepts_dashboard_url() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["--dashboard-url", "http://192.168.1.10:8765", "smoke"])
+
+    assert args.dashboard_url == "http://192.168.1.10:8765"
+
+
+def test_network_dashboard_sink_posts_state_and_case_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    case_dir = tmp_path / "run123" / "case-1" / "attempt_01"
+    case_dir.mkdir(parents=True, exist_ok=True)
+    (case_dir / "build.log").write_text("build output", encoding="utf-8")
+    captured: list[tuple[str, dict[str, object]]] = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    def fake_urlopen(request, timeout=0):  # type: ignore[no-untyped-def]
+        captured.append((request.full_url, json.loads(request.data.decode("utf-8"))))
+        assert timeout == 1.5
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    sink = NetworkDashboardSink("http://127.0.0.1:8765", source_label="windows-box")
+    sink.sync_run_state({"run_id": "run123", "status": "running"})
+    sink.sync_case_result(tmp_path / "run123", {"case_id": "case-1", "success": False})
+
+    assert captured[0][0].endswith("/api/ingest/runs/windows-box/run123/state")
+    assert captured[0][1]["source_label"] == "windows-box"
+    assert captured[1][0].endswith("/api/ingest/runs/windows-box/run123/cases/case-1")
+    assert captured[1][1]["files"][0]["path"] == "attempt_01/build.log"
+
+
+def test_collect_case_bundle_files_omits_result_json(tmp_path: Path) -> None:
+    case_dir = tmp_path / "case-1"
+    case_dir.mkdir()
+    (case_dir / "result.json").write_text("{}", encoding="utf-8")
+    (case_dir / "activity.log").write_text("event", encoding="utf-8")
+
+    files = _collect_case_bundle_files(case_dir)
+
+    assert [item["path"] for item in files] == ["activity.log"]
 
 
 def test_benchmark_run_parser_accepts_new_moe_model_profiles() -> None:
@@ -1072,7 +1123,21 @@ def test_benchmark_progress_can_request_hard_stop() -> None:
     assert progress.hard_stop_requested() is True
 
 
-def test_persistent_benchmark_observer_writes_run_state_files(tmp_path: Path) -> None:
+def test_persistent_benchmark_observer_writes_run_state_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "agentic_python_dependency.cli.collect_hardware_info",
+        lambda: {
+            "host": "bench-host",
+            "os": "TestOS 1.0",
+            "cpu": "Fast CPU",
+            "gpu": "Fast GPU",
+            "memory": "64.0 GiB",
+            "logical_cores": 16,
+            "machine": "arm64",
+            "memory_bytes": 64 * 1024**3,
+            "platform": "TestOS-1.0-arm64",
+        },
+    )
     inner = BenchmarkProgress("run123", total=5)
     observer = PersistentBenchmarkObserver(inner, tmp_path / "run123")
 
@@ -1112,6 +1177,8 @@ def test_persistent_benchmark_observer_writes_run_state_files(tmp_path: Path) ->
     assert payload["successes"] == 2
     assert payload["effective_model_profile"] == "mistral-nemo-12b"
     assert payload["effective_structured_prompting"] is True
+    assert payload["hardware_info"]["cpu"] == "Fast CPU"
+    assert "## Hardware" in (tmp_path / "run123" / "run-state.md").read_text(encoding="utf-8")
     assert (tmp_path / "run123" / "run-state.md").exists()
 
 

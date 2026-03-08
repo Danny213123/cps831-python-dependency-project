@@ -647,6 +647,50 @@ class ResolutionWorkflow:
         "feedback_summary": "{}",
         "max_plan_count": 1,
     }
+    _DEFAULT_ATTEMPT_FAILURE_ANALYSIS_TEMPLATE = """You are writing a short post-attempt failure analysis for a Python dependency resolution benchmark.
+
+Use only the supplied evidence. Do not invent facts that are not present in the logs or classification output.
+Return plain text only, maximum 4 short lines.
+Explain:
+- whether the failure happened during build or runtime,
+- the most likely immediate cause,
+- whether Python version, selected dependencies, or validation profile appear to be the issue,
+- and whether any part of the evidence is inconclusive.
+Do not propose a repair plan.
+
+Attempt number:
+{attempt_number}
+
+Target Python:
+{target_python}
+
+Runtime profile:
+{runtime_profile}
+
+Validation command:
+{validation_command}
+
+Dependencies:
+{dependencies}
+
+Classifier origin:
+{classifier_origin}
+
+Classified category:
+{error_category}
+
+Classified details:
+{error_details}
+
+Source compatibility hints:
+{source_compatibility_hints}
+
+Build log excerpt:
+{build_log_excerpt}
+
+Run log excerpt:
+{run_log_excerpt}
+"""
 
     def __init__(
         self,
@@ -827,6 +871,114 @@ class ResolutionWorkflow:
             "===\n"
         )
         self._emit_trace(state, message)
+
+    def _attempt_failure_analysis_template(self) -> str:
+        candidates = (
+            self.settings.prompt_template_dir / "attempt_failure_analysis.txt",
+            self.settings.prompts_dir / "research-rag" / "attempt_failure_analysis.txt",
+        )
+        for path in candidates:
+            if path.exists():
+                return path.read_text(encoding="utf-8")
+        return self._DEFAULT_ATTEMPT_FAILURE_ANALYSIS_TEMPLATE
+
+    @staticmethod
+    def _trim_text_block(text: str, *, max_lines: int = 30, max_chars: int = 1800) -> str:
+        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return "-"
+        excerpt = "\n".join(lines[-max_lines:])
+        if len(excerpt) <= max_chars:
+            return excerpt
+        return "...\n" + excerpt[-(max_chars - 4) :].lstrip()
+
+    def _render_attempt_failure_analysis_prompt(
+        self,
+        state: ResolutionState,
+        *,
+        attempt_number: int,
+        target_python: str,
+        runtime_profile: str,
+        validation_command: str,
+        dependencies: list[str],
+        classifier_origin: str,
+        error_category: str,
+        error_details: str,
+        build_log: str,
+        run_log: str,
+    ) -> str:
+        template = self._attempt_failure_analysis_template()
+        source_compatibility_hints = json.dumps(
+            list(state.get("llm_source_compatibility_hints", [])),
+            indent=2,
+        )[:1600]
+        return template.format(
+            attempt_number=attempt_number,
+            target_python=target_python or "-",
+            runtime_profile=runtime_profile or "-",
+            validation_command=validation_command or "-",
+            dependencies="\n".join(dependencies) if dependencies else "-",
+            classifier_origin=classifier_origin or "-",
+            error_category=error_category or "-",
+            error_details=self._trim_text_block(error_details, max_lines=12, max_chars=1400),
+            source_compatibility_hints=source_compatibility_hints or "[]",
+            build_log_excerpt=self._trim_text_block(build_log),
+            run_log_excerpt=self._trim_text_block(run_log),
+        )
+
+    def _record_attempt_failure_analysis(
+        self,
+        state: ResolutionState,
+        classified: ExecutionOutcome,
+    ) -> None:
+        if (
+            classified.success
+            or not state.get("attempt_records")
+            or not state.get("attempt_failure_analysis_enabled", False)
+        ):
+            return
+        latest_attempt = state["attempt_records"][-1]
+        prompt_text = self._render_attempt_failure_analysis_prompt(
+            state,
+            attempt_number=latest_attempt.attempt_number,
+            target_python=str(state.get("target_python", "") or ""),
+            runtime_profile=str(state.get("current_runtime_profile", "") or ""),
+            validation_command=str(latest_attempt.validation_command or ""),
+            dependencies=list(latest_attempt.dependencies),
+            classifier_origin=str(classified.classifier_origin or ""),
+            error_category=str(classified.category or ""),
+            error_details=str(classified.message or ""),
+            build_log=str(classified.build_log or ""),
+            run_log=str(classified.run_log or ""),
+        )
+        analysis_model = self._stage_model_name("analysis")
+        try:
+            self._trace_request(state, "analysis", prompt_text)
+            analysis = self.prompt_runner.invoke_text("analysis", prompt_text).strip()
+            self._trace_response(state, "analysis", analysis)
+        except Exception as exc:  # pragma: no cover - defensive runtime guard
+            latest_attempt.llm_failure_analysis = ""
+            latest_attempt.llm_failure_analysis_model = analysis_model
+            self._emit_activity(
+                state,
+                kind="failure_analysis_skipped",
+                detail=f"Attempt failure analysis was skipped after {exc.__class__.__name__}.",
+            )
+            return
+        latest_attempt.llm_failure_analysis = analysis
+        latest_attempt.llm_failure_analysis_model = analysis_model
+        state.setdefault("model_outputs", {}).setdefault("attempt_analysis", []).append(
+            {
+                "attempt": latest_attempt.attempt_number,
+                "model": analysis_model,
+                "output": analysis,
+            }
+        )
+        self._emit_activity(
+            state,
+            kind="failure_analysis_recorded",
+            detail=f"Recorded LLM failure analysis for attempt {latest_attempt.attempt_number}.",
+        )
 
     @staticmethod
     def _dynamic_import_signals(source_text: str) -> bool:
@@ -2305,7 +2457,7 @@ class ResolutionWorkflow:
             case_started_at=datetime.now(timezone.utc).isoformat(),
             attempt_records=[],
             prompt_history={"prompt_a": [], "prompt_b": "", "prompt_c": []},
-            model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": []},
+            model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": [], "attempt_analysis": []},
             current_attempt=0,
             repair_stall_count=0,
             resolver=self.settings.resolver,
@@ -2362,6 +2514,7 @@ class ResolutionWorkflow:
             structured_outputs={},
             research_path=self._is_research(),
             structured_prompt_failures=0,
+            attempt_failure_analysis_enabled=False,
         )
 
     def initial_state_for_project(
@@ -2381,7 +2534,7 @@ class ResolutionWorkflow:
             case_started_at=datetime.now(timezone.utc).isoformat(),
             attempt_records=[],
             prompt_history={"prompt_a": [], "prompt_b": "", "prompt_c": []},
-            model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": []},
+            model_outputs={"extract": [], "version": [], "repair": [], "adjudicate": [], "attempt_analysis": []},
             current_attempt=0,
             repair_stall_count=0,
             resolver=self.settings.resolver,
@@ -2438,6 +2591,7 @@ class ResolutionWorkflow:
             structured_outputs={},
             research_path=self._is_research(),
             structured_prompt_failures=0,
+            attempt_failure_analysis_enabled=False,
         )
 
     def run(self, state: ResolutionState) -> ResolutionState:
@@ -4629,6 +4783,7 @@ class ResolutionWorkflow:
         latest_attempt = state["attempt_records"][-1]
         latest_attempt.error_category = classified.category
         latest_attempt.error_details = classified.message
+        self._record_attempt_failure_analysis(state, classified)
         previous_dependencies = state.get("attempt_records", [])[-2].dependencies if len(state.get("attempt_records", [])) > 1 else []
         current_dependencies = latest_attempt.dependencies
         strategy_record = RepairStrategyRecord(

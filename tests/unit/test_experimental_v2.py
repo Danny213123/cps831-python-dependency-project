@@ -1967,6 +1967,26 @@ def test_research_prompt_templates_render_without_format_key_errors(tmp_path: Pa
             unresolved_packages="memcache\nyaml",
             raw_file="import memcache\nimport yaml\n",
         ),
+        "attempt_failure_analysis": workflow._render_attempt_failure_analysis_prompt(
+            workflow.initial_state_for_case(
+                BenchmarkCase(
+                    case_id="case-analysis-render",
+                    root_dir=tmp_path,
+                    snippet_path=tmp_path / "snippet.py",
+                    case_source="all-gists",
+                )
+            ),
+            attempt_number=1,
+            target_python="3.12",
+            runtime_profile="import_statements",
+            validation_command="python snippet.py",
+            dependencies=["tensorflow==2.13.1", "keras==2.13.1"],
+            classifier_origin="build",
+            error_category="ResolutionError",
+            error_details="ResolutionImpossible: conflicting dependencies",
+            build_log="ERROR: ResolutionImpossible",
+            run_log="",
+        ),
     }
 
     assert all(rendered.values())
@@ -1992,6 +2012,84 @@ def test_format_prompt_backfills_optional_research_variables(tmp_path: Path) -> 
     )
 
     assert "Conflict notes:" in rendered
+
+
+def test_classify_outcome_records_attempt_failure_analysis(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+    prompts: list[tuple[str, str]] = []
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            if stage == "analysis":
+                return "analysis-model"
+            return stage
+
+        @staticmethod
+        def invoke_text(stage: str, prompt_text: str) -> str:
+            prompts.append((stage, prompt_text))
+            assert stage == "analysis"
+            assert "tensorflow==2.13.1" in prompt_text
+            assert "ResolutionImpossible" in prompt_text
+            return (
+                "Build failure.\n"
+                "Immediate cause: pip reported incompatible dependency constraints.\n"
+                "The selected TensorFlow/Keras pair appears internally inconsistent."
+            )
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+    case_root = tmp_path / "case-attempt-analysis"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import tensorflow as tf\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-attempt-analysis", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-attempt-analysis")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["current_attempt"] = 1
+    state["target_python"] = "3.8"
+    state["current_runtime_profile"] = "import_statements"
+    state["attempt_failure_analysis_enabled"] = True
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="tensorflow", version="2.13.1"),
+        ResolvedDependency(name="keras", version="2.12.0"),
+    ]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=1,
+            dependencies=["tensorflow==2.13.1", "keras==2.12.0"],
+            image_tag="img-1",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ExecutionFailed",
+            error_details="",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_01"),
+        )
+    ]
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="ExecutionFailed",
+        message="Execution failed.",
+        build_succeeded=False,
+        run_succeeded=False,
+        exit_code=1,
+        build_log="ERROR: ResolutionImpossible because tensorflow requires keras>=2.13.1,<2.14",
+        run_log="",
+        image_tag="img-1",
+    )
+
+    updated = workflow.classify_outcome(state)
+
+    assert prompts
+    assert updated["attempt_records"][-1].llm_failure_analysis.startswith("Build failure.")
+    assert updated["attempt_records"][-1].llm_failure_analysis_model == "analysis-model"
+    assert updated["model_outputs"]["attempt_analysis"][-1]["attempt"] == 1
 
 
 def test_parse_alias_resolution_payload_is_strict() -> None:

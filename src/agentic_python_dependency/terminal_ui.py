@@ -825,6 +825,7 @@ class TerminalUI:
     modules_command: ActionCallback
     ensure_smoke_subset: Callable[..., Path]
     timeline_command: ActionCallback | None = None
+    web_dashboard_command: Callable[[Settings, str, int], int] | None = None
     output: Callable[[str], None] = print
     input_fn: Callable[[str], str] = input
 
@@ -836,9 +837,13 @@ class TerminalUI:
         self._app_version = _resolve_apdr_version()
 
     def run(self) -> int:
-        if self._use_prompt_toolkit:
-            return self._run_prompt_toolkit()
-        return self._run_basic()
+        try:
+            if self._use_prompt_toolkit:
+                return self._run_prompt_toolkit()
+            return self._run_basic()
+        except KeyboardInterrupt:
+            self.output("\nExiting APDR UI.")
+            return 130
 
     def _run_prompt_toolkit(self) -> int:
         while True:
@@ -850,6 +855,7 @@ class TerminalUI:
                     ("Reports", "report"),
                     ("Configure", "config"),
                     ("Loadouts", "loadouts"),
+                    ("Web", "web"),
                     ("Doctor", "doctor"),
                     ("Quit", "quit"),
                 ],
@@ -859,7 +865,7 @@ class TerminalUI:
                 message_dialog(title="APDR", text="Exiting APDR UI.", style=UI_STYLE).run()
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice in {"run", "report"} and exit_code >= 0:
+            if choice in {"run", "report", "web"} and exit_code >= 0:
                 self._show_status_dialog(f"Command finished with exit code {exit_code}.")
 
     def _run_basic(self) -> int:
@@ -872,7 +878,7 @@ class TerminalUI:
                 self.output("\nExiting APDR UI.")
                 return 0
             exit_code = self._dispatch_choice(choice)
-            if choice in {"1", "2", "3", "4", "5"} and exit_code >= 0:
+            if choice in {"1", "2", "3", "4", "5", "6"} and exit_code >= 0:
                 self._pause_after(exit_code)
 
     def _dispatch_choice(self, choice: str | None) -> int:
@@ -886,8 +892,106 @@ class TerminalUI:
             return self._configure_menu()
         if choice in {"loadouts", "5"}:
             return self._loadouts_menu()
+        if choice in {"web", "6"}:
+            return self._web_menu()
         self._show_status_dialog("Invalid choice.")
         return 0
+
+    def _candidate_lan_ip(self) -> str | None:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            try:
+                sock.connect(("8.8.8.8", 80))
+                host = sock.getsockname()[0]
+            except OSError:
+                return None
+        return host if host and not host.startswith("127.") else None
+
+    def _web_dashboard_urls(self, host: str, port: int) -> tuple[str, str | None]:
+        local_host = "127.0.0.1" if host == "0.0.0.0" else host
+        local_url = f"http://{local_host}:{port}"
+        network_url: str | None = None
+        if host == "0.0.0.0":
+            lan_ip = self._candidate_lan_ip()
+            if lan_ip:
+                network_url = f"http://{lan_ip}:{port}"
+        elif host not in {"127.0.0.1", "localhost"}:
+            network_url = f"http://{host}:{port}"
+        return local_url, network_url
+
+    def _web_dashboard_text(self, host: str, port: int) -> str:
+        local_url, network_url = self._web_dashboard_urls(host, port)
+        lines = [
+            "Start the APDR web dashboard from the command center.",
+            f"Local: {local_url}",
+        ]
+        if network_url:
+            lines.append(f"Network: {network_url}")
+        lines.extend(
+            [
+                "",
+                "The web server stays active until you stop it with Ctrl+C.",
+                "Use the network target if you want to view runs from other devices.",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _web_menu(self) -> int:
+        if self._use_prompt_toolkit:
+            return self._web_menu_prompt_toolkit()
+        return self._web_menu_basic()
+
+    def _web_menu_prompt_toolkit(self) -> int:
+        while True:
+            choice = button_dialog(
+                title="Web Dashboard",
+                text=self._web_dashboard_text("0.0.0.0", 8765),
+                buttons=[
+                    ("Launch local", "local"),
+                    ("Launch network", "network"),
+                    ("Custom", "custom"),
+                    ("Back", "back"),
+                ],
+                style=UI_STYLE,
+            ).run()
+            if choice in {None, "back"}:
+                return -1
+            if choice == "local":
+                return self._launch_web_dashboard("127.0.0.1", 8765)
+            if choice == "network":
+                return self._launch_web_dashboard("0.0.0.0", 8765)
+            if choice == "custom":
+                host = self._prompt_optional("Web host", "0.0.0.0")
+                port = self._prompt_int("Web port", 8765)
+                return self._launch_web_dashboard(host, port)
+
+    def _web_menu_basic(self) -> int:
+        self.output("\nWeb dashboard")
+        self.output(self._web_dashboard_text("0.0.0.0", 8765))
+        self.output("\n  1. Launch local dashboard")
+        self.output("  2. Launch network dashboard")
+        self.output("  3. Custom host/port")
+        self.output("  4. Back")
+        choice = self.input_fn("Select web option: ").strip().lower()
+        if choice == "1":
+            return self._launch_web_dashboard("127.0.0.1", 8765)
+        if choice == "2":
+            return self._launch_web_dashboard("0.0.0.0", 8765)
+        if choice == "3":
+            host = self._prompt_optional("Web host", "0.0.0.0")
+            port = self._prompt_int("Web port", 8765)
+            return self._launch_web_dashboard(host, port)
+        return -1
+
+    def _launch_web_dashboard(self, host: str, port: int) -> int:
+        if self.web_dashboard_command is None:
+            self._show_status_dialog("Web dashboard command is unavailable.")
+            return 1
+        self._show_status_dialog(self._web_dashboard_text(host, port))
+        try:
+            return self.web_dashboard_command(self.settings, host, port)
+        except Exception as exc:
+            self._show_status_dialog(f"{type(exc).__name__}: {exc}")
+            return 1
 
     def _loadouts_menu(self) -> int:
         if self._use_prompt_toolkit:
@@ -2584,6 +2688,7 @@ class TerminalUI:
         self.output("  3. Reports")
         self.output("  4. Configure")
         self.output("  5. Loadouts")
+        self.output("  6. Web dashboard")
         self.output("  8. Quit")
 
 
@@ -2598,6 +2703,7 @@ def launch_terminal_ui(
     modules_command: ActionCallback,
     timeline_command: ActionCallback,
     ensure_smoke_subset: Callable[..., Path],
+    web_dashboard_command: Callable[[Settings, str, int], int] | None = None,
 ) -> int:
     ui = TerminalUI(
         settings=settings,
@@ -2610,5 +2716,6 @@ def launch_terminal_ui(
         modules_command=modules_command,
         timeline_command=timeline_command,
         ensure_smoke_subset=ensure_smoke_subset,
+        web_dashboard_command=web_dashboard_command,
     )
     return ui.run()

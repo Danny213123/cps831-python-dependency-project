@@ -31,8 +31,8 @@ from agentic_python_dependency.presets import (
 from agentic_python_dependency.graph import ResolutionWorkflow
 from agentic_python_dependency.router import OllamaPromptRunner, OllamaStatsSnapshot, OllamaStatsTracker
 from agentic_python_dependency.reporting import analyze_failures, build_module_success_table, build_timeline_view, summarize_run
-from agentic_python_dependency.terminal_ui import launch_terminal_ui
 from agentic_python_dependency.tools.official_baselines import validate_pyego_runtime
+from agentic_python_dependency.web_dashboard import serve_web_dashboard
 
 RUNTIME_COMPARISON_COLUMNS = [
     "case_number",
@@ -1033,6 +1033,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("ui", help="Launch the interactive terminal UI.")
 
+    web = subparsers.add_parser("web", help="Launch the network-accessible benchmark dashboard.")
+    web.add_argument("--host", default="0.0.0.0")
+    web.add_argument("--port", type=int, default=8765)
+
     benchmark = subparsers.add_parser("benchmark")
     benchmark_sub = benchmark.add_subparsers(dest="benchmark_command", required=True)
 
@@ -1788,6 +1792,7 @@ def run_case_batch(
             activity_callback=progress_observer.case_event,
         )
         state = workflow.initial_state_for_case(case, run_id=active_run_id)
+        state["attempt_failure_analysis_enabled"] = True
         final_state = workflow.run(state)
         return dict(final_state["final_result"])
 
@@ -1937,6 +1942,7 @@ def run_case(settings: Settings, case_id: str, ref: str | None, run_id: str | No
     case = dataset.load_case(case_id, ref, case_source=settings.benchmark_case_source)
     workflow = ResolutionWorkflow(settings)
     state = workflow.initial_state_for_case(case, run_id=run_id)
+    state["attempt_failure_analysis_enabled"] = True
     final_state = workflow.run(state)
     _notify_path("Result written", Path(final_state["artifact_dir"]) / "result.json")
     if settings.trace_llm:
@@ -1957,6 +1963,7 @@ def run_project(
             shutil.rmtree(project_run_dir)
     workflow = ResolutionWorkflow(settings)
     state = workflow.initial_state_for_project(Path(project_path).resolve(), validation_command, run_id=run_id)
+    state["attempt_failure_analysis_enabled"] = True
     final_state = workflow.run(state)
     _notify_path("Result written", Path(final_state["artifact_dir"]) / "result.json")
     if settings.trace_llm:
@@ -2085,6 +2092,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_project(settings, args.path, args.validation_command, args.run_id, fresh_run=args.fresh_run)
 
     if args.command == "ui":
+        from agentic_python_dependency.terminal_ui import launch_terminal_ui
+
         return launch_terminal_ui(
             settings,
             doctor_command=doctor_command,
@@ -2096,7 +2105,13 @@ def main(argv: list[str] | None = None) -> int:
             modules_command=modules_command,
             timeline_command=timeline_command,
             ensure_smoke_subset=ensure_smoke_subset,
+            web_dashboard_command=lambda ui_settings, host, port: serve_web_dashboard(
+                ui_settings, host=host, port=port
+            ),
         )
+
+    if args.command == "web":
+        return serve_web_dashboard(settings, host=args.host, port=args.port)
 
     if args.command == "benchmark":
         dataset = GistableDataset(settings)

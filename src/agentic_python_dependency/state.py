@@ -158,6 +158,8 @@ class AttemptRecord:
     build_skipped: bool = False
     image_cache_hit: bool = False
     environment_cache_key: str = ""
+    llm_failure_analysis: str = ""
+    llm_failure_analysis_model: str = ""
 
 
 @dataclass(slots=True)
@@ -336,3 +338,4 @@ class ResolutionState(TypedDict, total=False):
     structured_outputs: dict[str, Any]
     research_path: bool
     structured_prompt_failures: int
+    attempt_failure_analysis_enabled: bool

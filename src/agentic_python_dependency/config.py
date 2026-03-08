@@ -362,7 +362,7 @@ class Settings:
             return self.version_model
         if stage == "repair":
             return self.repair_model
-        if stage == "adjudicate":
+        if stage in {"adjudicate", "analysis"}:
             return self.adjudication_model
         return self.reasoning_model
 

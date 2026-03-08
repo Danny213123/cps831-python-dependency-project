@@ -7,6 +7,26 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-03-08
+
+### Added
+
+- Added a device-hosted web dashboard and API for benchmark runs, including a Vite frontend, network-accessible run/case views, and per-case attempt drilldowns with activity timelines and artifact links.
+- Added per-attempt post-failure LLM analysis so failed benchmark attempts now persist a short model-written explanation in `result.json` and display it directly in the web attempt view.
+- Added terminal/web command-center parity improvements including a web launch option in the CLI UI, command-center metadata on the web homepage, and version display in benchmark run info.
+
+### Changed
+
+- Redesigned the web dashboard into a premium terminal-inspired interface with tabbed navigation, collapsible activity sections, scrollable completed-case views, and improved live-run readability for longer benchmarks.
+- Updated benchmark progress and attempt rendering so PLLM comparison status, cache/build-skip metrics, timing fields, and attempt-level context stay visible across resume flows and web refreshes.
+- Improved prompt plumbing so new optional research variables and post-attempt analysis prompts render safely through both workflow-side formatting and direct prompt-runner template invocation.
+
+### Fixed
+
+- Fixed shutdown and resume UX regressions by restoring completed-case tables on resume, handling `Ctrl-C`/signal exits cleanly, and preventing missing prompt variables from crashing active runs.
+- Fixed benchmark validation regressions in Python 2 and legacy-stack cases, including safer import-statement handling, better deferred fallback behavior, and more reliable repair prompt context.
+- Fixed dashboard rendering gaps around PLLM match semantics, run metadata restoration, and web attempt detail presentation so current benchmark state remains inspectable while runs are in progress.
+
 ## [2.1.0] - 2026-03-08
 
 ### Added

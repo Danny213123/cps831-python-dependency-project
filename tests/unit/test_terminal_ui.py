@@ -38,6 +38,61 @@ def test_terminal_ui_can_exit_immediately(tmp_path: Path, monkeypatch) -> None:
     assert any("Exiting APDR UI." in line for line in outputs)
 
 
+def test_terminal_ui_ctrl_c_exits_cleanly(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    exit_code = ui.run()
+
+    assert exit_code == 130
+    assert any("Exiting APDR UI." in line for line in outputs)
+
+
+def test_terminal_ui_can_launch_network_web_dashboard(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+    web_calls: list[tuple[str, int]] = []
+    inputs = iter(["6", "2", "", "8"])
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        web_dashboard_command=lambda current_settings, host, port: web_calls.append((host, port)) or 0,
+        output=outputs.append,
+        input_fn=lambda prompt: next(inputs),
+    )
+
+    ui.run()
+
+    assert web_calls == [("0.0.0.0", 8765)]
+    assert any("Web dashboard" in line for line in outputs)
+
+
 def test_terminal_ui_can_switch_preset(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []

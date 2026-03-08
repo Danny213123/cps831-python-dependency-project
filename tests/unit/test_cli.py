@@ -67,6 +67,16 @@ def test_benchmark_run_parser_accepts_jobs_flag() -> None:
     assert args.competition_filter_file == "/tmp/competition-case-ids.txt"
 
 
+def test_web_parser_accepts_host_and_port() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["web", "--host", "0.0.0.0", "--port", "9000"])
+
+    assert args.command == "web"
+    assert args.host == "0.0.0.0"
+    assert args.port == 9000
+
+
 def test_benchmark_run_parser_accepts_new_moe_model_profiles() -> None:
     parser = build_parser()
 

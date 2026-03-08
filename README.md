@@ -105,6 +105,7 @@ If you just cloned the repo and want the easiest commands, use these:
 
 ```bash
 apdr ui
+apdr web --host 0.0.0.0 --port 8765
 apdr doctor
 apdr smoke --jobs 1
 apdr full --jobs 1
@@ -112,6 +113,7 @@ apdr solve --path /path/to/python/repo
 ```
 
 - `apdr ui` launches a prompt-toolkit powered terminal control center for common benchmark, report, and project commands, including a live benchmark dashboard with preset, progress, active cases, elapsed time, and result counts.
+- `apdr web` launches a network-accessible web dashboard that mirrors the benchmark CLI fields and exposes expandable per-case attempt timelines over HTTP.
 - `apdr doctor` checks Docker, Ollama, required models, and dataset readiness.
 - `apdr smoke` runs the beginner-friendly smoke benchmark flow.
 - `apdr full` runs the full benchmark.
@@ -132,10 +134,31 @@ apdr --preset optimized benchmark run --subset smoke30
 apdr --fresh-run --model-profile gpt-oss-20b benchmark run --subset smoke30
 apdr case run --case-id 000769db6848429c9b3eac30361d9140
 apdr project solve --path /path/to/python/repo
+apdr web --host 0.0.0.0 --port 8765
 apdr report summarize --run-id <run-id>
 apdr report modules --run-id <run-id> --grouping canonical --top 50
 apdr report trace --run-id <run-id> --case-id <case-id>
 ```
+
+## Web dashboard
+
+The repo now includes a Vite-based dashboard in `web/` plus a built-in API/static server:
+
+```bash
+apdr web --host 0.0.0.0 --port 8765
+```
+
+That serves the current and historical benchmark runs from `artifacts/runs` and is reachable from other devices on your local network.
+
+Frontend development:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+The Vite dev server proxies `/api` to the Python dashboard server on port `8765`.
 
 ## One-step benchmark commands
 

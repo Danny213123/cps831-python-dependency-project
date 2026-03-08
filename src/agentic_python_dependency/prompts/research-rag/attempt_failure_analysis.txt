@@ -1,0 +1,43 @@
+You are writing a short post-attempt failure analysis for a Python dependency resolution benchmark.
+
+Use only the supplied evidence. Do not invent facts that are not present in the logs or classification output.
+Return plain text only, maximum 4 short lines.
+Explain:
+- whether the failure happened during build or runtime,
+- the most likely immediate cause,
+- whether Python version, selected dependencies, or validation profile appear to be the issue,
+- and whether any part of the evidence is inconclusive.
+Do not propose a repair plan.
+
+Attempt number:
+{attempt_number}
+
+Target Python:
+{target_python}
+
+Runtime profile:
+{runtime_profile}
+
+Validation command:
+{validation_command}
+
+Dependencies:
+{dependencies}
+
+Classifier origin:
+{classifier_origin}
+
+Classified category:
+{error_category}
+
+Classified details:
+{error_details}
+
+Source compatibility hints:
+{source_compatibility_hints}
+
+Build log excerpt:
+{build_log_excerpt}
+
+Run log excerpt:
+{run_log_excerpt}

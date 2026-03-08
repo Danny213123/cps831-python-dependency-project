@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APDR Benchmark Dashboard</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="terminal-shell">
+      <section class="terminal-frame">
+        <div class="terminal-badge">APDR Benchmark Dashboard</div>
+
+        <nav class="dashboard-tabs" aria-label="Dashboard tabs">
+          <button class="dashboard-tab tab-active" type="button" data-tab="home">Command Center</button>
+          <button class="dashboard-tab" type="button" data-tab="runs">Visualizations</button>
+        </nav>
+
+        <section class="tab-content tab-active" id="tab-home">
+          <section class="terminal-section" id="command-center">
+            <div class="terminal-divider"><span>APDR Command Center</span></div>
+            <div class="warning-title" id="home-title">APDR Command Center</div>
+            <div class="warning-copy" id="home-subtitle">Run, report, and configure without memorizing commands.</div>
+            <div class="warning-copy" id="home-description">The web dashboard mirrors the CLI command center on this host.</div>
+            <div class="meta-grid" id="home-info-grid"></div>
+          </section>
+        </section>
+
+        <section class="tab-content tab-hidden" id="tab-runs">
+          <section class="terminal-section toolbar-section">
+            <div class="toolbar-line">
+              <span class="toolbar-label">Runs</span>
+              <span class="toolbar-value" id="run-count">0</span>
+              <span class="toolbar-label">Selected</span>
+              <span class="toolbar-value" id="selected-run-id">none</span>
+              <span class="toolbar-label">Refresh</span>
+              <span class="toolbar-value" id="last-refresh">waiting</span>
+            </div>
+            <div class="toolbar-line">
+              <label class="toolbar-label" for="run-select">Run</label>
+              <select id="run-select" aria-label="Select run"></select>
+              <span class="toolbar-label">Scope</span>
+              <span class="toolbar-value" id="home-scope">-</span>
+              <span class="toolbar-label">Local</span>
+              <a class="toolbar-link" id="home-local-url" href="#" target="_blank" rel="noreferrer">-</a>
+              <span class="toolbar-label">Network</span>
+              <a class="toolbar-link" id="home-network-url" href="#" target="_blank" rel="noreferrer">-</a>
+            </div>
+          </section>
+
+          <section class="terminal-section" id="run-dashboard">
+            <div class="warning-title" id="hero-run-title">No run selected</div>
+            <div class="warning-copy" id="hero-run-subtitle">Select a run to inspect benchmark progress and results.</div>
+            <div class="meta-grid" id="run-info-grid"></div>
+          </section>
+
+          <section class="terminal-section progress-section">
+            <div class="progress-line">
+              <span class="toolbar-label">Progress</span>
+              <span class="toolbar-value" id="progress-label">0/0</span>
+              <span class="text-yellow" id="progress-percent">0.0%</span>
+            </div>
+            <div class="progress-track" aria-hidden="true">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="metrics-line" id="metrics-grid"></div>
+            <div class="perf-line" id="perf-line"></div>
+            <div class="research-line" id="research-line"></div>
+            <div class="last-llm-line" id="last-llm-line"></div>
+          </section>
+
+          <details class="terminal-section collapsible-panel" id="active-cases-panel" open>
+            <summary class="collapsible-summary">
+              <span class="section-title">Active cases</span>
+              <span class="collapsible-meta">expand / collapse</span>
+            </summary>
+            <div class="collapsible-body">
+              <div class="collapsible-inner">
+                <div class="bullet-list" id="active-cases"></div>
+              </div>
+            </div>
+          </details>
+
+          <details class="terminal-section collapsible-panel" id="recent-activity-panel">
+            <summary class="collapsible-summary">
+              <span class="section-title">Recent activity</span>
+              <span class="collapsible-meta">expand / collapse</span>
+            </summary>
+            <div class="collapsible-body">
+              <div class="collapsible-inner">
+                <div class="bullet-list" id="recent-activity"></div>
+              </div>
+            </div>
+          </details>
+
+          <section class="terminal-section cases-section" id="cases-panel">
+            <div class="terminal-divider">
+              <span>Completed Cases (newest first; click to expand attempt timelines)</span>
+            </div>
+            <div class="toolbar-line case-controls">
+              <label class="toolbar-label" for="case-search">Search</label>
+              <input id="case-search" type="search" placeholder="case id, result, dependency" />
+              <label class="toolbar-label" for="case-filter">Filter</label>
+              <select id="case-filter" aria-label="Filter cases">
+                <option value="all">All cases</option>
+                <option value="active">Active</option>
+                <option value="pass">Passed</option>
+                <option value="fail">Failed</option>
+                <option value="match">PLLM match</option>
+                <option value="miss">PLLM miss</option>
+              </select>
+            </div>
+            <div class="case-table-head">
+              <span>STAT</span>
+              <span>CASE ID</span>
+              <span>PY</span>
+              <span>TRY</span>
+              <span>SEC</span>
+              <span>PLLM</span>
+              <span>RESULT</span>
+              <span>DEPENDENCIES</span>
+            </div>
+            <div class="cases-scroll" id="cases-scroll"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <template id="case-row-template">
+      <details class="case-row">
+        <summary class="case-summary">
+          <span class="case-stat"></span>
+          <span class="case-id"></span>
+          <span class="case-python"></span>
+          <span class="case-attempts"></span>
+          <span class="case-seconds"></span>
+          <span class="case-pllm"></span>
+          <span class="case-result"></span>
+          <span class="case-dependencies"></span>
+        </summary>
+        <div class="case-detail">
+          <div class="case-critical"></div>
+          <div class="attempt-list"></div>
+          <div class="file-list"></div>
+        </div>
+      </details>
+    </template>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

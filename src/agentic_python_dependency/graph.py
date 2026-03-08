@@ -2702,6 +2702,11 @@ Run log excerpt:
                 return self.finalize_result(current)
             if repair_next_step == "repair_prompt_c_research":
                 continue
+            if repair_next_step == "replan_after_python_fallback":
+                current = self.replan_after_python_fallback(current)
+                if not current.get("selected_candidate_plan"):
+                    return self.finalize_result(current)
+                continue
             current = self.select_next_candidate_plan(current)
             if not current.get("selected_candidate_plan") or (
                 not current.get("selected_dependencies") and current.get("repair_skipped_reason")
@@ -2839,6 +2844,7 @@ Run log excerpt:
             lambda state: route_after_research_repair(state, self.settings),
             {
                 "repair_prompt_c_research": "build_repair_memory_summary",
+                "replan_after_python_fallback": "replan_after_python_fallback",
                 "select_next_candidate_plan": "select_next_candidate_plan",
                 "finalize_result": "finalize_result",
             },

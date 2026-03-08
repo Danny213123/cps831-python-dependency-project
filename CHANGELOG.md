@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [2.3.3] - 2026-03-08
+
+### Fixed
+
+- Fixed the research LangGraph branch map so `repair_prompt_c_research` can now route into `replan_after_python_fallback` without crashing on installed `langgraph` environments.
+- Fixed the no-langgraph research fallback loop so deferred Python fallback activated from repair now actually replans under the fallback interpreter instead of falling through to candidate selection.
+- Added a regression covering repair-triggered deferred Python fallback in the research fallback runner to prevent the Windows `KeyError: 'replan_after_python_fallback'` crash from returning.
+
 ## [2.3.2] - 2026-03-08
 
 ### Fixed

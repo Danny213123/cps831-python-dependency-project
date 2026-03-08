@@ -1980,6 +1980,169 @@ def test_replan_after_python_fallback_uses_model_selected_plan_and_runtime_profi
     assert updated["current_runtime_profile"] == "import_statements"
 
 
+def test_run_research_fallback_replans_after_repair_activates_deferred_python_fallback(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+
+    class WorkflowUnderTest(ResolutionWorkflow):
+        def __init__(self, settings: Settings) -> None:
+            super().__init__(settings)
+            self.replanned = False
+
+        def load_target(self, state):
+            return state
+
+        def extract_imports(self, state):
+            return state
+
+        def extract_dynamic_imports(self, state):
+            return state
+
+        def gather_repo_evidence(self, state):
+            return state
+
+        def build_dynamic_alias_candidates(self, state):
+            return state
+
+        def infer_package_candidates(self, state):
+            return state
+
+        def cross_validate_packages(self, state):
+            return state
+
+        def retrieve_pypi_metadata(self, state):
+            return state
+
+        def resolve_aliases(self, state):
+            return state
+
+        def retrieve_version_specific_metadata(self, state):
+            return state
+
+        def build_constraint_pack(self, state):
+            return state
+
+        def requires_python_intersection_check(self, state):
+            return state
+
+        def load_feedback_memory_summary(self, state):
+            return state
+
+        def build_rag_context(self, state):
+            return state
+
+        def generate_candidate_bundles(self, state):
+            return state
+
+        def negotiate_version_bundles(self, state):
+            return state
+
+        def generate_candidate_plans(self, state):
+            state["candidate_plans"] = [
+                CandidatePlan(
+                    rank=1,
+                    reason="initial py3 plan",
+                    dependencies=[CandidateDependency(name="pymc3", version="3.11.5")],
+                )
+            ]
+            state["remaining_candidate_plans"] = list(state["candidate_plans"])
+            return state
+
+        def select_next_candidate_plan(self, state):
+            plan = state.get("remaining_candidate_plans", [])
+            if plan:
+                selected = plan.pop(0)
+                state["selected_candidate_plan"] = selected
+                state["selected_dependencies"] = [
+                    ResolvedDependency(name=dependency.name, version=dependency.version)
+                    for dependency in selected.dependencies
+                ]
+            else:
+                state["selected_candidate_plan"] = None
+                state["selected_dependencies"] = []
+            state["remaining_candidate_plans"] = plan
+            return state
+
+        def materialize_execution_context(self, state):
+            return state
+
+        def execute_candidate(self, state):
+            state["current_attempt"] = int(state.get("current_attempt", 0) or 0) + 1
+            if self.replanned:
+                state["last_execution"] = ExecutionOutcome(
+                    success=True,
+                    category="Success",
+                    message="ok",
+                    build_succeeded=True,
+                    run_succeeded=True,
+                )
+            else:
+                state["last_execution"] = ExecutionOutcome(
+                    success=False,
+                    category="ExecutionFailed",
+                    message="failed",
+                    build_succeeded=False,
+                    run_succeeded=False,
+                    dependency_retryable=True,
+                )
+            return state
+
+        def classify_outcome(self, state):
+            state["retry_decision"] = SimpleNamespace(
+                candidate_fallback_allowed=False,
+                repair_allowed=True,
+                repair_retry_budget=1,
+            )
+            state["last_error_details"] = "ResolutionImpossible"
+            return state
+
+        def build_repair_memory_summary(self, state):
+            return state
+
+        def repair_prompt_c_research(self, state):
+            state["candidate_plans"] = []
+            state["remaining_candidate_plans"] = []
+            state["repair_cycle_count"] = 1
+            state["repair_model_concluded_impossible"] = False
+            state["pending_python_fallback"] = True
+            return state
+
+        def replan_after_python_fallback(self, state):
+            self.replanned = True
+            state["pending_python_fallback"] = False
+            state["selected_candidate_plan"] = CandidatePlan(
+                rank=1,
+                reason="py2 fallback plan",
+                dependencies=[CandidateDependency(name="pymc3", version="3.6")],
+            )
+            state["selected_dependencies"] = [ResolvedDependency(name="pymc3", version="3.6")]
+            return state
+
+        def finalize_result(self, state):
+            state["finalized"] = True
+            return state
+
+    workflow = WorkflowUnderTest(settings)
+    case_root = tmp_path / "case-research-fallback-loop"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import pymc3\nprint 'legacy'\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-research-fallback-loop", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-research-fallback-loop")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["target_python"] = "3.8"
+    state["deferred_target_python"] = "2.7.18"
+    state["repair_cycle_count"] = 0
+
+    updated = workflow._run_research_fallback(state)
+
+    assert workflow.replanned is True
+    assert updated["finalized"] is True
+    assert updated["last_execution"].success is True
+    assert [dependency.pin() for dependency in updated["selected_dependencies"]] == ["pymc3==3.6"]
+
+
 def test_feedback_memory_summary_aggregates_workspace_local_history(tmp_path: Path) -> None:
     memory_dir = tmp_path / "experimental_memory"
     append_feedback_event(

@@ -52,6 +52,11 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
                 "classifier_origin": "run",
                 "root_cause_bucket": "tensorflow_api_drift",
                 "python_fallback_used": True,
+                "docker_build_seconds_total": 12.0,
+                "docker_run_seconds_total": 1.5,
+                "llm_wall_clock_seconds": 3.0,
+                "image_cache_hits": 1,
+                "build_skips": 1,
             }
         ),
         encoding="utf-8",
@@ -74,6 +79,11 @@ def test_summarize_run_collects_preset_and_dependency_reasons(tmp_path: Path) ->
     assert summary.classifier_origin_counts == {"run": 1}
     assert summary.root_cause_counts == {"tensorflow_api_drift": 1}
     assert summary.deferred_python_fallback_cases == 1
+    assert summary.total_docker_build_time == 12.0
+    assert summary.total_docker_run_time == 1.5
+    assert summary.total_llm_time == 3.0
+    assert summary.image_cache_hits == 1
+    assert summary.build_skips == 1
     assert (run_dir / "results.csv").exists()
     assert (run_dir / "results.md").exists()
     assert "PyYAML" in (run_dir / "results.md").read_text(encoding="utf-8")

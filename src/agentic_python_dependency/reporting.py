@@ -192,6 +192,11 @@ def summarize_run(
     dependency_reason_counts: dict[str, int] = {}
     classifier_origin_counts: dict[str, int] = {}
     root_cause_counts: dict[str, int] = {}
+    total_docker_build_time = sum(float(item.get("docker_build_seconds_total", 0.0) or 0.0) for item in results)
+    total_docker_run_time = sum(float(item.get("docker_run_seconds_total", 0.0) or 0.0) for item in results)
+    total_llm_time = sum(float(item.get("llm_wall_clock_seconds", 0.0) or 0.0) for item in results)
+    image_cache_hits = sum(int(item.get("image_cache_hits", 0) or 0) for item in results)
+    build_skips = sum(int(item.get("build_skips", 0) or 0) for item in results)
     def _meta(key: str, fallback: Any) -> Any:
         if results:
             return results[0].get(key, fallback)
@@ -333,6 +338,14 @@ def summarize_run(
         classifier_origin_counts=classifier_origin_counts,
         deferred_python_fallback_cases=sum(1 for item in results if bool(item.get("python_fallback_used", False))),
         root_cause_counts=root_cause_counts,
+        total_docker_build_time=total_docker_build_time,
+        total_docker_run_time=total_docker_run_time,
+        total_llm_time=total_llm_time,
+        mean_docker_build_time=(total_docker_build_time / total_cases) if total_cases else 0.0,
+        mean_docker_run_time=(total_docker_run_time / total_cases) if total_cases else 0.0,
+        mean_llm_time=(total_llm_time / total_cases) if total_cases else 0.0,
+        image_cache_hits=image_cache_hits,
+        build_skips=build_skips,
     )
     write_summary_artifacts(run_dir, results, summary)
     build_timeline_view(run_dir)
@@ -352,6 +365,11 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
                 "initial_eval",
                 "final_error_category",
                 "wall_clock_seconds",
+                "docker_build_seconds_total",
+                "docker_run_seconds_total",
+                "llm_wall_clock_seconds",
+                "image_cache_hits",
+                "build_skips",
                 "started_at",
                 "finished_at",
             ],
@@ -366,6 +384,11 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
                     "initial_eval": row.get("initial_eval", ""),
                     "final_error_category": row.get("final_error_category", ""),
                     "wall_clock_seconds": row.get("wall_clock_seconds", 0.0),
+                    "docker_build_seconds_total": row.get("docker_build_seconds_total", 0.0),
+                    "docker_run_seconds_total": row.get("docker_run_seconds_total", 0.0),
+                    "llm_wall_clock_seconds": row.get("llm_wall_clock_seconds", 0.0),
+                    "image_cache_hits": row.get("image_cache_hits", 0),
+                    "build_skips": row.get("build_skips", 0),
                     "started_at": row.get("started_at", ""),
                     "finished_at": row.get("finished_at", ""),
                 }
@@ -412,6 +435,11 @@ def write_summary_artifacts(run_dir: Path, results: list[dict], summary: Benchma
         f"- Platform compatibility failures: `{summary.platform_compatibility_failures}`",
         f"- Native retry recoveries: `{summary.native_retry_success_count}`",
         f"- Deferred Python fallbacks used: `{summary.deferred_python_fallback_cases}`",
+        f"- Docker build time: `{summary.total_docker_build_time:.1f}s total / {summary.mean_docker_build_time:.1f}s per case`",
+        f"- Docker run time: `{summary.total_docker_run_time:.1f}s total / {summary.mean_docker_run_time:.1f}s per case`",
+        f"- LLM time: `{summary.total_llm_time:.1f}s total / {summary.mean_llm_time:.1f}s per case`",
+        f"- Image cache hits: `{summary.image_cache_hits}`",
+        f"- Build skips: `{summary.build_skips}`",
         f"- Classifier origins: `{summary.classifier_origin_counts}`",
         f"- Root cause buckets: `{summary.root_cause_counts}`",
         f"- Time to finish: `{summary.total_wall_clock_human}`",

@@ -36,6 +36,19 @@ def test_invoke_template_uses_disk_cache_without_model_imports(tmp_path: Path) -
     assert response == "cached-response"
 
 
+def test_invoke_template_backfills_optional_prompt_variables(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    prompt_dir = tmp_path / "prompts"
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    (prompt_dir / "example.txt").write_text("Hints:{source_compatibility_hints} Conflicts:{conflict_notes}", encoding="utf-8")
+    runner = OllamaPromptRunner(settings, prompt_dir)
+    runner._write_cache("repair", "Hints:[] Conflicts:[]", "cached-response")
+
+    response = runner.invoke_template("repair", "example.txt", {})
+
+    assert response == "cached-response"
+
+
 def test_invoke_text_skips_disk_cache_when_disabled(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     settings.disable_llm_cache = True

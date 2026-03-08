@@ -27,12 +27,20 @@ If dependency changes will not help, return:
 Rules:
 - Use only the allowed packages and listed versions.
 - Return at most {max_plan_count} plans.
-- You may return either the full install set or only the packages that change relative to the previous plan; omitted packages will be preserved from the previous plan.
-- Do not assume packages are already installed; list every installable dependency explicitly.
+- You may return either:
+  1. the full install set, listing every dependency explicitly, or
+  2. only the packages that change relative to the previous plan; omitted packages will be preserved automatically from the previous plan.
+- Do not omit unchanged packages unless you are intentionally returning a delta repair.
 - If changing validation strategy is more appropriate than changing dependencies, you may keep the same dependencies and set a different allowed `runtime_profile`.
+- If the failure appears to come from the validation wrapper or runtime profile rather than the package plan itself, prefer a `runtime_profile` change over dependency churn.
 - When source compatibility hints are present, prefer repairs that move toward those version families.
+- When source compatibility hints span related packages, revise the coupled family together instead of changing only one side of a constrained pair.
+- If the error details show dependency conflicts between related packages, prefer a family-level repair that restores internal compatibility across those packages.
 - Prefer the smallest change from the previous plan that addresses the error.
 - Do not introduce unrelated packages.
+- Do not return a plan whose normalized dependency set plus `runtime_profile` is identical to an attempted plan unless the supplied evidence introduces a genuinely new compatibility signal.
+- Cross-package compatibility: Before changing any package version, check its `requires_dist` in the version space to ensure the proposed version's constraints are satisfied by every other package in the plan. If changing package A would impose a constraint that conflicts with another package already in the plan, either also update the constrained package to a compatible version or choose a different version of A.
+- Removed-module errors: If the error is `ModuleNotFoundError` or `ImportError` for a submodule of an already installed top-level package, do not assume a downgrade will help. Only downgrade when the supplied version space, RAG context, or source compatibility hints provide evidence that the missing submodule or API existed in an older release line. If the same submodule-missing error recurs across multiple attempted plans within the plausible families supported by the evidence, return {{"repair_applicable": false, "plans": []}}.
 - Do not return markdown, code fences, or commentary.
 
 Target Python:
@@ -52,6 +60,9 @@ Default validation profile:
 
 Source compatibility hints:
 {source_compatibility_hints}
+
+Conflict notes:
+{conflict_notes}
 
 Previous plan:
 {previous_plan}

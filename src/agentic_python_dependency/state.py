@@ -153,6 +153,11 @@ class AttemptRecord:
     artifact_dir: str
     started_at: str = ""
     finished_at: str = ""
+    build_wall_clock_seconds: float = 0.0
+    run_wall_clock_seconds: float = 0.0
+    build_skipped: bool = False
+    image_cache_hit: bool = False
+    environment_cache_key: str = ""
 
 
 @dataclass(slots=True)
@@ -228,6 +233,14 @@ class BenchmarkSummary:
     classifier_origin_counts: dict[str, int] = field(default_factory=dict)
     deferred_python_fallback_cases: int = 0
     root_cause_counts: dict[str, int] = field(default_factory=dict)
+    total_docker_build_time: float = 0.0
+    total_docker_run_time: float = 0.0
+    total_llm_time: float = 0.0
+    mean_docker_build_time: float = 0.0
+    mean_docker_run_time: float = 0.0
+    mean_llm_time: float = 0.0
+    image_cache_hits: int = 0
+    build_skips: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -156,6 +156,8 @@ apdr full --jobs 2
 `benchmark segment` automatically fetches Gistable, regenerates `smoke30`, and runs it.
 `benchmark full` automatically fetches Gistable and runs all valid cases.
 
+For the best benchmark throughput on Windows, run APDR inside WSL2 on the Linux filesystem rather than a Windows-mounted path, and keep Docker Desktop's disk image/cache on fast local storage.
+
 ## Presets
 
 Eight presets are available:

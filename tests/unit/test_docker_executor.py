@@ -17,8 +17,10 @@ def test_patch_dockerfile_inserts_dependency_install_before_cmd() -> None:
 
     patched = DockerExecutor.patch_dockerfile(dockerfile)
 
+    assert patched.startswith("# syntax=docker/dockerfile:1.7\n")
     assert "COPY requirements.generated.txt /tmp/requirements.generated.txt" in patched
-    assert patched.index("RUN pip install --no-cache-dir -r /tmp/requirements.generated.txt") < patched.index(
+    assert "RUN --mount=type=cache,target=/root/.cache/pip pip install -r /tmp/requirements.generated.txt" in patched
+    assert patched.index("RUN --mount=type=cache,target=/root/.cache/pip pip install -r /tmp/requirements.generated.txt") < patched.index(
         'CMD ["python", "snippet.py"]'
     )
 
@@ -44,9 +46,9 @@ def test_patch_dockerfile_rewrites_benchmark_pip_installs_for_python2() -> None:
 
     assert 'RUN ["pip", "install", "emoji"]' not in patched
     assert "RUN pip install requests" not in patched
-    assert "RUN pip install --no-cache-dir --upgrade 'pip<21' 'setuptools<45' 'wheel<0.35'" in patched
-    assert "RUN pip install --no-cache-dir numpy==1.16.6" in patched
-    assert patched.index("RUN pip install --no-cache-dir --upgrade 'pip<21' 'setuptools<45' 'wheel<0.35'") < patched.index(
+    assert "RUN --mount=type=cache,target=/root/.cache/pip pip install --upgrade 'pip<21' 'setuptools<45' 'wheel<0.35'" in patched
+    assert "RUN --mount=type=cache,target=/root/.cache/pip pip install numpy==1.16.6" in patched
+    assert patched.index("RUN --mount=type=cache,target=/root/.cache/pip pip install --upgrade 'pip<21' 'setuptools<45' 'wheel<0.35'") < patched.index(
         'ADD snippet.py snippet.py'
     )
 
@@ -68,7 +70,7 @@ def test_patch_dockerfile_shell_quotes_bootstrap_specifiers() -> None:
         bootstrap_pins=["numpy==1.16.6", "Cython<3"],
     )
 
-    assert "RUN pip install --no-cache-dir numpy==1.16.6 'Cython<3'" in patched
+    assert "RUN --mount=type=cache,target=/root/.cache/pip pip install 'Cython<3' numpy==1.16.6" in patched
 
 
 def test_patch_dockerfile_rewrites_python_base_image_when_target_changes() -> None:
@@ -166,6 +168,66 @@ def test_patch_dockerfile_normalizes_hdf5_serial_layout_when_libhdf5_is_injected
     )
 
 
+def test_prepare_benchmark_context_generates_cacheable_runtime_mounted_dockerfile(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    executor = DockerExecutor(settings)
+    case_root = tmp_path / "case"
+    case_root.mkdir()
+    snippet_path = case_root / "snippet.py"
+    snippet_path.write_text("print('ok')\n", encoding="utf-8")
+    from agentic_python_dependency.state import BenchmarkCase, ResolvedDependency
+
+    context = executor.prepare_benchmark_context(
+        BenchmarkCase(case_id="case", root_dir=case_root, snippet_path=snippet_path, dockerfile_path=None),
+        [ResolvedDependency(name="requests", version="2.32.3")],
+        tmp_path / "artifact",
+        "attempt-image",
+    )
+
+    dockerfile = context.dockerfile_path.read_text(encoding="utf-8")
+    assert context.mount_workspace is True
+    assert context.environment_cache_key
+    assert context.image_tag.startswith("apdr-env-")
+    assert "COPY . /workspace" not in dockerfile
+    assert "COPY requirements.generated.txt /tmp/requirements.generated.txt" in dockerfile
+
+
+def test_environment_cache_key_ignores_validation_command_and_changes_with_environment_inputs(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    executor = DockerExecutor(settings)
+
+    key_one = executor._environment_cache_key(
+        mode="benchmark-generated",
+        target_python="3.12",
+        docker_platform="linux/amd64",
+        dependencies=["requests==2.32.3"],
+        bootstrap_pins=["wheel==0.45.1"],
+        system_packages=["pkg-config"],
+        dockerfile_recipe="FROM python:3.12-slim\n",
+    )
+    key_two = executor._environment_cache_key(
+        mode="benchmark-generated",
+        target_python="3.12",
+        docker_platform="linux/amd64",
+        dependencies=["requests==2.32.3"],
+        bootstrap_pins=["wheel==0.45.1"],
+        system_packages=["pkg-config"],
+        dockerfile_recipe="FROM python:3.12-slim\n",
+    )
+    key_three = executor._environment_cache_key(
+        mode="benchmark-generated",
+        target_python="3.12",
+        docker_platform="linux/amd64",
+        dependencies=["requests==2.31.0"],
+        bootstrap_pins=["wheel==0.45.1"],
+        system_packages=["pkg-config"],
+        dockerfile_recipe="FROM python:3.12-slim\n",
+    )
+
+    assert key_one == key_two
+    assert key_one != key_three
+
+
 def test_execute_converts_run_timeout_into_failed_result(monkeypatch, tmp_path: Path) -> None:
     settings = Settings.from_env(project_root=tmp_path)
     settings.run_timeout_seconds = 60
@@ -204,7 +266,7 @@ def test_execute_converts_run_timeout_into_failed_result(monkeypatch, tmp_path: 
     assert result.run_succeeded is False
     assert result.exit_code == 124
     assert "docker run timed out after 60 seconds." in result.run_log
-    assert ["docker", "rm", "-f", "pllm-test-case-1-run"] in calls
+    assert ["docker", "rm", "-f", "pllm-test-case-1-attempt-0-run"] in calls
     assert ["docker", "image", "rm", "-f", "pllm-test-case-1"] in calls
 
 
@@ -242,6 +304,70 @@ def test_execute_adds_headless_runtime_environment(monkeypatch, tmp_path: Path) 
     assert "QT_QPA_PLATFORM=offscreen" in run_command
 
 
+def test_execute_mounts_workspace_for_cacheable_generated_context(monkeypatch, tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    settings.keep_images = True
+    executor = DockerExecutor(settings)
+    context = PreparedExecutionContext(
+        context_dir=tmp_path,
+        dockerfile_path=tmp_path / "Dockerfile.generated",
+        image_tag="apdr-env-test",
+        validation_command="python snippet.py",
+        artifact_dir=tmp_path,
+        mount_workspace=True,
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command[:2] == ["docker", "build"]:
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        if command[:2] == ["docker", "run"]:
+            return subprocess.CompletedProcess(command, 0, stdout="ok\n", stderr="")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = executor.execute(context)
+
+    assert result.run_succeeded is True
+    run_command = next(command for command in calls if command[:2] == ["docker", "run"])
+    assert "-v" in run_command
+    assert f"{tmp_path.resolve()}:/workspace" in run_command
+
+
+def test_execute_reuses_cached_image_and_skips_build(monkeypatch, tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path)
+    executor = DockerExecutor(settings)
+    context = PreparedExecutionContext(
+        context_dir=tmp_path,
+        dockerfile_path=tmp_path / "Dockerfile.generated",
+        image_tag="apdr-env-test",
+        validation_command="python snippet.py",
+        artifact_dir=tmp_path,
+        environment_cache_key="cache-key",
+        mount_workspace=True,
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command[:3] == ["docker", "image", "inspect"]:
+            return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
+        if command[:2] == ["docker", "run"]:
+            return subprocess.CompletedProcess(command, 0, stdout="ok\n", stderr="")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = executor.execute(context)
+
+    assert result.build_succeeded is True
+    assert result.build_skipped is True
+    assert result.image_cache_hit is True
+    assert not any(command[:2] == ["docker", "build"] for command in calls)
+
+
 def test_execute_honors_requested_docker_platform(monkeypatch, tmp_path: Path) -> None:
     settings = Settings.from_env(project_root=tmp_path)
     executor = DockerExecutor(settings)
@@ -272,7 +398,7 @@ def test_execute_honors_requested_docker_platform(monkeypatch, tmp_path: Path) -
     build_command = next(command for command in calls if command[:2] == ["docker", "build"])
     run_command = next(command for command in calls if command[:2] == ["docker", "run"])
     assert build_command[:4] == ["docker", "build", "--platform", "linux/amd64"]
-    assert run_command[:7] == ["docker", "run", "--rm", "--name", "pllm-test-case-platform-run", "--platform", "linux/amd64"]
+    assert run_command[:7] == ["docker", "run", "--rm", "--name", "pllm-test-case-platform-attempt-0-run", "--platform", "linux/amd64"]
 
 
 def test_execute_handles_none_stdout_on_windows_subprocess(monkeypatch, tmp_path: Path) -> None:

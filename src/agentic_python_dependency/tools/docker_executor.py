@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import shlex
 import shutil
 import subprocess
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +31,8 @@ class PreparedExecutionContext:
     dependencies: list[str] = field(default_factory=list)
     case_id: str = ""
     attempt_number: int = 0
+    environment_cache_key: str = ""
+    mount_workspace: bool = False
 
 
 @dataclass(slots=True)
@@ -39,9 +44,17 @@ class DockerExecutionResult:
     run_log: str
     image_tag: str
     wall_clock_seconds: float
+    build_wall_clock_seconds: float = 0.0
+    run_wall_clock_seconds: float = 0.0
+    build_skipped: bool = False
+    image_cache_hit: bool = False
 
 
 class DockerExecutor:
+    _BUILDKIT_SYNTAX = "# syntax=docker/dockerfile:1.7"
+    _CACHE_MANIFEST_NAME = "docker-image-cache.json"
+    _CACHE_MANIFEST_VERSION = 1
+    _CACHE_LOCK = threading.RLock()
     LONG_BUILD_PACKAGES = {"numpy", "pandas", "scipy", "pymc3", "theano", "h5py"}
     SYSTEM_PACKAGE_MAP = {
         "pygame": [
@@ -66,6 +79,7 @@ class DockerExecutor:
     ):
         self.settings = settings
         self.activity_callback = activity_callback
+        self._cache_manifest_path = self.settings.data_dir / "loadouts" / self._CACHE_MANIFEST_NAME
 
     def _emit_activity(self, context: PreparedExecutionContext, *, kind: str, detail: str) -> None:
         if self.activity_callback is None or not context.case_id:
@@ -102,6 +116,104 @@ class DockerExecutor:
             return output.decode("utf-8", errors="replace")
         return output
 
+    @staticmethod
+    def _stable_lines(items: list[str] | None) -> list[str]:
+        if not items:
+            return []
+        deduped: dict[str, str] = {}
+        for item in items:
+            candidate = str(item or "").strip()
+            if not candidate:
+                continue
+            deduped[candidate.lower()] = candidate
+        return [deduped[key] for key in sorted(deduped)]
+
+    @classmethod
+    def _ensure_buildkit_syntax_header(cls, dockerfile_text: str) -> str:
+        lines = dockerfile_text.splitlines()
+        if lines and lines[0].strip().lower().startswith("# syntax="):
+            return dockerfile_text if dockerfile_text.endswith("\n") else dockerfile_text + "\n"
+        rendered = "\n".join([cls._BUILDKIT_SYNTAX, *lines]).rstrip() + "\n"
+        return rendered
+
+    @staticmethod
+    def _cache_mount_pip(command: str) -> str:
+        return f"RUN --mount=type=cache,target=/root/.cache/pip {command}"
+
+    @classmethod
+    def _environment_cache_key(
+        cls,
+        *,
+        mode: str,
+        target_python: str,
+        docker_platform: str,
+        dependencies: list[str],
+        bootstrap_pins: list[str],
+        system_packages: list[str],
+        dockerfile_recipe: str,
+    ) -> str:
+        payload = json.dumps(
+            {
+                "mode": mode,
+                "target_python": target_python,
+                "docker_platform": docker_platform,
+                "dependencies": cls._stable_lines(dependencies),
+                "bootstrap_pins": cls._stable_lines(bootstrap_pins),
+                "system_packages": cls._stable_lines(system_packages),
+                "dockerfile_recipe": dockerfile_recipe,
+            },
+            sort_keys=True,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _image_tag_for_cache_key(cache_key: str) -> str:
+        return f"apdr-env-{cache_key[:24]}"
+
+    def _load_cache_manifest(self) -> dict[str, object]:
+        with self._CACHE_LOCK:
+            if not self._cache_manifest_path.exists():
+                return {"version": self._CACHE_MANIFEST_VERSION, "entries": {}}
+            try:
+                payload = json.loads(self._cache_manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return {"version": self._CACHE_MANIFEST_VERSION, "entries": {}}
+            if not isinstance(payload, dict):
+                return {"version": self._CACHE_MANIFEST_VERSION, "entries": {}}
+            entries = payload.get("entries", {})
+            if not isinstance(entries, dict):
+                entries = {}
+            return {
+                "version": self._CACHE_MANIFEST_VERSION,
+                "entries": entries,
+            }
+
+    def _store_cache_entry(self, cache_key: str, image_tag: str, *, mode: str) -> None:
+        with self._CACHE_LOCK:
+            payload = self._load_cache_manifest()
+            entries = dict(payload.get("entries", {}))
+            now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            entries[cache_key] = {
+                "image_tag": image_tag,
+                "mode": mode,
+                "last_used_at": now,
+            }
+            payload["entries"] = entries
+            self._cache_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = self._cache_manifest_path.with_suffix(".tmp")
+            temp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+            temp_path.replace(self._cache_manifest_path)
+
+    @staticmethod
+    def _docker_image_exists(image_tag: str, env: dict[str, str]) -> bool:
+        probe = subprocess.run(
+            ["docker", "image", "inspect", image_tag],
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+        return probe.returncode == 0
+
     def _format_timeout_log(
         self,
         operation: str,
@@ -133,7 +245,8 @@ class DockerExecutor:
 
     @staticmethod
     def render_requirements(dependencies: list[ResolvedDependency]) -> str:
-        return "\n".join(dep.pin() for dep in dependencies) + ("\n" if dependencies else "")
+        rendered = sorted((dep.pin() for dep in dependencies), key=str.lower)
+        return "\n".join(rendered) + ("\n" if rendered else "")
 
     @staticmethod
     def _normalize_requirement_name(requirement: str) -> str:
@@ -169,7 +282,7 @@ class DockerExecutor:
             ):
                 continue
             pins.append(requirement)
-        return pins
+        return cls._stable_lines(pins)
 
     @classmethod
     def system_packages(cls, dependencies: list[ResolvedDependency]) -> list[str]:
@@ -180,7 +293,7 @@ class DockerExecutor:
                 if package not in seen:
                     seen.add(package)
                     packages.append(package)
-        return packages
+        return cls._stable_lines(packages)
 
     @staticmethod
     def _is_python_install_line(line: str) -> bool:
@@ -240,19 +353,21 @@ class DockerExecutor:
             injection.extend(cls._legacy_python_apt_bootstrap(target_python))
             injection.append(
                 "RUN apt-get update && apt-get install -y --no-install-recommends "
-                + " ".join(system_packages)
+                + " ".join(cls._stable_lines(system_packages))
                 + " && rm -rf /var/lib/apt/lists/*"
             )
             injection.extend(cls._system_package_post_install_lines(system_packages))
         if target_python.startswith("2"):
-            injection.append("RUN pip install --no-cache-dir --upgrade 'pip<21' 'setuptools<45' 'wheel<0.35'")
+            injection.append(
+                cls._cache_mount_pip("pip install --upgrade 'pip<21' 'setuptools<45' 'wheel<0.35'")
+            )
         if bootstrap_pins:
-            rendered_pins = " ".join(shlex.quote(pin) for pin in bootstrap_pins)
-            injection.append(f"RUN pip install --no-cache-dir {rendered_pins}")
+            rendered_pins = " ".join(shlex.quote(pin) for pin in cls._stable_lines(bootstrap_pins))
+            injection.append(cls._cache_mount_pip(f"pip install {rendered_pins}"))
         injection.extend(
             [
                 f"COPY {requirements_file} /tmp/{requirements_file}",
-                f"RUN pip install --no-cache-dir -r /tmp/{requirements_file}",
+                cls._cache_mount_pip(f"pip install -r /tmp/{requirements_file}"),
             ]
         )
         return injection
@@ -268,6 +383,7 @@ class DockerExecutor:
         bootstrap_pins: list[str] | None = None,
         system_packages: list[str] | None = None,
     ) -> str:
+        dockerfile_text = DockerExecutor._ensure_buildkit_syntax_header(dockerfile_text)
         lines = dockerfile_text.splitlines()
         rewritten_lines: list[str] = []
         for line in lines:
@@ -305,6 +421,33 @@ class DockerExecutor:
                 patched = rewritten_lines[:index] + injection + rewritten_lines[index:]
                 return "\n".join(patched) + "\n"
         return "\n".join(rewritten_lines + injection) + "\n"
+
+    @classmethod
+    def _render_generated_dockerfile(
+        cls,
+        *,
+        target_python: str,
+        default_command: str,
+        bootstrap_pins: list[str],
+        system_packages: list[str],
+    ) -> str:
+        injection = cls._dependency_injection_lines(
+            "requirements.generated.txt",
+            target_python=target_python,
+            bootstrap_pins=bootstrap_pins,
+            system_packages=system_packages,
+        )
+        return cls._ensure_buildkit_syntax_header(
+            "\n".join(
+                [
+                    f"FROM python:{target_python}-slim",
+                    "WORKDIR /workspace",
+                    *injection,
+                    default_command,
+                    "",
+                ]
+            )
+        )
 
     def _copy_project_tree(self, source_root: Path, destination_root: Path) -> None:
         ignore = shutil.ignore_patterns(".git", ".venv", "venv", "__pycache__", ".pytest_cache", "dist", "build")
@@ -346,6 +489,7 @@ class DockerExecutor:
         for package in extra_system_packages or []:
             if package not in merged_system_packages:
                 merged_system_packages.append(package)
+        merged_system_packages = self._stable_lines(merged_system_packages)
         bootstrap_pins = self.bootstrap_pins(
             dependencies,
             target_python=target_python,
@@ -353,41 +497,44 @@ class DockerExecutor:
         )
         if case.dockerfile_path is not None and case.dockerfile_path.exists():
             dockerfile_text = case.dockerfile_path.read_text(encoding="utf-8")
-            dockerfile_path.write_text(
-                self.patch_dockerfile(
-                    dockerfile_text,
-                    rewrite_python_installs=True,
-                    rewrite_base_python=True,
-                    target_python=target_python,
-                    bootstrap_pins=bootstrap_pins,
-                    system_packages=merged_system_packages,
-                ),
-                encoding="utf-8",
-            )
-        else:
-            injection = self._dependency_injection_lines(
-                "requirements.generated.txt",
+            generated_dockerfile = self.patch_dockerfile(
+                dockerfile_text,
+                rewrite_python_installs=True,
+                rewrite_base_python=True,
                 target_python=target_python,
                 bootstrap_pins=bootstrap_pins,
                 system_packages=merged_system_packages,
             )
             dockerfile_path.write_text(
-                "\n".join(
-                    [
-                        f"FROM python:{target_python}-slim",
-                        "WORKDIR /workspace",
-                        "COPY . /workspace",
-                        *injection,
-                        'CMD ["python", "snippet.py"]',
-                        "",
-                    ]
-                ),
+                generated_dockerfile,
                 encoding="utf-8",
             )
+            environment_cache_key = ""
+            image_ref = image_tag
+            mount_workspace = False
+        else:
+            generated_dockerfile = self._render_generated_dockerfile(
+                target_python=target_python,
+                default_command='CMD ["python", "snippet.py"]',
+                bootstrap_pins=bootstrap_pins,
+                system_packages=merged_system_packages,
+            )
+            dockerfile_path.write_text(generated_dockerfile, encoding="utf-8")
+            environment_cache_key = self._environment_cache_key(
+                mode="benchmark-generated",
+                target_python=target_python,
+                docker_platform=self.settings.benchmark_platform,
+                dependencies=[dependency.pin() for dependency in dependencies],
+                bootstrap_pins=bootstrap_pins,
+                system_packages=merged_system_packages,
+                dockerfile_recipe=generated_dockerfile,
+            )
+            image_ref = self._image_tag_for_cache_key(environment_cache_key)
+            mount_workspace = True
         return PreparedExecutionContext(
             context_dir=context_dir,
             dockerfile_path=dockerfile_path,
-            image_tag=image_tag,
+            image_tag=image_ref,
             validation_command=validation_command,
             artifact_dir=artifact_dir,
             docker_platform=self.settings.benchmark_platform,
@@ -397,6 +544,8 @@ class DockerExecutor:
             dependencies=[dependency.pin() for dependency in dependencies],
             case_id=case_id,
             attempt_number=attempt_number,
+            environment_cache_key=environment_cache_key,
+            mount_workspace=mount_workspace,
         )
 
     def prepare_project_context(
@@ -417,6 +566,7 @@ class DockerExecutor:
         for package in extra_system_packages or []:
             if package not in merged_system_packages:
                 merged_system_packages.append(package)
+        merged_system_packages = self._stable_lines(merged_system_packages)
         bootstrap_pins = self.bootstrap_pins(
             dependencies,
             target_python="3.12",
@@ -427,38 +577,41 @@ class DockerExecutor:
         requirements_path.write_text(self.render_requirements(dependencies), encoding="utf-8")
         if target.dockerfile_path and target.dockerfile_path.exists():
             dockerfile_text = target.dockerfile_path.read_text(encoding="utf-8")
-            dockerfile_path.write_text(
-                self.patch_dockerfile(
-                    dockerfile_text,
-                    bootstrap_pins=bootstrap_pins,
-                    system_packages=merged_system_packages,
-                ),
-                encoding="utf-8",
-            )
-        else:
-            injection = self._dependency_injection_lines(
-                "requirements.generated.txt",
-                target_python="3.12",
+            generated_dockerfile = self.patch_dockerfile(
+                dockerfile_text,
                 bootstrap_pins=bootstrap_pins,
                 system_packages=merged_system_packages,
             )
             dockerfile_path.write_text(
-                "\n".join(
-                    [
-                        "FROM python:3.12-slim",
-                        "WORKDIR /workspace",
-                        "COPY . /workspace",
-                        *injection,
-                        'CMD ["python", "-m", "compileall", "."]',
-                        "",
-                    ]
-                ),
+                generated_dockerfile,
                 encoding="utf-8",
             )
+            environment_cache_key = ""
+            image_ref = image_tag
+            mount_workspace = False
+        else:
+            generated_dockerfile = self._render_generated_dockerfile(
+                target_python="3.12",
+                default_command='CMD ["python", "-m", "compileall", "."]',
+                bootstrap_pins=bootstrap_pins,
+                system_packages=merged_system_packages,
+            )
+            dockerfile_path.write_text(generated_dockerfile, encoding="utf-8")
+            environment_cache_key = self._environment_cache_key(
+                mode="project-generated",
+                target_python="3.12",
+                docker_platform="",
+                dependencies=[dependency.pin() for dependency in dependencies],
+                bootstrap_pins=bootstrap_pins,
+                system_packages=merged_system_packages,
+                dockerfile_recipe=generated_dockerfile,
+            )
+            image_ref = self._image_tag_for_cache_key(environment_cache_key)
+            mount_workspace = True
         return PreparedExecutionContext(
             context_dir=context_dir,
             dockerfile_path=dockerfile_path,
-            image_tag=image_tag,
+            image_tag=image_ref,
             validation_command=target.validation_command,
             artifact_dir=artifact_dir,
             system_packages=merged_system_packages,
@@ -466,15 +619,24 @@ class DockerExecutor:
             dependencies=[dependency.pin() for dependency in dependencies],
             case_id=case_id,
             attempt_number=attempt_number,
+            environment_cache_key=environment_cache_key,
+            mount_workspace=mount_workspace,
         )
 
     def execute(self, context: PreparedExecutionContext) -> DockerExecutionResult:
         env = os.environ.copy()
+        env.setdefault("DOCKER_BUILDKIT", "1")
         if self.settings.docker_host:
             env["DOCKER_HOST"] = self.settings.docker_host
         else:
             env.pop("DOCKER_HOST", None)
 
+        build_log = ""
+        build_succeeded = False
+        build_skipped = False
+        image_cache_hit = False
+        build_exit_code: int | None = None
+        build_elapsed = 0.0
         build_cmd = [
             "docker",
             "build",
@@ -497,49 +659,83 @@ class DockerExecutor:
             kind="docker_build_start",
             detail=f"Starting docker build for attempt {context.attempt_number} ({context.image_tag}).",
         )
-        try:
-            build = subprocess.run(
-                build_cmd,
-                capture_output=True,
-                timeout=build_timeout_seconds,
-                env=env,
-                check=False,
+        if context.environment_cache_key and self._docker_image_exists(context.image_tag, env):
+            build_skipped = True
+            image_cache_hit = True
+            build_succeeded = True
+            build_exit_code = 0
+            build_elapsed = time.monotonic() - build_started
+            build_log = (
+                f"docker build skipped; reused cached image {context.image_tag} "
+                f"for environment {context.environment_cache_key}.\n"
             )
-            build_log = self._decode_output(build.stdout) + self._decode_output(build.stderr)
-            build_succeeded = build.returncode == 0
-            exit_code = build.returncode
             self._write_attempt_log(context.artifact_dir / "build.log", build_log)
-            failure_excerpt = self._activity_excerpt(build_log)
+            self._store_cache_entry(
+                context.environment_cache_key,
+                context.image_tag,
+                mode="generated",
+            )
             self._emit_activity(
                 context,
                 kind="docker_build_finish",
                 detail=(
-                    f"Docker build {'succeeded' if build_succeeded else 'failed'} "
-                    f"in {time.monotonic() - build_started:.1f}s."
-                    + (f" {failure_excerpt}" if failure_excerpt and not build_succeeded else "")
+                    f"Docker build skipped via environment cache in {time.monotonic() - build_started:.1f}s."
                 ),
             )
-        except subprocess.TimeoutExpired as exc:
-            build = None
-            build_log = self._format_timeout_log(
-                "docker build",
-                build_timeout_seconds,
-                exc.stdout,
-                exc.stderr,
-            )
-            build_succeeded = False
-            exit_code = 124
-            self._write_attempt_log(context.artifact_dir / "build.log", build_log)
-            self._emit_activity(
-                context,
-                kind="docker_build_finish",
-                detail=f"Docker build timed out after {build_timeout_seconds}s.",
-            )
+        else:
+            try:
+                build = subprocess.run(
+                    build_cmd,
+                    capture_output=True,
+                    timeout=build_timeout_seconds,
+                    env=env,
+                    check=False,
+                )
+                build_log = self._decode_output(build.stdout) + self._decode_output(build.stderr)
+                build_succeeded = build.returncode == 0
+                build_exit_code = build.returncode
+                build_elapsed = time.monotonic() - build_started
+                self._write_attempt_log(context.artifact_dir / "build.log", build_log)
+                failure_excerpt = self._activity_excerpt(build_log)
+                if build_succeeded and context.environment_cache_key:
+                    self._store_cache_entry(
+                        context.environment_cache_key,
+                        context.image_tag,
+                        mode="generated",
+                    )
+                self._emit_activity(
+                    context,
+                    kind="docker_build_finish",
+                    detail=(
+                        f"Docker build {'succeeded' if build_succeeded else 'failed'} "
+                        f"in {time.monotonic() - build_started:.1f}s."
+                        + (f" {failure_excerpt}" if failure_excerpt and not build_succeeded else "")
+                    ),
+                )
+            except subprocess.TimeoutExpired as exc:
+                build_log = self._format_timeout_log(
+                    "docker build",
+                    build_timeout_seconds,
+                    exc.stdout,
+                    exc.stderr,
+                )
+                build_succeeded = False
+                build_exit_code = 124
+                build_elapsed = time.monotonic() - build_started
+                self._write_attempt_log(context.artifact_dir / "build.log", build_log)
+                self._emit_activity(
+                    context,
+                    kind="docker_build_finish",
+                    detail=f"Docker build timed out after {build_timeout_seconds}s.",
+                )
         run_log = ""
         run_success = False
+        run_elapsed = 0.0
 
         if build_succeeded:
-            container_name = f"{context.image_tag}-run"
+            container_suffix = context.case_id or f"attempt-{context.attempt_number}"
+            container_suffix = re.sub(r"[^a-zA-Z0-9_.-]+", "-", container_suffix)[:48]
+            container_name = f"{context.image_tag}-{container_suffix}-run"
             run_cmd = [
                 "docker",
                 "run",
@@ -549,6 +745,8 @@ class DockerExecutor:
             ]
             if context.docker_platform:
                 run_cmd.extend(["--platform", context.docker_platform])
+            if context.mount_workspace:
+                run_cmd.extend(["-v", f"{context.context_dir.resolve()}:/workspace"])
             run_cmd.extend(
                 [
                 "-e",
@@ -581,8 +779,9 @@ class DockerExecutor:
                     check=False,
                 )
                 run_log = self._decode_output(run.stdout) + self._decode_output(run.stderr)
-                exit_code = run.returncode
+                build_exit_code = run.returncode
                 run_success = run.returncode == 0
+                run_elapsed = time.monotonic() - run_started
                 self._write_attempt_log(context.artifact_dir / "run.log", run_log)
                 failure_excerpt = self._activity_excerpt(run_log)
                 self._emit_activity(
@@ -601,7 +800,8 @@ class DockerExecutor:
                     exc.stdout,
                     exc.stderr,
                 )
-                exit_code = 124
+                build_exit_code = 124
+                run_elapsed = time.monotonic() - run_started
                 self._write_attempt_log(context.artifact_dir / "run.log", run_log)
                 self._emit_activity(
                     context,
@@ -615,7 +815,7 @@ class DockerExecutor:
                     check=False,
                 )
 
-        if not self.settings.keep_images:
+        if not self.settings.keep_images and not context.environment_cache_key:
             subprocess.run(
                 ["docker", "image", "rm", "-f", context.image_tag],
                 capture_output=True,
@@ -626,11 +826,15 @@ class DockerExecutor:
         return DockerExecutionResult(
             build_succeeded=build_succeeded,
             run_succeeded=run_success,
-            exit_code=exit_code,
+            exit_code=build_exit_code,
             build_log=build_log,
             run_log=run_log,
             image_tag=context.image_tag,
-            wall_clock_seconds=time.monotonic() - build_started,
+            wall_clock_seconds=build_elapsed + run_elapsed,
+            build_wall_clock_seconds=build_elapsed,
+            run_wall_clock_seconds=run_elapsed,
+            build_skipped=build_skipped,
+            image_cache_hit=image_cache_hit,
         )
 
 

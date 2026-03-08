@@ -470,11 +470,17 @@ def build_import_statements_command() -> str:
         "import ast\n"
         "import io\n"
         "import os\n"
+        "import sys\n"
         "for key, value in [('MPLBACKEND', 'Agg'), ('SDL_VIDEODRIVER', 'dummy'), ('QT_QPA_PLATFORM', 'offscreen')]:\n"
         "    os.environ.setdefault(key, value)\n"
-        "source = io.open('snippet.py', 'r', encoding='utf-8').read()\n"
-        "tree = ast.parse(source, filename='snippet.py')\n"
-        "module = ast.parse('', filename='snippet.py')\n"
+        "if sys.version_info[0] < 3:\n"
+        "    source = open('snippet.py', 'rb').read()\n"
+        "    tree = compile(source, 'snippet.py', 'exec', ast.PyCF_ONLY_AST)\n"
+        "    module = compile('', 'snippet.py', 'exec', ast.PyCF_ONLY_AST)\n"
+        "else:\n"
+        "    source = io.open('snippet.py', 'r', encoding='utf-8').read()\n"
+        "    tree = ast.parse(source, filename='snippet.py')\n"
+        "    module = ast.parse('', filename='snippet.py')\n"
         "module.body = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]\n"
         "if hasattr(module, 'type_ignores'):\n"
         "    module.type_ignores = []\n"
@@ -4145,6 +4151,7 @@ class ResolutionWorkflow:
         version_space_summary = self._planning_version_space_summary(state)
         validation_options_summary = self._validation_options_summary(state)
         source_compatibility_hints = self._source_compatibility_hint_summary(state)
+        conflict_notes_summary = self._conflict_note_summary(state)
         allowed_runtime_profiles = {
             option.get("profile", "")
             for option in state.get("validation_options", [])
@@ -4168,6 +4175,7 @@ class ResolutionWorkflow:
             validation_options=validation_options_summary,
             default_validation_profile=state.get("default_validation_profile", ""),
             source_compatibility_hints=source_compatibility_hints,
+            conflict_notes=conflict_notes_summary,
             max_plan_count=min(2, self.settings.candidate_plan_count),
             repair_memory=json.dumps(asdict(state.get("repair_memory_summary") or RepairMemorySummary()), indent=2)[:2500],
             feedback_summary=json.dumps(feedback_summary, indent=2)[:2500],
@@ -4187,6 +4195,7 @@ class ResolutionWorkflow:
                 "validation_options": validation_options_summary,
                 "default_validation_profile": state.get("default_validation_profile", ""),
                 "source_compatibility_hints": source_compatibility_hints,
+                "conflict_notes": conflict_notes_summary,
                 "max_plan_count": min(2, self.settings.candidate_plan_count),
                 "repair_memory": json.dumps(asdict(state.get("repair_memory_summary") or RepairMemorySummary()), indent=2)[:2500],
                 "feedback_summary": json.dumps(feedback_summary, indent=2)[:2500],
@@ -4465,6 +4474,11 @@ class ResolutionWorkflow:
                 artifact_dir=str(attempt_dir),
                 started_at=attempt_started_at,
                 finished_at=attempt_finished_at,
+                build_wall_clock_seconds=result.build_wall_clock_seconds,
+                run_wall_clock_seconds=result.run_wall_clock_seconds,
+                build_skipped=result.build_skipped,
+                image_cache_hit=result.image_cache_hit,
+                environment_cache_key=getattr(context, "environment_cache_key", ""),
             )
         )
         return state
@@ -4862,6 +4876,15 @@ class ResolutionWorkflow:
         )
 
         total_wall_clock = sum(attempt.wall_clock_seconds for attempt in state.get("attempt_records", []))
+        total_build_wall_clock = sum(attempt.build_wall_clock_seconds for attempt in state.get("attempt_records", []))
+        total_run_wall_clock = sum(attempt.run_wall_clock_seconds for attempt in state.get("attempt_records", []))
+        image_cache_hits = sum(1 for attempt in state.get("attempt_records", []) if attempt.image_cache_hit)
+        build_skips = sum(1 for attempt in state.get("attempt_records", []) if attempt.build_skipped)
+        llm_wall_clock_seconds = 0.0
+        stats_snapshot = getattr(self.prompt_runner, "stats_snapshot", None)
+        if callable(stats_snapshot):
+            snapshot = stats_snapshot()
+            llm_wall_clock_seconds = max(0.0, float(snapshot.total_duration_ns) / 1_000_000_000)
         runtime_config = self.settings.effective_runtime_config()
         result = {
             "run_id": state["run_id"],
@@ -4951,6 +4974,11 @@ class ResolutionWorkflow:
             "root_cause_bucket": self._root_cause_bucket(execution.category, execution.message),
             "strategy_type": state.get("strategy_history", [])[-1].strategy_type if state.get("strategy_history") else "",
             "wall_clock_seconds": total_wall_clock,
+            "docker_build_seconds_total": total_build_wall_clock,
+            "docker_run_seconds_total": total_run_wall_clock,
+            "llm_wall_clock_seconds": llm_wall_clock_seconds,
+            "image_cache_hits": image_cache_hits,
+            "build_skips": build_skips,
             "started_at": state.get("case_started_at", ""),
             "finished_at": case_finished_at,
             "artifact_dir": str(artifact_dir),

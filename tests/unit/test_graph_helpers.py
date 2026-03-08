@@ -4,6 +4,7 @@ from agentic_python_dependency.config import Settings
 from agentic_python_dependency.graph import (
     ResolutionWorkflow,
     _has_python2_only_imports,
+    build_import_statements_command,
     build_benchmark_validation_options,
     filter_allowed_dependencies,
     infer_benchmark_validation_profile,
@@ -337,6 +338,17 @@ def test_infer_benchmark_validation_profile_uses_import_statements_for_non_tenso
     assert profile == "import_statements"
     assert "ast.parse(source, filename='snippet.py')" in command
     assert "ast.ImportFrom" in command
+
+
+def test_build_import_statements_command_is_python2_safe_for_encoding_cookies() -> None:
+    command = build_import_statements_command()
+
+    assert "import sys" in command
+    assert "if sys.version_info[0] < 3:" in command
+    assert "source = open('snippet.py', 'rb').read()" in command
+    assert "tree = compile(source, 'snippet.py', 'exec', ast.PyCF_ONLY_AST)" in command
+    assert "module = compile('', 'snippet.py', 'exec', ast.PyCF_ONLY_AST)" in command
+    assert "source = io.open('snippet.py', 'r', encoding='utf-8').read()" in command
 
 
 def test_infer_benchmark_validation_profile_uses_headless_imports_for_gui_cases() -> None:

@@ -164,6 +164,11 @@ class TerminalBenchmarkDashboard:
         self.summary_path: Path | None = None
         self.warnings_path: Path | None = None
         self.ollama_stats: OllamaStatsTracker | None = None
+        self.docker_build_seconds_total = 0.0
+        self.docker_run_seconds_total = 0.0
+        self.llm_wall_clock_seconds_total = 0.0
+        self.image_cache_hits = 0
+        self.build_skips = 0
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._cancel_requested = False
@@ -217,6 +222,20 @@ class TerminalBenchmarkDashboard:
         self.ollama_stats = ollama_stats
         self.started_at = time.monotonic() - elapsed_seconds
         self.recent_case_results = [self._case_result_row(result) for result in (completed_results or [])[:200]]
+        self.docker_build_seconds_total = sum(
+            float(result.get("docker_build_seconds_total", 0.0) or 0.0)
+            for result in (completed_results or [])
+        )
+        self.docker_run_seconds_total = sum(
+            float(result.get("docker_run_seconds_total", 0.0) or 0.0)
+            for result in (completed_results or [])
+        )
+        self.llm_wall_clock_seconds_total = sum(
+            float(result.get("llm_wall_clock_seconds", 0.0) or 0.0)
+            for result in (completed_results or [])
+        )
+        self.image_cache_hits = sum(int(result.get("image_cache_hits", 0) or 0) for result in (completed_results or []))
+        self.build_skips = sum(int(result.get("build_skips", 0) or 0) for result in (completed_results or []))
         if self._isatty:
             self._start_prompt_toolkit_app()
         else:
@@ -270,6 +289,11 @@ class TerminalBenchmarkDashboard:
             self.recent_case_results = [item for item in self.recent_case_results if item.get("case_id") != case_id]
             self.recent_case_results.insert(0, row)
             del self.recent_case_results[200:]
+            self.docker_build_seconds_total += float(result.get("docker_build_seconds_total", 0.0) or 0.0)
+            self.docker_run_seconds_total += float(result.get("docker_run_seconds_total", 0.0) or 0.0)
+            self.llm_wall_clock_seconds_total += float(result.get("llm_wall_clock_seconds", 0.0) or 0.0)
+            self.image_cache_hits += int(result.get("image_cache_hits", 0) or 0)
+            self.build_skips += int(result.get("build_skips", 0) or 0)
         self._refresh()
 
     @staticmethod
@@ -487,6 +511,17 @@ class TerminalBenchmarkDashboard:
             ("class:accent", f"Speed: {seconds_per_case}"),
             ("", "    "),
             ("class:accent", f"ETA: {eta}\n"),
+            ("class:label", "Perf         "),
+            (
+                "class:value",
+                (
+                    f"build {self.docker_build_seconds_total:.1f}s, "
+                    f"run {self.docker_run_seconds_total:.1f}s, "
+                    f"llm {self.llm_wall_clock_seconds_total:.1f}s, "
+                    f"cache hits {self.image_cache_hits}, "
+                    f"build skips {self.build_skips}\n"
+                ),
+            ),
         ]
         if self.research_features:
             fragments.extend(
@@ -649,6 +684,12 @@ class TerminalBenchmarkDashboard:
                 f"Success rate: {success_rate}    Elapsed: {_format_elapsed(elapsed_seconds)}"
             ),
             f"Speed: {seconds_per_case}    ETA: {eta}",
+            (
+                f"Docker build: {self.docker_build_seconds_total:.1f}s    "
+                f"Docker run: {self.docker_run_seconds_total:.1f}s    "
+                f"LLM: {self.llm_wall_clock_seconds_total:.1f}s    "
+                f"Cache hits: {self.image_cache_hits}    Build skips: {self.build_skips}"
+            ),
         ]
         last_ollama = self._last_ollama_summary(ollama_snapshot)
         if last_ollama is not None:

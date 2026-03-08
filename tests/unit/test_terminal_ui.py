@@ -1074,6 +1074,11 @@ def test_terminal_benchmark_dashboard_preloads_completed_results_on_start(monkey
                 "final_error_category": "ImportError",
                 "result_matches_csv": "PASS",
                 "dependencies": ["rx==1.2.4", "twisted==19.10.0"],
+                "docker_build_seconds_total": 8.0,
+                "docker_run_seconds_total": 1.0,
+                "llm_wall_clock_seconds": 2.5,
+                "image_cache_hits": 1,
+                "build_skips": 1,
             },
             {
                 "case_id": "case-older",
@@ -1083,6 +1088,9 @@ def test_terminal_benchmark_dashboard_preloads_completed_results_on_start(monkey
                 "wall_clock_seconds": 3.2,
                 "result_matches_csv": "FAIL",
                 "dependencies": ["requests==2.32.3"],
+                "docker_build_seconds_total": 2.0,
+                "docker_run_seconds_total": 0.5,
+                "llm_wall_clock_seconds": 1.0,
             },
         ],
     )
@@ -1098,6 +1106,11 @@ def test_terminal_benchmark_dashboard_preloads_completed_results_on_start(monkey
     assert "case-older" in rendered
     assert "MATCH" in rendered
     assert "MISS" in rendered
+    assert dashboard.docker_build_seconds_total == 10.0
+    assert dashboard.docker_run_seconds_total == 1.5
+    assert dashboard.llm_wall_clock_seconds_total == 3.5
+    assert dashboard.image_cache_hits == 1
+    assert dashboard.build_skips == 1
 
 
 def test_terminal_benchmark_dashboard_reports_rate_speed_and_eta(monkeypatch) -> None:
@@ -1141,6 +1154,7 @@ def test_terminal_benchmark_dashboard_reports_rate_speed_and_eta(monkeypatch) ->
     assert "Success rate: 75.0%" in rendered
     assert "Speed: 10.0s/case" in rendered
     assert "ETA: 00:01:00" in rendered
+    assert "Perf" in rendered
     assert "1 calls, out 45 tok @ 50.0 tok/s" in rendered
     assert "repair / gemma3:12b @ 50.0 tok/s" in rendered
 

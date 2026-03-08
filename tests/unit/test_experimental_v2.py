@@ -10,7 +10,7 @@ from agentic_python_dependency.graph import (
     route_after_research_classification,
 )
 from agentic_python_dependency.presets import resolve_research_features
-from agentic_python_dependency.state import AttemptRecord, BenchmarkCase, CandidateDependency, CandidatePlan, ExecutionOutcome, PackageVersionOptions, ResolvedDependency
+from agentic_python_dependency.state import AttemptRecord, BenchmarkCase, CandidateDependency, CandidatePlan, ConflictNote, ExecutionOutcome, PackageVersionOptions, ResolvedDependency
 from agentic_python_dependency.tools.constraint_pack import build_constraint_pack, generate_candidate_bundles
 from agentic_python_dependency.tools.dynamic_imports import collect_dynamic_import_candidates
 from agentic_python_dependency.tools.repo_aliases import build_repo_alias_candidates
@@ -922,6 +922,7 @@ def test_research_prompts_emphasize_coherent_legacy_families(tmp_path: Path) -> 
         version_space='{"packages":[]}',
         validation_options='[{"profile":"docker_cmd","command":"","reason":"exact"}]',
         default_validation_profile="docker_cmd",
+        conflict_notes='[{"package":"tensorflow","related_package":"keras","kind":"requires_dist","reason":"tensorflow constrains keras","severity":"warning"}]',
         source_compatibility_hints=source_hints,
         previous_plan="gym==0.26.2\nkeras==2.15.0\nnumpy==1.24.4\ntensorflow==2.13.1",
         attempted_plans="gym==0.26.2, keras==2.15.0, numpy==1.24.4, tensorflow==2.13.1",
@@ -937,7 +938,71 @@ def test_research_prompts_emphasize_coherent_legacy_families(tmp_path: Path) -> 
     assert source_hints in candidate_prompt
     assert "revise the coupled family together" in repair_prompt
     assert "family-level repair" in repair_prompt
+    assert "prefer a `runtime_profile` change over dependency churn" in repair_prompt
+    assert "normalized dependency set plus `runtime_profile` is identical to an attempted plan" in repair_prompt
+    assert "Conflict notes:" in repair_prompt
     assert "tensorflow 2.13.1 depends on keras<2.14 and >=2.13.1" in repair_prompt
+    assert "tensorflow constrains keras" in repair_prompt
+
+
+def test_repair_prompt_research_passes_conflict_notes_to_prompt_runner(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "repair"
+            assert template in {"repair_attempt.txt", "repair_attempt_v2.txt"}
+            assert "tensorflow requires numpy<2.2.0" in variables["conflict_notes"]
+            return '{"repair_applicable":false,"plans":[]}'
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+    case_root = tmp_path / "case-repair-conflict-notes"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import tensorflow as tf\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-repair-conflict-notes", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-repair-conflict-notes")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["target_python"] = "3.8"
+    state["current_attempt"] = 2
+    state["inferred_packages"] = ["numpy", "tensorflow"]
+    state["version_options"] = [
+        PackageVersionOptions(package="numpy", versions=["2.4.1", "2.1.3"]),
+        PackageVersionOptions(
+            package="tensorflow",
+            versions=["2.19.1"],
+            requires_dist={"2.19.1": ["numpy<2.2.0"]},
+        ),
+    ]
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="numpy", version="2.4.1"),
+        ResolvedDependency(name="tensorflow", version="2.19.1"),
+    ]
+    state["validation_options"] = [{"profile": "import_specs", "reason": "safe module probe"}]
+    state["default_validation_profile"] = "import_specs"
+    state["version_conflict_notes"] = [
+        ConflictNote(
+            package="tensorflow",
+            related_package="numpy",
+            kind="requires_dist",
+            reason="tensorflow requires numpy<2.2.0",
+            severity="warning",
+        )
+    ]
+    state["last_error_details"] = "ResolutionImpossible: tensorflow 2.19.1 depends on numpy<2.2.0"
+
+    updated = workflow.repair_prompt_c_research(state)
+
+    assert updated["repair_model_concluded_impossible"] is True
+    assert updated["repair_plan_unavailable_reason"] == "model_not_applicable"
 
 
 def test_retrieve_version_specific_metadata_filters_versions_using_enriched_requires_python(tmp_path: Path) -> None:
@@ -1876,6 +1941,7 @@ def test_research_prompt_templates_render_without_format_key_errors(tmp_path: Pa
             rag_context="{}",
             validation_options="[]",
             default_validation_profile="docker_cmd",
+            conflict_notes="[]",
             source_compatibility_hints="[]",
         ),
         "version_negotiation": workflow._format_prompt(

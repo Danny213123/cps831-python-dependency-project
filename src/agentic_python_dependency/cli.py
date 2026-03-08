@@ -279,6 +279,11 @@ def write_run_state(run_dir: Path, payload: dict[str, object]) -> None:
         f"- Successes: `{payload.get('successes', 0)}`",
         f"- Failures: `{payload.get('failures', 0)}`",
         f"- Elapsed: `{format_elapsed(float(payload.get('elapsed_seconds', 0.0) or 0.0))}`",
+        f"- Docker build time: `{float(payload.get('docker_build_seconds_total', 0.0) or 0.0):.1f}s`",
+        f"- Docker run time: `{float(payload.get('docker_run_seconds_total', 0.0) or 0.0):.1f}s`",
+        f"- LLM time: `{float(payload.get('llm_wall_clock_seconds_total', 0.0) or 0.0):.1f}s`",
+        f"- Image cache hits: `{int(payload.get('image_cache_hits', 0) or 0)}`",
+        f"- Build skips: `{int(payload.get('build_skips', 0) or 0)}`",
         f"- Started at: `{payload.get('started_at', '') or 'unknown'}`",
         f"- Last updated: `{payload.get('last_updated_at', '') or 'unknown'}`",
         f"- Last case: `{payload.get('last_case_id', '') or 'none'}`",
@@ -424,6 +429,11 @@ class PersistentBenchmarkObserver:
             "recent_case_activity": list(self.restored_state.get("recent_case_activity", []))
             if isinstance(self.restored_state.get("recent_case_activity", []), list)
             else [],
+            "docker_build_seconds_total": float(self.restored_state.get("docker_build_seconds_total", 0.0) or 0.0),
+            "docker_run_seconds_total": float(self.restored_state.get("docker_run_seconds_total", 0.0) or 0.0),
+            "llm_wall_clock_seconds_total": float(self.restored_state.get("llm_wall_clock_seconds_total", 0.0) or 0.0),
+            "image_cache_hits": int(self.restored_state.get("image_cache_hits", 0) or 0),
+            "build_skips": int(self.restored_state.get("build_skips", 0) or 0),
         }
 
     def _elapsed_seconds(self) -> float:
@@ -496,6 +506,26 @@ class PersistentBenchmarkObserver:
                 "hard_stop_requested": False,
             }
         )
+        self.payload["docker_build_seconds_total"] = sum(
+            float(result.get("docker_build_seconds_total", 0.0) or 0.0)
+            for result in (completed_results or [])
+        )
+        self.payload["docker_run_seconds_total"] = sum(
+            float(result.get("docker_run_seconds_total", 0.0) or 0.0)
+            for result in (completed_results or [])
+        )
+        self.payload["llm_wall_clock_seconds_total"] = sum(
+            float(result.get("llm_wall_clock_seconds", 0.0) or 0.0)
+            for result in (completed_results or [])
+        )
+        self.payload["image_cache_hits"] = sum(
+            int(result.get("image_cache_hits", 0) or 0)
+            for result in (completed_results or [])
+        )
+        self.payload["build_skips"] = sum(
+            int(result.get("build_skips", 0) or 0)
+            for result in (completed_results or [])
+        )
         if runtime_payload:
             self.payload.update(runtime_payload)
         self._persist(status="running")
@@ -547,6 +577,21 @@ class PersistentBenchmarkObserver:
         self.payload["completed"] = int(self.payload.get("completed", 0) or 0) + 1
         self.payload["successes"] = int(self.payload.get("successes", 0) or 0) + int(success)
         self.payload["failures"] = int(self.payload.get("failures", 0) or 0) + int(not success)
+        self.payload["docker_build_seconds_total"] = float(self.payload.get("docker_build_seconds_total", 0.0) or 0.0) + float(
+            result.get("docker_build_seconds_total", 0.0) or 0.0
+        )
+        self.payload["docker_run_seconds_total"] = float(self.payload.get("docker_run_seconds_total", 0.0) or 0.0) + float(
+            result.get("docker_run_seconds_total", 0.0) or 0.0
+        )
+        self.payload["llm_wall_clock_seconds_total"] = float(
+            self.payload.get("llm_wall_clock_seconds_total", 0.0) or 0.0
+        ) + float(result.get("llm_wall_clock_seconds", 0.0) or 0.0)
+        self.payload["image_cache_hits"] = int(self.payload.get("image_cache_hits", 0) or 0) + int(
+            result.get("image_cache_hits", 0) or 0
+        )
+        self.payload["build_skips"] = int(self.payload.get("build_skips", 0) or 0) + int(
+            result.get("build_skips", 0) or 0
+        )
         self.payload["last_case_id"] = case_id
         self.payload["last_status"] = "success" if success else str(result.get("final_error_category", "failure"))
         self.activity_tracker.finish_case(case_id)

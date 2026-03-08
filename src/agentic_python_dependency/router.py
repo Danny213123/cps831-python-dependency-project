@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from string import Formatter
 from threading import RLock
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,6 +11,19 @@ import urllib.error
 import urllib.request
 
 from agentic_python_dependency.config import Settings
+
+
+_OPTIONAL_PROMPT_VARIABLE_DEFAULTS: dict[str, Any] = {
+    "candidate_bundle_hints": "{}",
+    "conflict_notes": "[]",
+    "source_compatibility_hints": "[]",
+    "source_signals": "[]",
+    "validation_options": "[]",
+    "default_validation_profile": "",
+    "repair_memory": "{}",
+    "feedback_summary": "{}",
+    "max_plan_count": 1,
+}
 
 
 @dataclass(slots=True)
@@ -151,6 +165,7 @@ class OllamaPromptRunner:
     scripted_responses: dict[str, list[str]] = field(default_factory=dict)
     stats_callback: Callable[[OllamaInvocationStats], None] | None = None
     _chains: dict[tuple[str, str], Any] = field(default_factory=dict, init=False)
+    _local_stats: OllamaStatsTracker = field(default_factory=OllamaStatsTracker, init=False)
 
     def stage_model(self, stage: str) -> str:
         return self.settings.stage_model(stage)
@@ -188,8 +203,14 @@ class OllamaPromptRunner:
         cache_path.write_text(response_text, encoding="utf-8")
 
     def _record_stats(self, stats: OllamaInvocationStats | None) -> None:
-        if stats is not None and self.stats_callback is not None:
+        if stats is None:
+            return
+        self._local_stats.record(stats)
+        if self.stats_callback is not None:
             self.stats_callback(stats)
+
+    def stats_snapshot(self) -> OllamaStatsSnapshot:
+        return self._local_stats.snapshot()
 
     def _stats_from_payload(self, stage: str, model: str, payload: object, *, backend: str) -> OllamaInvocationStats:
         metadata = payload if isinstance(payload, dict) else {}
@@ -241,7 +262,14 @@ class OllamaPromptRunner:
             return self.scripted_responses[stage].pop(0)
 
         prompt_text = (self.prompt_dir / template_name).read_text(encoding="utf-8")
-        rendered_prompt = prompt_text.format(**variables)
+        resolved_variables = dict(variables)
+        formatter = Formatter()
+        for _literal, field_name, _format_spec, _conversion in formatter.parse(prompt_text):
+            if not field_name or field_name in resolved_variables:
+                continue
+            if field_name in _OPTIONAL_PROMPT_VARIABLE_DEFAULTS:
+                resolved_variables[field_name] = _OPTIONAL_PROMPT_VARIABLE_DEFAULTS[field_name]
+        rendered_prompt = prompt_text.format(**resolved_variables)
         cached = self._read_cache(stage, rendered_prompt)
         if cached is not None:
             return cached
@@ -268,7 +296,7 @@ class OllamaPromptRunner:
             )
             self._chains[key] = PromptTemplate.from_template(prompt_text) | llm
 
-        response = self._chains[key].invoke(variables)
+        response = self._chains[key].invoke(resolved_variables)
         rendered_response = self._stringify_response(response)
         self._record_stats(self._stats_from_payload(stage, self.stage_model(stage), getattr(response, "response_metadata", {}), backend="langchain"))
         self._write_cache(stage, rendered_prompt, rendered_response)

@@ -7,6 +7,26 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-03-08
+
+### Added
+
+- Added persistent Docker environment reuse, build-skip accounting, and run-level timing breakdowns for Docker build, Docker run, and LLM time so benchmark performance is measurable and repeated environments are reused across attempts.
+- Added richer repair guidance and context, including conflict notes, validator-aware runtime-profile repair rules, cross-package `requires_dist` compatibility instructions, and duplicate-plan avoidance in repair prompts.
+- Added benchmark UI/runtime visibility improvements including displayed app version, live cache/build-skip totals, and stronger prompt-rendering fallbacks in the shared prompt runner.
+
+### Changed
+
+- Reworked benchmark Docker image generation to be cache-friendly: dependency installation now happens before workspace content, BuildKit pip cache mounts are used, and generated environments are mounted at runtime instead of copied into each image.
+- Improved model-led planning context for legacy stacks by surfacing better source compatibility evidence for TensorFlow, Keras, Gym, and related coupled dependency families instead of relying on narrow deterministic steering.
+- Expanded repair and candidate planning context so the model can reason about family-level compatibility, validation-strategy changes, and conflict notes directly from prompt inputs.
+
+### Fixed
+
+- Fixed multiple benchmark regressions caused by Python-2-incompatible import-statement validation helpers, missing optional prompt variables in live prompt rendering, and prompt-template crashes after adding new repair fields.
+- Fixed repeated false negatives in legacy TensorFlow/Keras/Gym and Python 2 cases by improving deferred fallback behavior, safer validation profiles, repair delta handling, and compatibility-hint propagation.
+- Fixed resume/runtime UX regressions around restored tables, PLLM match display, runtime-version display, and prompt compatibility between workflow-side rendering and direct prompt-runner rendering.
+
 ## [2.0.0] - 2026-03-08
 
 ### Added

@@ -334,7 +334,7 @@ def test_terminal_ui_can_switch_model_bundle(tmp_path: Path, monkeypatch) -> Non
 def test_terminal_ui_can_toggle_fresh_run(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     outputs: list[str] = []
-    inputs = iter(["4", "8", "", "8"])
+    inputs = iter(["4", "9", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -685,7 +685,7 @@ def test_terminal_ui_smoke_run_uses_dashboard(tmp_path: Path, monkeypatch) -> No
     settings = make_settings(tmp_path)
     outputs: list[str] = []
     benchmark_calls: list[dict[str, object]] = []
-    inputs = iter(["2", "1", "1", "", "", "8"])
+    inputs = iter(["4", "8", "http://192.168.1.10:8765", "", "2", "1", "1", "", "", "8"])
 
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
 
@@ -712,6 +712,7 @@ def test_terminal_ui_smoke_run_uses_dashboard(tmp_path: Path, monkeypatch) -> No
     assert benchmark_calls
     assert benchmark_calls[0]["notify_paths"] is False
     assert isinstance(benchmark_calls[0]["observer"], TerminalBenchmarkDashboard)
+    assert benchmark_calls[0]["dashboard_url"] == "http://192.168.1.10:8765"
 
 
 def test_terminal_ui_can_resume_saved_benchmark_run(tmp_path: Path, monkeypatch) -> None:

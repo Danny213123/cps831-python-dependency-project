@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-03-08
+
+### Fixed
+
+- Fixed terminal-UI benchmark launches so configured central dashboard URLs are now forwarded into benchmark runs and resumes, allowing remote Windows benchmarks started from `apdr ui` to appear in a Mac-hosted dashboard.
+- Fixed the terminal UI dashboard URL control so it can be explicitly cleared instead of always snapping back to the previous value.
+
 ## [2.3.0] - 2026-03-08
 
 ### Added

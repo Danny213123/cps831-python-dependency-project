@@ -4,6 +4,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import socket
@@ -850,6 +851,7 @@ class TerminalUI:
         )
         self._fresh_run = False
         self._app_version = _resolve_apdr_version()
+        self._dashboard_url = os.getenv("APDR_DASHBOARD_URL", "").strip()
 
     def run(self) -> int:
         try:
@@ -1183,6 +1185,7 @@ class TerminalUI:
                     ("Runtime", "r"),
                     ("Official setup", "o"),
                     ("Benchmark source", "s"),
+                    ("Dashboard URL", "d"),
                     ("Fresh run", "f"),
                     ("Trace LLM", "t"),
                     ("Back", "back"),
@@ -1205,6 +1208,8 @@ class TerminalUI:
                 self._configure_official_setup()
             elif choice == "s":
                 self._choose_benchmark_source()
+            elif choice == "d":
+                self._configure_dashboard_url()
             elif choice == "f":
                 self._fresh_run = not self._fresh_run
                 self._show_status_dialog(f"Fresh run is now {'on' if self._fresh_run else 'off'}.")
@@ -1221,9 +1226,10 @@ class TerminalUI:
         self.output("  5. Runtime controls")
         self.output("  6. Official baseline setup")
         self.output("  7. Change benchmark source")
-        self.output("  8. Toggle fresh run / no LLM cache")
-        self.output("  9. Toggle LLM tracing")
-        self.output("  10. Back")
+        self.output("  8. Set central dashboard URL")
+        self.output("  9. Toggle fresh run / no LLM cache")
+        self.output("  10. Toggle LLM tracing")
+        self.output("  11. Back")
         choice = self.input_fn("Select configuration option: ").strip().lower()
         if choice == "1":
             self._choose_resolver()
@@ -1240,12 +1246,22 @@ class TerminalUI:
         elif choice == "7":
             self._choose_benchmark_source()
         elif choice == "8":
+            self._configure_dashboard_url()
+        elif choice == "9":
             self._fresh_run = not self._fresh_run
             self._show_status_dialog(f"Fresh run is now {'on' if self._fresh_run else 'off'}.")
-        elif choice == "9":
+        elif choice == "10":
             self.settings.trace_llm = not self.settings.trace_llm
             self._show_status_dialog(f"LLM tracing is now {'on' if self.settings.trace_llm else 'off'}.")
         return 0
+
+    def _configure_dashboard_url(self) -> None:
+        value = self._prompt_allow_blank("Central dashboard URL (blank to disable)", self._dashboard_url)
+        self._dashboard_url = value.strip()
+        if self._dashboard_url:
+            self._show_status_dialog(f"Central dashboard URL set to {self._dashboard_url}.")
+        else:
+            self._show_status_dialog("Central dashboard URL cleared.")
 
     def _configure_official_setup(self) -> None:
         if self._use_prompt_toolkit:
@@ -1286,6 +1302,7 @@ class TerminalUI:
             observer=dashboard,
             notify_paths=False,
             fresh_run=self._fresh_run,
+            dashboard_url=self._dashboard_url or None,
         )
 
     def _run_full(self) -> int:
@@ -1304,6 +1321,7 @@ class TerminalUI:
             observer=dashboard,
             notify_paths=False,
             fresh_run=self._fresh_run,
+            dashboard_url=self._dashboard_url or None,
         )
 
     def _run_resume_benchmark(self) -> int:
@@ -1352,6 +1370,7 @@ class TerminalUI:
             observer=dashboard,
             notify_paths=False,
             fresh_run=False,
+            dashboard_url=self._dashboard_url or None,
         )
 
     def _run_project_solve(self) -> int:
@@ -2610,6 +2629,7 @@ class TerminalUI:
             f"<b>Loadouts:</b> {len(self._list_loadout_names())}\n"
             f"<b>Fresh run:</b> {'on' if self._fresh_run else 'off'} | "
             f"<b>Trace LLM:</b> {'on' if self.settings.trace_llm else 'off'}\n"
+            f"<b>Dashboard URL:</b> {self._dashboard_url or 'disabled'}\n"
             f"<b>Artifacts:</b> {self.settings.artifacts_dir}"
         )
 
@@ -2634,6 +2654,15 @@ class TerminalUI:
             return value.strip() or default
         value = self.input_fn(f"{label} [{default}]: ").strip()
         return value or default
+
+    def _prompt_allow_blank(self, label: str, default: str) -> str:
+        shown_default = default if default else "(blank)"
+        if self._use_prompt_toolkit:
+            value = input_dialog(title="APDR", text=f"{label} [{shown_default}]", style=UI_STYLE).run()
+            if value is None:
+                return default
+            return value.strip()
+        return self.input_fn(f"{label} [{shown_default}]: ").strip()
 
     def _prompt_int(self, label: str, default: int) -> int:
         raw_value = self._prompt_optional(label, str(default))
@@ -2693,6 +2722,7 @@ class TerminalUI:
         self.output(f"Prompt profile: {self.settings.prompt_profile}")
         self.output(f"Fresh run: {'on' if self._fresh_run else 'off'}")
         self.output(f"Trace LLM: {'on' if self.settings.trace_llm else 'off'}")
+        self.output(f"Dashboard URL: {self._dashboard_url or 'disabled'}")
         self.output(f"Ollama: {self.settings.ollama_base_url}")
         self.output(f"Artifacts: {self.settings.artifacts_dir}")
 

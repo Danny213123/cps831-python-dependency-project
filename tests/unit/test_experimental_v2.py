@@ -8,6 +8,7 @@ from agentic_python_dependency.graph import (
     ResolutionWorkflow,
     parse_package_inference_output,
     route_after_research_classification,
+    route_after_research_repair,
 )
 from agentic_python_dependency.presets import resolve_research_features
 from agentic_python_dependency.state import AttemptRecord, BenchmarkCase, CandidateDependency, CandidatePlan, ConflictNote, ExecutionOutcome, PackageVersionOptions, ResolvedDependency
@@ -1345,6 +1346,118 @@ def test_repair_prompt_research_discards_already_attempted_plans(tmp_path: Path)
     assert updated["remaining_candidate_plans"] == []
     assert updated["repair_model_concluded_impossible"] is False
     assert updated["repair_plan_unavailable_reason"] == "no_novel_plans"
+
+
+def test_repair_prompt_research_activates_deferred_python_fallback_after_python3_repairs_are_exhausted(
+    tmp_path: Path,
+) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.max_attempts = 6
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "repair"
+            return (
+                '{"repair_applicable":true,"plans":['
+                '{"rank":1,"reason":"repeat prior pymc3 plan","dependencies":['
+                '{"name":"numpy","version":"1.24.4"},'
+                '{"name":"pandas","version":"2.0.3"},'
+                '{"name":"pymc3","version":"3.11.5"},'
+                '{"name":"scipy","version":"1.10.1"},'
+                '{"name":"theano","version":"1.0.5"}'
+                "]}]}"
+            )
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+    case_root = tmp_path / "case-py2-repair-fallback"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import pymc3\nprint str('legacy')\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-py2-repair-fallback", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-py2-repair-fallback")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["target_python"] = "3.8"
+    state["inferred_target_python"] = "3.8"
+    state["deferred_target_python"] = "2.7.18"
+    state["current_attempt"] = 3
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="numpy", version="1.24.4"),
+        ResolvedDependency(name="pandas", version="2.0.3"),
+        ResolvedDependency(name="pymc3", version="3.11.5"),
+        ResolvedDependency(name="scipy", version="1.10.1"),
+        ResolvedDependency(name="theano", version="1.0.5"),
+    ]
+    state["inferred_packages"] = ["numpy", "pandas", "pymc3", "scipy", "theano"]
+    state["version_options"] = [
+        PackageVersionOptions(package="numpy", versions=["1.24.4"]),
+        PackageVersionOptions(package="pandas", versions=["2.0.3"]),
+        PackageVersionOptions(package="pymc3", versions=["3.11.5"]),
+        PackageVersionOptions(package="scipy", versions=["1.10.1"]),
+        PackageVersionOptions(package="theano", versions=["1.0.5"]),
+    ]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=1,
+            dependencies=["numpy==1.24.4", "pandas==2.0.3", "pymc3==3.11.6", "scipy==1.10.1", "theano==1.0.5"],
+            image_tag="img-1",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ResolutionError",
+            error_details="ResolutionImpossible",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_01"),
+        ),
+        AttemptRecord(
+            attempt_number=2,
+            dependencies=["numpy==1.24.4", "pandas==2.0.3", "pymc3==3.11.6", "scipy==1.10.0", "theano==1.0.5"],
+            image_tag="img-2",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ResolutionError",
+            error_details="ResolutionImpossible",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_02"),
+        ),
+        AttemptRecord(
+            attempt_number=3,
+            dependencies=["numpy==1.24.4", "pandas==2.0.3", "pymc3==3.11.5", "scipy==1.10.1", "theano==1.0.5"],
+            image_tag="img-3",
+            build_succeeded=False,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ResolutionError",
+            error_details="ResolutionImpossible",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_03"),
+        ),
+    ]
+    state["last_error_details"] = "ResolutionImpossible"
+
+    updated = workflow.repair_prompt_c_research(state)
+
+    assert updated["pending_python_fallback"] is True
+    assert updated["python_fallback_used"] is True
+    assert updated["target_python"] == "2.7.18"
+    assert updated["python_version_source"] == "deferred_python_fallback"
+    assert updated["selected_dependencies"] == []
+    assert updated["candidate_plans"] == []
+    assert updated["repair_model_concluded_impossible"] is False
+    assert updated["repair_plan_unavailable_reason"] == "deferred_python_fallback"
+    assert route_after_research_repair(updated, settings) == "replan_after_python_fallback"
 
 
 def test_classify_retry_decision_limits_native_build_retries_once_system_packages_were_injected() -> None:

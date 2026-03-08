@@ -370,6 +370,8 @@ def route_after_research_classification(state: ResolutionState, settings: Settin
 
 
 def route_after_research_repair(state: ResolutionState, settings: Settings) -> str:
+    if state.get("pending_python_fallback"):
+        return "replan_after_python_fallback"
     if state.get("candidate_plans"):
         return "select_next_candidate_plan"
     if state.get("repair_model_concluded_impossible"):
@@ -2304,6 +2306,20 @@ Run log excerpt:
             kind="python_fallback_activated",
             detail=f"Switching to deferred Python fallback {deferred_target} and restarting model planning.",
         )
+
+    def _should_activate_deferred_python_fallback_after_repair(self, state: ResolutionState) -> bool:
+        if not self._uses_full_apd() or state.get("mode") != "gistable":
+            return False
+        if state.get("python_fallback_used") or state.get("pending_python_fallback"):
+            return False
+        deferred_target = str(state.get("deferred_target_python", "") or "").strip()
+        if not deferred_target:
+            return False
+        current_target = str(state.get("target_python", "") or "").strip()
+        if not current_target.startswith("3"):
+            return False
+        current_attempt = int(state.get("current_attempt", 0) or 0)
+        return current_attempt < self.settings.max_attempts
 
     def _apply_python_signal_guardrails(self, state: ResolutionState) -> None:
         self._refresh_deferred_python_fallback(state)
@@ -4423,6 +4439,12 @@ Run log excerpt:
                 state["repair_plan_unavailable_reason"] = "no_novel_plans"
                 state.pop("stop_reason", None)
                 detail = "Repair only proposed already-attempted plans; retrying repair if budget remains."
+            if self._should_activate_deferred_python_fallback_after_repair(state):
+                self._activate_deferred_python_fallback(state)
+                state["repair_model_concluded_impossible"] = False
+                state["repair_plan_unavailable_reason"] = "deferred_python_fallback"
+                state.pop("stop_reason", None)
+                detail = "Repair produced no viable Python 3 plan; switching to deferred Python fallback."
             self._emit_activity(
                 state,
                 kind="repair_plan_unavailable",

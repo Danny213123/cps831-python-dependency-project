@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [2.3.2] - 2026-03-08
+
+### Fixed
+
+- Fixed deferred Python fallback handling in research repair so gist benchmark cases that already recorded a Python 2 fallback no longer finalize on exhausted Python 3 repair plans without ever activating that fallback.
+- Added a regression covering repeated Python 3 `ResolutionError` repair exhaustion for legacy Python 2 snippets to ensure the workflow now switches into `replan_after_python_fallback` instead of stopping early.
+
 ## [2.3.1] - 2026-03-08
 
 ### Fixed

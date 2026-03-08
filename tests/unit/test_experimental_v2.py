@@ -4,7 +4,11 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from agentic_python_dependency.config import Settings
-from agentic_python_dependency.graph import ResolutionWorkflow, route_after_research_classification
+from agentic_python_dependency.graph import (
+    ResolutionWorkflow,
+    parse_package_inference_output,
+    route_after_research_classification,
+)
 from agentic_python_dependency.presets import resolve_research_features
 from agentic_python_dependency.state import AttemptRecord, BenchmarkCase, CandidateDependency, CandidatePlan, ExecutionOutcome, PackageVersionOptions, ResolvedDependency
 from agentic_python_dependency.tools.constraint_pack import build_constraint_pack, generate_candidate_bundles
@@ -18,6 +22,7 @@ from agentic_python_dependency.tools.structured_outputs import (
     parse_alias_resolution_payload,
     parse_candidate_plan_payload,
     parse_repair_plan_payload,
+    parse_source_compatibility_payload,
 )
 
 
@@ -419,6 +424,81 @@ def test_generate_candidate_bundles_prioritizes_source_compatible_versions_when_
     ]
 
 
+def test_generate_candidate_bundles_surface_legacy_keras_family_before_version_cap_when_model_hints_it(
+    tmp_path: Path,
+) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(settings, pypi_store=FakePyPIStore())
+    case_root = tmp_path / "case-legacy-keras-bundles"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import gym\nimport keras\nimport numpy\nimport tensorflow\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-legacy-keras-bundles", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["target_python"] = "3.8"
+    state["version_options"] = [
+        PackageVersionOptions(
+            package="gym",
+            versions=["0.26.2", "0.26.1", "0.26.0", "0.25.2"],
+            requires_python={version: ">=3.8" for version in ["0.26.2", "0.26.1", "0.26.0", "0.25.2"]},
+        ),
+        PackageVersionOptions(
+            package="keras",
+            versions=["2.15.0", "2.13.1", "2.12.0", "2.11.0", "2.10.0", "2.9.0", "2.4.3"],
+            requires_python={version: ">=3.8" for version in ["2.15.0", "2.13.1", "2.12.0", "2.11.0", "2.10.0", "2.9.0", "2.4.3"]},
+        ),
+        PackageVersionOptions(
+            package="numpy",
+            versions=["1.24.4", "1.24.3", "1.24.2", "1.24.1", "1.24.0", "1.23.5", "1.19.5"],
+            requires_python={version: ">=3.8" for version in ["1.24.4", "1.24.3", "1.24.2", "1.24.1", "1.24.0", "1.23.5", "1.19.5"]},
+        ),
+        PackageVersionOptions(
+            package="tensorflow",
+            versions=["2.13.1", "2.13.0", "2.12.1", "2.12.0", "2.11.1", "2.10.1", "2.4.4"],
+            requires_python={version: ">=3.8" for version in ["2.13.1", "2.13.0", "2.12.1", "2.12.0", "2.11.1", "2.10.1", "2.4.4"]},
+            requires_dist={
+                "2.13.1": ["keras<2.14,>=2.13.1", "numpy<=1.24.3,>=1.22"],
+                "2.13.0": ["keras<2.14,>=2.13.1", "numpy<=1.24.3,>=1.22"],
+                "2.12.1": ["keras<2.13,>=2.12.0", "numpy<1.24,>=1.22"],
+                "2.12.0": ["keras<2.13,>=2.12.0", "numpy<1.24,>=1.22"],
+                "2.11.1": ["keras<2.12,>=2.11.0", "numpy<1.24,>=1.20"],
+                "2.10.1": ["keras<2.11,>=2.10.0", "numpy<1.24,>=1.20"],
+                "2.4.4": ["keras<=2.4.3", "numpy<=1.19.5,>=1.19.2"],
+            },
+        ),
+    ]
+    pack = build_constraint_pack(state["version_options"], target_python="3.8", top_k=None)
+
+    modern_only = generate_candidate_bundles(pack, beam_width=12, max_bundles=4, version_cap_per_package=6)
+    assert all(
+        [("tensorflow", "2.4.4"), ("numpy", "1.19.5")] != [(dep.name, dep.version) for dep in bundle if dep.name in {"tensorflow", "numpy"}]
+        for bundle in modern_only
+    )
+
+    state["llm_source_compatibility_hints"] = [
+        {"package": "gym", "preferred_specifier": "<0.26.0", "reason": "legacy_gym_api"},
+        {"package": "keras", "preferred_specifier": "<=2.4.3", "reason": "legacy_standalone_keras_api"},
+        {"package": "numpy", "preferred_specifier": "<=1.19.5", "reason": "legacy_keras_tensorflow_numpy_api"},
+        {"package": "tensorflow", "preferred_specifier": "<=2.4.4", "reason": "legacy_standalone_keras_api"},
+    ]
+    hinted = generate_candidate_bundles(
+        pack,
+        beam_width=12,
+        max_bundles=4,
+        version_cap_per_package=6,
+        preferred_versions_by_package=workflow._preferred_bundle_versions(state),
+    )
+
+    assert [(dep.name, dep.version) for dep in hinted[0]] == [
+        ("gym", "0.25.2"),
+        ("keras", "2.4.3"),
+        ("numpy", "1.19.5"),
+        ("tensorflow", "2.4.4"),
+    ]
+
+
 def test_retrieve_pypi_metadata_uses_benchmark_platform_override(tmp_path: Path) -> None:
     class RecordingStore:
         def __init__(self) -> None:
@@ -462,32 +542,24 @@ def test_retrieve_pypi_metadata_uses_benchmark_platform_override(tmp_path: Path)
     assert workflow.pypi_store.calls[0]["platform"] == "linux/amd64"
 
 
-def test_apply_source_version_preferences_annotates_legacy_keras_and_gym_versions_in_research(tmp_path: Path) -> None:
+def test_apply_source_version_preferences_annotates_llm_source_compatibility_hints_in_research(tmp_path: Path) -> None:
     settings = Settings.from_env(project_root=tmp_path, preset_override="research")
     workflow = ResolutionWorkflow(settings, pypi_store=FakePyPIStore())
     case_root = tmp_path / "case"
     case_root.mkdir()
     snippet = case_root / "snippet.py"
-    snippet.write_text(
-        "\n".join(
-            [
-                "import gym",
-                "from keras.layers import Dense, merge",
-                "from keras.models import Model",
-                "import tensorflow as tf",
-                "import numpy as np",
-                "state = env.reset()",
-                "new_state, reward, done, _ = env.step(action)",
-                "model = Model(input=state_in, output=out)",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    snippet.write_text("import tensorflow as tf\n", encoding="utf-8")
     state = workflow.initial_state_for_case(
         BenchmarkCase(case_id="case-legacy", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
     )
     state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
     state["inferred_packages"] = ["gym", "keras", "numpy", "tensorflow"]
+    state["llm_source_compatibility_hints"] = [
+        {"package": "gym", "preferred_specifier": "<0.26", "reason": "legacy_gym_api"},
+        {"package": "keras", "preferred_specifier": "<=2.4.3", "reason": "legacy_keras_api"},
+        {"package": "numpy", "preferred_specifier": "<=1.19.5", "reason": "legacy_tensorflow_numpy"},
+        {"package": "tensorflow", "preferred_specifier": "<=2.4.4", "reason": "legacy_keras_tensorflow_api"},
+    ]
     state["version_options"] = [
         PackageVersionOptions(package="gym", versions=["0.26.2", "0.26.1", "0.25.2"]),
         PackageVersionOptions(package="keras", versions=["2.15.0", "2.13.1", "2.4.3", "2.4.2"]),
@@ -503,6 +575,369 @@ def test_apply_source_version_preferences_annotates_legacy_keras_and_gym_version
     assert versions_by_package["numpy"] == ["1.24.4", "1.24.3", "1.19.5", "1.19.4"]
     assert versions_by_package["tensorflow"] == ["2.13.1", "2.10.1", "2.4.4", "2.4.3"]
     assert "source_compat_legacy_keras_api:<=2.4.3" in state["applied_compatibility_policy"]["keras"]
+    assert "source_compat_legacy_gym_api:<0.26" in state["applied_compatibility_policy"]["gym"]
+
+
+def test_retrieve_pypi_metadata_asks_model_for_source_compatibility_hints(
+    tmp_path: Path,
+) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "version"
+            assert template == "source_compatibility.txt"
+            assert "tensorflow" in variables["allowed_packages"]
+            assert "import_specs" in variables["validation_options"]
+            assert "tensorflow_models_module" in variables["source_signals"]
+            assert "tensorflow_app_flags" in variables["source_signals"]
+            assert "python2_xrange" in variables["source_signals"]
+            return (
+                '{"default_runtime_profile":"import_specs","compatibility_hints":['
+                '{"package":"tensorflow","preferred_specifier":"<2.0.0","reason":"uses tensorflow.contrib"},'
+                '{"package":"gensim","preferred_specifier":">=0.13.3,<4.0.0","reason":"uses index2word"}]}'
+            )
+
+        @staticmethod
+        def invoke_text(stage: str, prompt_text: str) -> str:
+            raise AssertionError("Adjudication should not be needed in this test")
+
+    class PyPIStore:
+        @staticmethod
+        def get_version_options(
+            package: str,
+            target_python: str,
+            *,
+            limit: int = 20,
+            preset: str = "optimized",
+        ) -> PackageVersionOptions:
+            assert target_python == "3.7"
+            assert limit >= 1
+            assert preset
+            if package == "gensim":
+                return PackageVersionOptions(package="gensim", versions=["4.2.0", "3.8.3", "3.7.3"])
+            if package == "tensorflow":
+                return PackageVersionOptions(package="tensorflow", versions=["2.11.0", "2.10.1", "1.15.5", "1.14.0"])
+            raise FileNotFoundError(package)
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner(), pypi_store=PyPIStore())
+    case_root = tmp_path / "case-tf1"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text(
+        "\n".join(
+                [
+                    "# required tensorflow 0.12",
+                    "from gensim.models import Word2Vec",
+                    "import tensorflow as tf",
+                    "from tensorflow.models.embedding import gen_word2vec as word2vec",
+                    "from tensorflow.contrib.tensorboard.plugins import projector",
+                    "flags = tf.app.flags",
+                    "model = Word2Vec.load('YOUR-MODEL')",
+                    "for word in model.wv.index2word[:10000]:",
+                    "    print(word)",
+                    "for _ in xrange(10):",
+                    "    pass",
+                    "sess = tf.InteractiveSession()",
+                ]
+            ),
+            encoding="utf-8",
+        )
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-tf1", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["inferred_packages"] = ["gensim", "tensorflow"]
+    state["target_python"] = "3.7"
+    state["validation_options"] = [
+        {"profile": "docker_cmd", "command": "", "reason": "exact"},
+        {"profile": "import_specs", "command": "python - <<'PY'\nprint('ok')\nPY", "reason": "safe"},
+    ]
+    state["default_validation_profile"] = "docker_cmd"
+    state["current_runtime_profile"] = "docker_cmd"
+    state["current_validation_command"] = ""
+
+    workflow.retrieve_pypi_metadata(state)
+
+    assert state["default_validation_profile"] == "import_specs"
+    assert state["current_runtime_profile"] == "import_specs"
+    assert "source_compat_uses tensorflow.contrib:<2.0.0" in state["applied_compatibility_policy"]["tensorflow"]
+    assert "source_compat_uses index2word:>=0.13.3,<4.0.0" in state["applied_compatibility_policy"]["gensim"]
+    assert state["llm_source_compatibility_hints"] == [
+        {"package": "tensorflow", "preferred_specifier": "<2.0.0", "reason": "uses tensorflow.contrib"},
+        {"package": "gensim", "preferred_specifier": ">=0.13.3,<4.0.0", "reason": "uses index2word"},
+    ]
+    assert state["structured_outputs"]["source_compatibility"]["default_runtime_profile"] == "import_specs"
+
+
+def test_source_signal_summary_detects_legacy_keras_and_gym_signals(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(settings, pypi_store=FakePyPIStore())
+    case_root = tmp_path / "case-legacy-keras-signals"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text(
+        "\n".join(
+            [
+                "import gym",
+                "from keras.layers import Dense, Flatten, Input, merge, Lambda, Activation",
+                "from keras.models import Sequential, Model",
+                "import keras.backend as K",
+                "import tensorflow as tf",
+                "state = env.reset()",
+                "new_state, reward, done, _ = env.step(action)",
+                "model = Model(input=state_in, output=out)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-legacy-keras-signals", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+
+    rendered = workflow._source_signal_summary(state, limit=5000)
+
+    assert "keras_layers_merge_import" in rendered
+    assert "standalone_keras_api" in rendered
+    assert "keras_legacy_model_input" in rendered
+    assert "keras_legacy_model_output" in rendered
+    assert "gym_legacy_step_signature" in rendered
+    assert "gym_legacy_reset_signature" in rendered
+
+
+def test_retrieve_pypi_metadata_asks_model_for_legacy_keras_gym_family_hints(
+    tmp_path: Path,
+) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "version"
+            assert template == "source_compatibility.txt"
+            assert "keras_layers_merge_import" in variables["source_signals"]
+            assert "standalone_keras_api" in variables["source_signals"]
+            assert "keras_legacy_model_input" in variables["source_signals"]
+            assert "keras_legacy_model_output" in variables["source_signals"]
+            assert "gym_legacy_step_signature" in variables["source_signals"]
+            assert "gym_legacy_reset_signature" in variables["source_signals"]
+            return (
+                '{"compatibility_hints":['
+                '{"package":"gym","preferred_specifier":"<0.26.0","reason":"legacy gym api"},'
+                '{"package":"keras","preferred_specifier":"<=2.4.3","reason":"legacy standalone keras api"},'
+                '{"package":"numpy","preferred_specifier":"<=1.19.5","reason":"legacy keras tensorflow numpy api"},'
+                '{"package":"tensorflow","preferred_specifier":"<=2.4.4","reason":"legacy standalone keras api"}]}'
+            )
+
+        @staticmethod
+        def invoke_text(stage: str, prompt_text: str) -> str:
+            raise AssertionError("Adjudication should not be needed in this test")
+
+    class PyPIStore:
+        @staticmethod
+        def get_version_options(
+            package: str,
+            target_python: str,
+            *,
+            limit: int = 20,
+            preset: str = "optimized",
+        ) -> PackageVersionOptions:
+            assert target_python == "3.8"
+            assert limit >= 1
+            assert preset
+            if package == "gym":
+                return PackageVersionOptions(package="gym", versions=["0.26.2", "0.26.1", "0.25.2"])
+            if package == "keras":
+                return PackageVersionOptions(package="keras", versions=["2.15.0", "2.13.1", "2.4.3", "2.4.2"])
+            if package == "numpy":
+                return PackageVersionOptions(package="numpy", versions=["1.24.4", "1.24.3", "1.19.5", "1.19.4"])
+            if package == "tensorflow":
+                return PackageVersionOptions(package="tensorflow", versions=["2.13.1", "2.10.1", "2.4.4", "2.4.3"])
+            raise FileNotFoundError(package)
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner(), pypi_store=PyPIStore())
+    case_root = tmp_path / "case-legacy-keras-hints"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text(
+        "\n".join(
+            [
+                "import gym",
+                "from keras.layers import Dense, Flatten, Input, merge, Lambda, Activation",
+                "from keras.models import Sequential, Model",
+                "import keras.backend as K",
+                "import tensorflow as tf",
+                "state = env.reset()",
+                "new_state, reward, done, _ = env.step(action)",
+                "model = Model(input=state_in, output=out)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-legacy-keras-hints", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-legacy-keras-hints")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["inferred_packages"] = ["gym", "keras", "numpy", "tensorflow"]
+    state["target_python"] = "3.8"
+    state["validation_options"] = [
+        {"profile": "docker_cmd", "command": "", "reason": "exact"},
+        {"profile": "import_specs", "command": "python - <<'PY'\nprint('ok')\nPY", "reason": "safe"},
+    ]
+    state["default_validation_profile"] = "docker_cmd"
+    state["current_runtime_profile"] = "docker_cmd"
+    state["current_validation_command"] = ""
+
+    workflow.retrieve_pypi_metadata(state)
+
+    assert state["llm_source_compatibility_hints"] == [
+        {"package": "gym", "preferred_specifier": "<0.26.0", "reason": "legacy gym api"},
+        {"package": "keras", "preferred_specifier": "<=2.4.3", "reason": "legacy standalone keras api"},
+        {"package": "numpy", "preferred_specifier": "<=1.19.5", "reason": "legacy keras tensorflow numpy api"},
+        {"package": "tensorflow", "preferred_specifier": "<=2.4.4", "reason": "legacy standalone keras api"},
+    ]
+    assert workflow._preferred_bundle_versions(state) == {
+        "gym": ["0.25.2"],
+        "keras": ["2.4.3", "2.4.2"],
+        "numpy": ["1.19.5", "1.19.4"],
+        "tensorflow": ["2.4.4", "2.4.3"],
+    }
+    rendered = workflow._planning_version_space_summary(state, limit=5000)
+    assert rendered.index('"0.25.2"') < rendered.index('"0.26.2"')
+    assert rendered.index('"2.4.3"') < rendered.index('"2.15.0"')
+    assert rendered.index('"1.19.5"') < rendered.index('"1.24.4"')
+
+
+def test_planning_version_space_summary_surfaces_model_selected_preferred_versions_first(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(settings, pypi_store=FakePyPIStore())
+    case_root = tmp_path / "case-summary"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text(
+        "\n".join(
+            [
+                "# required tensorflow 0.12",
+                "from gensim.models import Word2Vec",
+                "import tensorflow as tf",
+                "from tensorflow.contrib.tensorboard.plugins import projector",
+                "for word in model.wv.index2word[:10000]:",
+                "    print(word)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-summary", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["inferred_packages"] = ["gensim", "tensorflow"]
+    state["llm_source_compatibility_hints"] = [
+        {"package": "gensim", "preferred_specifier": ">=0.13.3,<4.0.0", "reason": "uses index2word"},
+        {"package": "tensorflow", "preferred_specifier": "<2.0.0", "reason": "uses tensorflow.contrib"},
+    ]
+    state["version_options"] = [
+        PackageVersionOptions(package="gensim", versions=["4.2.0", "4.1.2", "3.8.3", "3.7.3"]),
+        PackageVersionOptions(package="tensorflow", versions=["2.11.0", "2.10.1", "1.15.5", "1.14.0"]),
+    ]
+
+    rendered = workflow._planning_version_space_summary(state, limit=5000)
+
+    assert rendered.index('"gensim"') < rendered.index('"tensorflow"')
+    assert rendered.index('"3.8.3"') < rendered.index('"4.2.0"')
+    assert rendered.index('"1.15.5"') < rendered.index('"2.11.0"')
+
+
+def test_parse_source_compatibility_payload_is_strict() -> None:
+    runtime_profile, hints = parse_source_compatibility_payload(
+        (
+            '{"default_runtime_profile":"import_specs","compatibility_hints":['
+            '{"package":"tensorflow","preferred_specifier":"<2.0.0","reason":"legacy tf1"}]}'
+        ),
+        allowed_packages={"tensorflow"},
+        allowed_runtime_profiles={"docker_cmd", "import_specs"},
+    )
+
+    assert runtime_profile == "import_specs"
+    assert hints == [
+        {"package": "tensorflow", "preferred_specifier": "<2.0.0", "reason": "legacy tf1"}
+    ]
+
+    try:
+        parse_source_compatibility_payload(
+            '{"compatibility_hints":[{"package":"tensorflow","preferred_specifier":"not-a-spec"}]}',
+            allowed_packages={"tensorflow"},
+            allowed_runtime_profiles={"import_specs"},
+        )
+    except StructuredOutputError:
+        pass
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Invalid preferred_specifier should raise StructuredOutputError.")
+
+
+def test_research_prompts_emphasize_coherent_legacy_families(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+    workflow = ResolutionWorkflow(settings, pypi_store=FakePyPIStore())
+    source_hints = (
+        '[{"package":"gym","preferred_specifier":"<0.26.0","reason":"legacy gym api"},'
+        '{"package":"keras","preferred_specifier":"<=2.4.3","reason":"legacy standalone keras api"},'
+        '{"package":"numpy","preferred_specifier":"<=1.19.5","reason":"legacy keras tensorflow numpy api"},'
+        '{"package":"tensorflow","preferred_specifier":"<=2.4.4","reason":"legacy standalone keras api"}]'
+    )
+
+    candidate_prompt = workflow._format_prompt(
+        "candidate_plans_v2.txt",
+        target_python="3.8",
+        allowed_packages="gym\nkeras\nnumpy\ntensorflow",
+        version_space='{"packages":[]}',
+        rag_context="{}",
+        validation_options='[{"profile":"docker_cmd","command":"","reason":"exact"}]',
+        default_validation_profile="docker_cmd",
+        candidate_bundle_hints='{"generated_bundles":[],"negotiated_bundles":[]}',
+        conflict_notes="[]",
+        source_compatibility_hints=source_hints,
+        max_plan_count=3,
+    )
+    repair_prompt = workflow._format_prompt(
+        "repair_attempt_v2.txt",
+        target_python="3.8",
+        allowed_packages="gym\nkeras\nnumpy\ntensorflow",
+        version_space='{"packages":[]}',
+        validation_options='[{"profile":"docker_cmd","command":"","reason":"exact"}]',
+        default_validation_profile="docker_cmd",
+        source_compatibility_hints=source_hints,
+        previous_plan="gym==0.26.2\nkeras==2.15.0\nnumpy==1.24.4\ntensorflow==2.13.1",
+        attempted_plans="gym==0.26.2, keras==2.15.0, numpy==1.24.4, tensorflow==2.13.1",
+        error_details="tensorflow 2.13.1 depends on keras<2.14 and >=2.13.1",
+        repair_memory='{"entries":[]}',
+        feedback_summary='{"entries":[]}',
+        rag_context="{}",
+        max_plan_count=2,
+    )
+
+    assert "keep related packages internally coherent" in candidate_prompt
+    assert "legacy standalone Keras / legacy Gym snippets" in candidate_prompt
+    assert source_hints in candidate_prompt
+    assert "revise the coupled family together" in repair_prompt
+    assert "family-level repair" in repair_prompt
+    assert "tensorflow 2.13.1 depends on keras<2.14 and >=2.13.1" in repair_prompt
 
 
 def test_retrieve_version_specific_metadata_filters_versions_using_enriched_requires_python(tmp_path: Path) -> None:
@@ -1451,6 +1886,16 @@ def test_research_prompt_templates_render_without_format_key_errors(tmp_path: Pa
             source_compatibility_hints="[]",
             repo_evidence="{}",
         ),
+        "source_compatibility": workflow._format_prompt(
+            "source_compatibility.txt",
+            target_python="3.12",
+            allowed_packages="tensorflow\ngensim",
+            version_space="{}",
+            validation_options="[]",
+            default_validation_profile="docker_cmd",
+            source_signals="[]",
+            raw_file="import tensorflow as tf\n",
+        ),
         "resolve_aliases": workflow._format_prompt(
             "resolve_aliases.txt",
             unresolved_packages="memcache\nyaml",
@@ -1561,6 +2006,86 @@ def test_research_extract_backfills_known_runtime_aliases_omitted_by_llm(tmp_pat
 
     assert updated["inferred_packages"] == ["python-memcached", "redis"]
     assert updated["candidate_provenance"]["python-memcached"] == "alias"
+
+
+def test_parse_package_inference_output_extracts_python_version_from_markdown_wrapped_json() -> None:
+    packages, python_version = parse_package_inference_output(
+        """
+Based on the code:
+
+```json
+{
+  "packages": [
+    {"package": "tensorflow"},
+    {"package": "numpy"}
+  ],
+  "python_version": "3.7"
+}
+```
+""".strip()
+    )
+
+    assert packages == ["tensorflow", "numpy"]
+    assert python_version == "3.7"
+
+
+def test_research_extract_preserves_python_version_from_markdown_wrapped_json(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "extract"
+            assert template == "initial_imports.txt"
+            return """
+Legacy snippet analysis:
+
+```json
+{
+  "packages": [
+    {"package": "tensorflow", "confidence": 1.0, "source": "code", "evidence": ["import tensorflow as tf"]},
+    {"package": "numpy", "confidence": 1.0, "source": "code", "evidence": ["import numpy as np"]}
+  ],
+  "python_version": "3.7"
+}
+```
+""".strip()
+
+        @staticmethod
+        def invoke_text(stage: str, prompt_text: str) -> str:
+            assert stage == "adjudicate"
+            return (
+                '{"packages":['
+                '{"package":"tensorflow","confidence":1.0,"source":"code","evidence":["import tensorflow as tf"]},'
+                '{"package":"numpy","confidence":1.0,"source":"code","evidence":["import numpy as np"]}'
+                '],"python_version":"3.7"}'
+            )
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+
+    case_root = tmp_path / "case-py37"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import tensorflow as tf\nimport numpy as np\n", encoding="utf-8")
+    case = BenchmarkCase(case_id="case-py37", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    state = workflow.initial_state_for_case(case, run_id="run-1")
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["extracted_imports"] = ["tensorflow", "numpy"]
+    state["repo_evidence"] = {}
+    state["benchmark_target_python"] = "3.12"
+    state["target_python"] = "3.12"
+    state["python_version_source"] = "benchmark_default"
+
+    updated = workflow._infer_packages_prompt_a_research(state, state["extracted_imports"])
+
+    assert updated["inferred_target_python"] == "3.7"
+    assert updated["target_python"] == "3.7"
+    assert updated["python_version_source"] == "llm_prompt_a"
 
 
 def test_finalize_result_handles_unsupported_imports_without_execution(tmp_path: Path) -> None:

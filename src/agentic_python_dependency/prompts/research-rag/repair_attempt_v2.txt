@@ -21,6 +21,8 @@ Rules:
 - Do not assume packages are already installed; list every installable dependency explicitly.
 - If changing validation strategy is more appropriate than changing dependencies, you may keep the same dependencies and set a different allowed `runtime_profile`.
 - When source compatibility hints are present, prefer repairs that move toward those version families.
+- When source compatibility hints span related packages, revise the coupled family together instead of downgrading or upgrading only one side of a constrained pair.
+- If the error details show dependency conflicts between related packages, prefer a family-level repair that restores internal compatibility across those packages.
 - Avoid repeating blocked strategy families from the repair memory.
 - Prefer orthogonal fixes when prior strategies failed.
 - If dependency changes are not likely to help, return {{"repair_applicable": false, "plans": []}}.

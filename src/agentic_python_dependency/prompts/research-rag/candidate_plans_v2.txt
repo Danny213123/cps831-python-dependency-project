@@ -21,6 +21,8 @@ Rules:
 - If a non-default validation profile is safer or more accurate for this snippet, set `runtime_profile` to one of the allowed validation profiles. Otherwise omit it or use the default.
 - Treat advisory bundle hints as conflict-checked starting points unless the source compatibility hints or conflict notes justify a different family.
 - When source compatibility hints are present, prefer plans that satisfy those version families over newer incompatible-looking stacks.
+- If the source hints imply a coupled package family, keep related packages internally coherent instead of mixing modern and legacy lines in the same plan.
+- For legacy standalone Keras / legacy Gym snippets, prefer coherent `keras`/`tensorflow`/`numpy`/`gym` families over single-package upgrades or downgrades.
 - Prefer plans that fit the target Python and avoid noted conflicts.
 - Return at most {max_plan_count} plans.
 - No markdown, no commentary, no text outside JSON.

@@ -1,0 +1,46 @@
+Infer advisory source compatibility hints for a Python dependency resolver.
+
+Return strict JSON only using this schema:
+{{
+  "default_runtime_profile": "import_specs",
+  "compatibility_hints": [
+    {{
+      "package": "tensorflow",
+      "preferred_specifier": "<2.0.0",
+      "reason": "uses tensorflow.contrib"
+    }}
+  ]
+}}
+
+Rules:
+- Only return advisory hints when the source strongly implies a version family or a safer validation profile.
+- Only use packages from the allowed package set.
+- Only use validation profiles from the allowed validation profile set.
+- Use broad version families or specifiers, not exact pins.
+- Treat observed source signals as objective hints, but infer compatibility yourself instead of blindly echoing them.
+- When the source implies a coupled dependency family, return compatible hints for each related package that likely needs to move together instead of emitting only one isolated hint.
+- Legacy standalone Keras signals such as `from keras.layers import ... merge`, `Model(input=..., output=...)`, and old Gym reset/step signatures often imply an older coherent family across `keras`, `tensorflow`, `numpy`, and `gym`.
+- Prefer no hint over a weak hint.
+- If the current default validation profile already looks right, omit `default_runtime_profile` or leave it empty.
+- No markdown, no commentary, no text outside JSON.
+
+Target Python:
+{target_python}
+
+Allowed packages:
+{allowed_packages}
+
+Version space:
+{version_space}
+
+Allowed validation profiles:
+{validation_options}
+
+Current default validation profile:
+{default_validation_profile}
+
+Observed source signals:
+{source_signals}
+
+Source code:
+{raw_file}

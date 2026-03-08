@@ -287,6 +287,7 @@ class ResolutionState(TypedDict, total=False):
     dependency_reason: str
     candidate_provenance: dict[str, str]
     repair_outcome: str
+    llm_source_compatibility_hints: list[dict[str, str]]
     applied_compatibility_policy: dict[str, list[str]]
     version_selection_source: str
     candidate_plan_strategy: str

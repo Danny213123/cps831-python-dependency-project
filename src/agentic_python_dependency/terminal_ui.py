@@ -11,7 +11,9 @@ import subprocess
 import sys
 import threading
 import time
+import tomllib
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from typing import Callable
 
@@ -60,6 +62,24 @@ DASHBOARD_STYLE = Style.from_dict(
         "bar.remaining": "bg:#1f2937 #1f2937",
     }
 )
+
+
+def _resolve_apdr_version() -> str:
+    try:
+        pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        version = str(payload.get("project", {}).get("version", "") or "").strip()
+        if version:
+            return version
+    except Exception:
+        pass
+    try:
+        return package_version("agentic-python-dependency")
+    except PackageNotFoundError:
+        pass
+    except Exception:
+        pass
+    return "unknown"
 
 
 def _format_progress_bar(completed: int, total: int, width: int = 36) -> str:
@@ -117,6 +137,7 @@ class TerminalBenchmarkDashboard:
     refresh_interval: float = 0.2
 
     def __post_init__(self) -> None:
+        self.app_version = _resolve_apdr_version()
         self.run_id = ""
         self.total = 0
         self.completed = 0
@@ -439,6 +460,7 @@ class TerminalBenchmarkDashboard:
             ("class:headline", "APDR benchmark in progress\n"),
             ("class:muted", "Use Ctrl+C only if you intend to stop the benchmark process itself.\n\n"),
             ("class:label", "Run ID       "), ("class:value", f"{self.run_id}\n"),
+            ("class:label", "Version      "), ("class:value", f"{self.app_version}\n"),
             ("class:label", "Target       "), ("class:value", f"{self.target}\n"),
             ("class:label", "Resolver     "), ("class:value", f"{self.resolver}\n"),
             ("class:label", "Preset       "), ("class:value", f"{self.preset}\n"),
@@ -608,6 +630,7 @@ class TerminalBenchmarkDashboard:
             "APDR Benchmark Dashboard",
             "=" * 80,
             f"Run ID: {self.run_id}",
+            f"Version: {self.app_version}",
             f"Target: {self.target}",
             f"Resolver: {self.resolver}",
             f"Preset: {self.preset}",
@@ -769,6 +792,7 @@ class TerminalUI:
             self.input_fn is input and self.output is print and sys.stdin.isatty() and sys.stdout.isatty()
         )
         self._fresh_run = False
+        self._app_version = _resolve_apdr_version()
 
     def run(self) -> int:
         if self._use_prompt_toolkit:
@@ -2412,6 +2436,7 @@ class TerminalUI:
         return HTML(
             "<b><ansibrightyellow>APDR Command Center</ansibrightyellow></b>\n"
             "<style fg='#98c1d9'>Run, report, and configure without memorizing commands.</style>\n\n"
+            f"<b>Version:</b> {self._app_version}\n"
             f"<b>Preset/Resolver:</b> {self.settings.preset} / {self.settings.resolver}\n"
             f"<b>Benchmark source:</b> {self.settings.benchmark_case_source}\n"
             f"<b>Model bundle:</b> {self.settings.model_profile}\n"
@@ -2489,6 +2514,7 @@ class TerminalUI:
         self.output("=" * width)
         self.output(title.center(width))
         self.output("=" * width)
+        self.output(f"Version: {self._app_version}")
         self.output(f"Preset: {self.settings.preset}")
         self.output(f"Resolver: {self.settings.resolver}")
         self.output(f"Benchmark source: {self.settings.benchmark_case_source}")

@@ -1145,6 +1145,35 @@ def test_terminal_benchmark_dashboard_reports_rate_speed_and_eta(monkeypatch) ->
     assert "repair / gemma3:12b @ 50.0 tok/s" in rendered
 
 
+def test_terminal_benchmark_dashboard_displays_app_version(monkeypatch) -> None:
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("agentic_python_dependency.terminal_ui._resolve_apdr_version", lambda: "9.9.9")
+    dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
+
+    dashboard.start(
+        run_id="run123",
+        total=4,
+        completed=0,
+        successes=0,
+        failures=0,
+        resolver="apdr",
+        preset="research",
+        prompt_profile="research-rag",
+        model_summary="mistral-nemo-12b",
+        jobs=1,
+        target="full",
+        artifacts_dir=Path("/tmp/run123"),
+    )
+    dashboard._stop_event.set()
+    if dashboard._thread is not None:
+        dashboard._thread.join(timeout=0.2)
+
+    rendered = "".join(fragment for _, fragment in dashboard._formatted_text())
+
+    assert "Version" in rendered
+    assert "9.9.9" in rendered
+
+
 def test_terminal_benchmark_dashboard_renders_recent_case_table(monkeypatch) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
     dashboard = TerminalBenchmarkDashboard(refresh_interval=0.01)
@@ -1230,6 +1259,32 @@ def test_terminal_benchmark_dashboard_renders_case_activity(monkeypatch) -> None
     assert "docker_build_start" in rendered
     assert "Starting docker build." in rendered
     assert "Recent activity" in rendered
+
+
+def test_terminal_ui_print_header_displays_app_version(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    outputs: list[str] = []
+
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("agentic_python_dependency.terminal_ui._resolve_apdr_version", lambda: "9.9.9")
+
+    ui = TerminalUI(
+        settings=settings,
+        doctor_command=lambda *args, **kwargs: 0,
+        run_benchmark=lambda *args, **kwargs: 0,
+        run_failed_cases=lambda *args, **kwargs: 0,
+        run_project=lambda *args, **kwargs: 0,
+        summarize_command=lambda *args, **kwargs: 0,
+        failures_command=lambda *args, **kwargs: 0,
+        modules_command=lambda *args, **kwargs: 0,
+        ensure_smoke_subset=lambda *args, **kwargs: tmp_path,
+        output=outputs.append,
+        input_fn=lambda prompt: "",
+    )
+
+    ui._print_header()
+
+    assert any("Version: 9.9.9" in line for line in outputs)
 
 
 def test_terminal_benchmark_dashboard_can_request_stop(monkeypatch) -> None:

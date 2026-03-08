@@ -82,6 +82,7 @@ from agentic_python_dependency.tools.structured_outputs import (
     parse_cross_validation_payload,
     parse_experimental_package_payload,
     parse_repair_plan_payload,
+    parse_source_compatibility_payload,
     parse_version_negotiation_payload,
 )
 
@@ -143,13 +144,39 @@ def normalize_python_version_hint(value: str) -> str | None:
     return None
 
 
+def _extract_json_object_text(raw_output: str) -> str | None:
+    candidates: list[str] = []
+    stripped = raw_output.strip()
+    if stripped:
+        candidates.append(stripped)
+    fenced_blocks = re.findall(r"```(?:json)?\s*([\s\S]*?)```", raw_output, flags=re.IGNORECASE)
+    candidates.extend(block.strip() for block in fenced_blocks if block.strip())
+    first_brace = raw_output.find("{")
+    last_brace = raw_output.rfind("}")
+    if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
+        candidates.append(raw_output[first_brace : last_brace + 1].strip())
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return candidate
+    return None
+
+
 def parse_package_inference_output(raw_output: str) -> tuple[list[str], str | None]:
     raw_output = raw_output.strip()
     if not raw_output:
         return [], None
 
+    json_candidate = _extract_json_object_text(raw_output)
     try:
-        payload = json.loads(raw_output)
+        payload = json.loads(json_candidate if json_candidate is not None else raw_output)
     except json.JSONDecodeError:
         payload = None
 
@@ -551,10 +578,6 @@ def build_benchmark_validation_options(source_code: str, extracted_imports: list
         default_profile = "main_guard_import"
         default_command = build_snippet_import_command()
         add_option("main_guard_import", default_command, "main-guarded scripts should avoid full execution")
-    elif _has_top_level_ml_training_loop(source_code, extracted_imports) and normalized_imports & hardware_sensitive_ml_imports:
-        default_profile = "import_specs"
-        default_command = build_import_spec_probe_command(extracted_imports)
-        add_option("import_specs", default_command, "hardware-sensitive ML imports should use spec-only validation")
     elif _has_top_level_ml_training_loop(source_code, extracted_imports):
         default_profile = "import_statements"
         default_command = build_import_statements_command()
@@ -611,6 +634,7 @@ class ResolutionWorkflow:
         "candidate_bundle_hints": "{}",
         "conflict_notes": "[]",
         "source_compatibility_hints": "[]",
+        "source_signals": "[]",
         "validation_options": "[]",
         "default_validation_profile": "",
         "repair_memory": "{}",
@@ -813,26 +837,51 @@ class ResolutionWorkflow:
             )
         )
 
-    @staticmethod
-    def _has_legacy_keras_api(source_text: str) -> bool:
+    def _source_signal_summary(self, state: ResolutionState, *, limit: int = 1800) -> str:
+        source_text = "\n".join(state.get("source_files", {}).values())
         lowered = source_text.lower()
-        if "from keras.layers import" in lowered and re.search(r"\bmerge\b", lowered):
-            return True
-        return bool(
-            re.search(r"\bModel\s*\([^)]*\binput\s*=", source_text)
-            or re.search(r"\bModel\s*\([^)]*\boutput\s*=", source_text)
-        )
+        signals: list[dict[str, str]] = []
 
-    @staticmethod
-    def _has_legacy_gym_api(source_text: str) -> bool:
-        return bool(
-            re.search(
-                r"^\s*[^=\n,]+,\s*[^=\n,]+,\s*[^=\n,]+,\s*[^=\n,]+\s*=\s*.*\.step\(",
-                source_text,
-                re.MULTILINE,
-            )
-            or re.search(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*.*\.reset\(\)\s*$", source_text, re.MULTILINE)
+        def add_signal(signal: str, evidence: str) -> None:
+            signals.append({"signal": signal, "evidence": evidence})
+
+        token_signals = (
+            ("required tensorflow 0.", "legacy_tensorflow_comment", "required tensorflow 0.x"),
+            ("tensorflow.models.", "tensorflow_models_module", "tensorflow.models.* import"),
+            ("tensorflow.contrib", "tensorflow_contrib_api", "tensorflow.contrib usage"),
+            ("tf.contrib", "tensorflow_contrib_alias_api", "tf.contrib usage"),
+            ("tf.app.flags", "tensorflow_app_flags", "tf.app.flags usage"),
+            ("tf.flags", "tensorflow_flags_alias", "tf.flags usage"),
+            ("tf.merge_all_summaries", "tensorflow_merge_all_summaries", "tf.merge_all_summaries usage"),
+            ("tf.train.summarywriter", "tensorflow_summary_writer", "tf.train.SummaryWriter usage"),
+            ("tf.summary.filewriter", "tensorflow_filewriter", "tf.summary.FileWriter usage"),
+            ("interactivesession(", "tensorflow_interactive_session", "tf.InteractiveSession usage"),
+            ("index2word", "gensim_index2word", "gensim index2word usage"),
+            ("word2vec.load(", "gensim_word2vec_load", "Word2Vec.load usage"),
         )
+        for token, signal, evidence in token_signals:
+            if token in lowered:
+                add_signal(signal, evidence)
+        if re.search(r"\bxrange\s*\(", source_text):
+            add_signal("python2_xrange", "xrange() usage")
+        if re.search(r"^\s*from\s+keras\.layers\s+import\b.*\bmerge\b", source_text, re.MULTILINE):
+            add_signal("keras_layers_merge_import", "from keras.layers import ... merge")
+        if re.search(r"^\s*(?:from\s+keras(?:\.|\b)|import\s+keras\b)", source_text, re.MULTILINE):
+            add_signal("standalone_keras_api", "imports standalone keras package")
+        if re.search(r"\bmodel\s*\([^)]*\binput\s*=", source_text, re.IGNORECASE):
+            add_signal("keras_legacy_model_input", "Model(input=...) usage")
+        if re.search(r"\bmodel\s*\([^)]*\boutput\s*=", source_text, re.IGNORECASE):
+            add_signal("keras_legacy_model_output", "Model(output=...) usage")
+        if re.search(
+            r"^\s*[^=\n,]+,\s*[^=\n,]+,\s*[^=\n,]+,\s*[^=\n,]+\s*=\s*.*\.step\(",
+            source_text,
+            re.MULTILINE,
+        ):
+            add_signal("gym_legacy_step_signature", "four-value env.step(...) unpack")
+        if re.search(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*.*\.reset\(\)\s*$", source_text, re.MULTILINE):
+            add_signal("gym_legacy_reset_signature", "single-value env.reset() assignment")
+        rendered = json.dumps(signals, indent=2)
+        return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
 
     def _benchmark_resolution_platform(self, state: ResolutionState) -> str:
         if state.get("mode") != "gistable":
@@ -861,18 +910,103 @@ class ResolutionWorkflow:
             kwargs["platform"] = platform_override
         return self.pypi_store.get_version_options(package, target_python, **kwargs)
 
-    def _source_version_preferences(self, state: ResolutionState) -> dict[str, tuple[str, str]]:
-        source_text = "\n".join(state.get("source_files", {}).values())
+    def _should_infer_source_compatibility_hints(self, state: ResolutionState) -> bool:
+        if not self._is_research() or not self._uses_full_apd():
+            return False
+        if state.get("mode") != "gistable":
+            return False
+        if not state.get("version_options") or not state.get("validation_options"):
+            return False
         inferred = {normalize_package_name(package) for package in state.get("inferred_packages", [])}
+        return bool(inferred & {"tensorflow", "torch", "keras", "gensim", "gym"})
+
+    def _infer_source_compatibility_hints(self, state: ResolutionState) -> None:
+        state["llm_source_compatibility_hints"] = []
+        state.setdefault("structured_outputs", {})["source_compatibility"] = {
+            "default_runtime_profile": "",
+            "compatibility_hints": [],
+        }
+        if not self._should_infer_source_compatibility_hints(state):
+            return
+        allowed_packages = self._research_allowed_packages(state)
+        if not allowed_packages:
+            return
+        allowed_runtime_profiles = {
+            option.get("profile", "")
+            for option in state.get("validation_options", [])
+            if option.get("profile")
+        }
+        source_context = "\n\n".join(
+            f"# file: {file_name}\n{code}" for file_name, code in state.get("source_files", {}).items()
+        )[:7000]
+        prompt_variables = {
+            "target_python": state.get("target_python", ""),
+            "allowed_packages": "\n".join(sorted(allowed_packages)),
+            "version_space": self._planning_version_space_summary(state),
+            "validation_options": self._validation_options_summary(state),
+            "default_validation_profile": state.get("default_validation_profile", ""),
+            "source_signals": self._source_signal_summary(state),
+            "raw_file": source_context,
+        }
+        prompt_text = self._format_prompt("source_compatibility.txt", **prompt_variables)
+        self._trace_request(state, "version", prompt_text)
+        raw_output = self.prompt_runner.invoke_template("version", "source_compatibility.txt", prompt_variables)
+        self._trace_response(state, "version", raw_output)
+        state["model_outputs"]["version"].append(
+            {
+                "attempt": state["current_attempt"],
+                "output": raw_output,
+                "source": "source_compatibility",
+            }
+        )
+        state["structured_outputs"]["source_compatibility_raw"] = raw_output
+
+        runtime_profile = ""
+        hints: list[dict[str, str]] = []
+        try:
+            runtime_profile, hints = parse_source_compatibility_payload(
+                raw_output,
+                allowed_packages=allowed_packages,
+                allowed_runtime_profiles=allowed_runtime_profiles,
+            )
+        except StructuredOutputError:
+            cleaned_output = self._adjudicate_json(
+                state,
+                "source_compatibility",
+                raw_output,
+                '{"default_runtime_profile":"import_specs","compatibility_hints":[{"package":"tensorflow","preferred_specifier":"<2.0.0","reason":"legacy tf1 api"}]}',
+            )
+            try:
+                runtime_profile, hints = parse_source_compatibility_payload(
+                    cleaned_output,
+                    allowed_packages=allowed_packages,
+                    allowed_runtime_profiles=allowed_runtime_profiles,
+                )
+            except StructuredOutputError:
+                state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
+                runtime_profile = ""
+                hints = []
+
+        state["llm_source_compatibility_hints"] = hints
+        payload = {
+            "default_runtime_profile": runtime_profile,
+            "compatibility_hints": hints,
+        }
+        state["structured_outputs"]["source_compatibility"] = payload
+        self._write_json_artifact(state, "source-compatibility.json", payload)
+        if runtime_profile:
+            state["default_validation_profile"] = runtime_profile
+            self._apply_validation_profile(state, runtime_profile)
+
+    def _source_version_preferences(self, state: ResolutionState) -> dict[str, tuple[str, str]]:
         preferences: dict[str, tuple[str, str]] = {}
-        if "keras" in inferred and self._has_legacy_keras_api(source_text):
-            preferences["keras"] = ("<=2.4.3", "legacy_keras_api")
-            if "tensorflow" in inferred:
-                preferences["tensorflow"] = ("<=2.4.4", "legacy_keras_tensorflow_api")
-                if "numpy" in inferred:
-                    preferences["numpy"] = ("<=1.19.5", "legacy_tensorflow_numpy")
-        if "gym" in inferred and self._has_legacy_gym_api(source_text):
-            preferences["gym"] = ("<0.26", "legacy_gym_api")
+        for item in state.get("llm_source_compatibility_hints", []):
+            package = normalize_package_name(str(item.get("package", "")))
+            preferred_specifier = str(item.get("preferred_specifier", "")).strip()
+            reason = str(item.get("reason", "")).strip() or "llm_source_compatibility"
+            if not package or not preferred_specifier:
+                continue
+            preferences[package] = (preferred_specifier, reason)
         return preferences
 
     def _apply_source_version_preferences(self, state: ResolutionState) -> None:
@@ -1208,27 +1342,67 @@ class ResolutionWorkflow:
         return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
 
     def _planning_version_space_summary(self, state: ResolutionState, *, limit: int = 5000) -> str:
+        preferred_versions_by_package = self._preferred_bundle_versions(state)
         package_limit = 16
         for version_limit in (24, 16, 12, 8, 6, 4, 2):
             payload = {
                 "packages": [
                     {
                         "package": option.package,
-                        "versions": option.versions[:version_limit],
+                        "versions": (
+                            [
+                                *preferred_versions_by_package.get(option.package, []),
+                                *[
+                                    version
+                                    for version in option.versions
+                                    if version not in set(preferred_versions_by_package.get(option.package, []))
+                                ],
+                            ]
+                        )[:version_limit],
                         "policy_notes": option.policy_notes[:4],
                         "requires_python": {
                             version: option.requires_python.get(version, "")
-                            for version in option.versions[: min(version_limit, 12)]
+                            for version in (
+                                [
+                                    *preferred_versions_by_package.get(option.package, []),
+                                    *[
+                                        candidate_version
+                                        for candidate_version in option.versions
+                                        if candidate_version
+                                        not in set(preferred_versions_by_package.get(option.package, []))
+                                    ],
+                                ]
+                            )[: min(version_limit, 12)]
                             if option.requires_python.get(version, "")
                         },
                         "platform_notes": {
                             version: option.platform_notes.get(version, [])[:4]
-                            for version in option.versions[: min(version_limit, 8)]
+                            for version in (
+                                [
+                                    *preferred_versions_by_package.get(option.package, []),
+                                    *[
+                                        candidate_version
+                                        for candidate_version in option.versions
+                                        if candidate_version
+                                        not in set(preferred_versions_by_package.get(option.package, []))
+                                    ],
+                                ]
+                            )[: min(version_limit, 8)]
                             if option.platform_notes.get(version, [])
                         },
                         "requires_dist": {
                             version: option.requires_dist.get(version, [])[:6]
-                            for version in option.versions[: min(version_limit, 6)]
+                            for version in (
+                                [
+                                    *preferred_versions_by_package.get(option.package, []),
+                                    *[
+                                        candidate_version
+                                        for candidate_version in option.versions
+                                        if candidate_version
+                                        not in set(preferred_versions_by_package.get(option.package, []))
+                                    ],
+                                ]
+                            )[: min(version_limit, 6)]
                             if option.requires_dist.get(version, [])
                         },
                     }
@@ -2136,6 +2310,7 @@ class ResolutionWorkflow:
             dependency_reason="",
             candidate_provenance={},
             repair_outcome="",
+            llm_source_compatibility_hints=[],
             applied_compatibility_policy={},
             version_selection_source="",
             candidate_plan_strategy="",
@@ -2211,6 +2386,7 @@ class ResolutionWorkflow:
             dependency_reason="",
             candidate_provenance={},
             repair_outcome="",
+            llm_source_compatibility_hints=[],
             applied_compatibility_policy={},
             version_selection_source="",
             candidate_plan_strategy="",
@@ -3085,6 +3261,7 @@ class ResolutionWorkflow:
         state["applied_compatibility_policy"] = {
             option.package: option.policy_notes for option in options if option.policy_notes
         }
+        self._infer_source_compatibility_hints(state)
         self._apply_source_version_preferences(state)
         if self._is_research():
             pypi_evidence = self._build_pypi_evidence_payload(

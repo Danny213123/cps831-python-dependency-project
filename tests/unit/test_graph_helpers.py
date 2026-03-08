@@ -4,6 +4,7 @@ from agentic_python_dependency.config import Settings
 from agentic_python_dependency.graph import (
     ResolutionWorkflow,
     _has_python2_only_imports,
+    build_benchmark_validation_options,
     filter_allowed_dependencies,
     infer_benchmark_validation_profile,
     infer_graph_recursion_limit,
@@ -276,7 +277,31 @@ def test_infer_benchmark_validation_profile_prefers_import_smoke_for_data_script
     assert "__import__('pandas')" in command
 
 
-def test_infer_benchmark_validation_profile_uses_import_specs_for_tensorflow_ml_loops() -> None:
+def test_infer_benchmark_validation_profile_uses_import_smoke_for_tensorflow_import_smoke_cases() -> None:
+    source = "\n".join(
+        [
+            "from gensim.models import Word2Vec",
+            "import tensorflow as tf",
+            "with open('./projector/prefix_metadata.tsv', 'w+') as handle:",
+            "    handle.write('ok')",
+        ]
+    )
+
+    profile, command = infer_benchmark_validation_profile(source, ["gensim", "tensorflow"])
+
+    assert profile == "import_smoke"
+    assert "__import__('tensorflow')" in command
+
+
+def test_build_benchmark_validation_options_exposes_import_specs_for_tensorflow_cases() -> None:
+    options, default_profile = build_benchmark_validation_options("import tensorflow as tf\n", ["tensorflow"])
+
+    assert default_profile == "docker_cmd"
+    assert any(option["profile"] == "import_specs" for option in options)
+    assert any("find_spec(name)" in option["command"] for option in options if option["profile"] == "import_specs")
+
+
+def test_infer_benchmark_validation_profile_uses_import_statements_for_tensorflow_ml_loops() -> None:
     source = "\n".join(
         [
             "import gym",
@@ -292,11 +317,9 @@ def test_infer_benchmark_validation_profile_uses_import_specs_for_tensorflow_ml_
 
     profile, command = infer_benchmark_validation_profile(source, ["gym", "keras", "tensorflow"])
 
-    assert profile == "import_specs"
-    assert "importlib.util as importlib_util" in command
-    assert '"tensorflow"' in command
-    assert "find_spec(name)" in command
-    assert "__import__(" not in command
+    assert profile == "import_statements"
+    assert "ast.parse(source, filename='snippet.py')" in command
+    assert "ast.ImportFrom" in command
 
 
 def test_infer_benchmark_validation_profile_uses_import_statements_for_non_tensorflow_ml_loops() -> None:

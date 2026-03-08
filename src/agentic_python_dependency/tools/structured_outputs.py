@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
 from agentic_python_dependency.state import CandidateDependency, CandidatePlan
 
 
@@ -96,6 +98,61 @@ def parse_alias_resolution_payload(raw_output: str) -> list[dict[str, str]]:
             raise StructuredOutputError("Alias entries require import_name and pypi_package")
         parsed.append({"import_name": import_name, "pypi_package": pypi_package})
     return parsed
+
+
+def parse_source_compatibility_payload(
+    raw_output: str,
+    *,
+    allowed_packages: set[str],
+    allowed_runtime_profiles: set[str] | None = None,
+) -> tuple[str, list[dict[str, str]]]:
+    payload = _load_json(raw_output)
+    runtime_profile = str(
+        payload.get("default_runtime_profile", payload.get("runtime_profile", "")) or ""
+    ).strip()
+    if runtime_profile and allowed_runtime_profiles is not None and runtime_profile not in allowed_runtime_profiles:
+        raise StructuredOutputError(
+            f"Runtime profile '{runtime_profile}' is not in the allowed runtime profile set"
+        )
+    hints = payload.get("compatibility_hints", [])
+    if not isinstance(hints, list):
+        raise StructuredOutputError("'compatibility_hints' must be a list")
+    parsed: list[dict[str, str]] = []
+    seen_packages: set[str] = set()
+    for item in hints:
+        if not isinstance(item, dict):
+            raise StructuredOutputError("Compatibility hint entries must be objects")
+        package = str(item.get("package", "")).strip()
+        preferred_specifier = str(item.get("preferred_specifier", "")).strip()
+        reason = str(item.get("reason", "")).strip()
+        if not package or not preferred_specifier:
+            raise StructuredOutputError(
+                "Compatibility hint entries require package and preferred_specifier"
+            )
+        normalized_package = package.replace("-", "_").lower()
+        if normalized_package not in allowed_packages:
+            raise StructuredOutputError(
+                f"Compatibility hint package '{package}' is not in the allowed package set"
+            )
+        if normalized_package in seen_packages:
+            raise StructuredOutputError(
+                f"Compatibility hint package '{package}' duplicates another package after normalization"
+            )
+        try:
+            SpecifierSet(preferred_specifier)
+        except InvalidSpecifier as exc:
+            raise StructuredOutputError(
+                f"Compatibility hint for '{package}' has invalid preferred_specifier '{preferred_specifier}'"
+            ) from exc
+        parsed.append(
+            {
+                "package": normalized_package,
+                "preferred_specifier": preferred_specifier,
+                "reason": reason or "source_signal",
+            }
+        )
+        seen_packages.add(normalized_package)
+    return runtime_profile, parsed
 
 
 def parse_candidate_plan_payload(

@@ -1129,6 +1129,8 @@ def test_terminal_benchmark_dashboard_preloads_completed_results_on_start(monkey
                 "wall_clock_seconds": 12.5,
                 "final_error_category": "ImportError",
                 "result_matches_csv": "PASS",
+                "pyego_match": "FAIL",
+                "readpy_match": "PASS",
                 "dependencies": ["rx==1.2.4", "twisted==19.10.0"],
                 "docker_build_seconds_total": 8.0,
                 "docker_run_seconds_total": 1.0,
@@ -1143,6 +1145,8 @@ def test_terminal_benchmark_dashboard_preloads_completed_results_on_start(monkey
                 "target_python": "3.12",
                 "wall_clock_seconds": 3.2,
                 "result_matches_csv": "FAIL",
+                "pyego_match": "PASS",
+                "readpy_match": "FAIL",
                 "dependencies": ["requests==2.32.3"],
                 "docker_build_seconds_total": 2.0,
                 "docker_run_seconds_total": 0.5,
@@ -1156,7 +1160,11 @@ def test_terminal_benchmark_dashboard_preloads_completed_results_on_start(monkey
 
     assert [row["case_id"] for row in dashboard.recent_case_results[:2]] == ["case-newer", "case-older"]
     assert dashboard.recent_case_results[0]["pllm_match"] == "MATCH"
+    assert dashboard.recent_case_results[0]["pyego_match"] == "MISS"
+    assert dashboard.recent_case_results[0]["readpy_match"] == "MATCH"
     assert dashboard.recent_case_results[1]["pllm_match"] == "MISS"
+    assert dashboard.recent_case_results[1]["pyego_match"] == "MATCH"
+    assert dashboard.recent_case_results[1]["readpy_match"] == "MISS"
     rendered = "".join(fragment for _, fragment in dashboard._results_table_formatted_text())
     assert "case-newer" in rendered
     assert "case-older" in rendered
@@ -1270,6 +1278,8 @@ def test_terminal_benchmark_dashboard_renders_recent_case_table(monkeypatch) -> 
             "target_python": "3.12",
             "wall_clock_seconds": 5.2,
             "result_matches_csv": "PASS",
+            "pyego_match": "PASS",
+            "readpy_match": "",
             "dependencies": ["requests==2.32.3"],
         }
     )
@@ -1282,6 +1292,8 @@ def test_terminal_benchmark_dashboard_renders_recent_case_table(monkeypatch) -> 
             "wall_clock_seconds": 11.4,
             "final_error_category": "NativeBuildError",
             "result_matches_csv": "FAIL",
+            "pyego_match": "",
+            "readpy_match": "FAIL",
             "dependencies": ["scrapy==2.9.0", "Twisted==25.5.0"],
         }
     )
@@ -1293,6 +1305,8 @@ def test_terminal_benchmark_dashboard_renders_recent_case_table(monkeypatch) -> 
 
     assert "STAT" in rendered
     assert "PLLM" in rendered
+    assert "PYEGO" in rendered
+    assert "READPY" in rendered
     assert "DEPENDENCIES" in rendered
     assert "FAIL" in rendered
     assert "PASS" in rendered

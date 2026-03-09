@@ -12,7 +12,7 @@ from agentic_python_dependency.graph import (
 )
 from agentic_python_dependency.presets import resolve_research_features
 from agentic_python_dependency.state import AttemptRecord, BenchmarkCase, CandidateDependency, CandidatePlan, ConflictNote, ExecutionOutcome, PackageVersionOptions, ResolvedDependency
-from agentic_python_dependency.tools.constraint_pack import build_constraint_pack, generate_candidate_bundles
+from agentic_python_dependency.tools.constraint_pack import ConstraintPack, build_constraint_pack, generate_candidate_bundles
 from agentic_python_dependency.tools.dynamic_imports import collect_dynamic_import_candidates
 from agentic_python_dependency.tools.repo_aliases import build_repo_alias_candidates
 from agentic_python_dependency.tools.repair_feedback import append_feedback_event, summarize_feedback_memory
@@ -500,6 +500,132 @@ def test_generate_candidate_bundles_surface_legacy_keras_family_before_version_c
     ]
 
 
+def test_generate_candidate_bundles_expand_search_when_partial_legacy_preferences_would_otherwise_collapse() -> None:
+    pack = ConstraintPack(
+        target_python="3.8",
+        candidate_versions={
+            "gym": ["0.26.2", "0.26.1", "0.26.0", "0.25.2"],
+            "keras": [
+                "2.15.0",
+                "2.13.1",
+                "2.12.0",
+                "2.11.0",
+                "2.10.0",
+                "2.9.0",
+                "2.8.0",
+                "2.7.0",
+                "2.6.0",
+                "2.4.3",
+                "2.4.2",
+                "2.4.1",
+                "2.4.0",
+                "2.3.1",
+                "2.3.0",
+            ],
+            "numpy": [
+                "1.24.4",
+                "1.24.3",
+                "1.24.2",
+                "1.24.1",
+                "1.24.0",
+                "1.23.5",
+                "1.23.4",
+                "1.23.3",
+                "1.23.2",
+                "1.23.1",
+                "1.23.0",
+                "1.22.4",
+                "1.22.3",
+                "1.22.2",
+                "1.22.1",
+                "1.22.0",
+                "1.21.6",
+                "1.21.5",
+                "1.21.4",
+                "1.21.3",
+                "1.21.2",
+                "1.21.1",
+                "1.21.0",
+                "1.20.3",
+                "1.20.2",
+                "1.20.1",
+                "1.20.0",
+                "1.19.5",
+            ],
+            "tensorflow": [
+                "2.13.1",
+                "2.13.0",
+                "2.12.1",
+                "2.12.0",
+                "2.11.1",
+                "2.11.0",
+                "2.10.1",
+                "2.10.0",
+                "2.9.3",
+                "2.9.2",
+                "2.9.1",
+                "2.9.0",
+                "2.8.4",
+                "2.8.3",
+                "2.8.2",
+                "2.8.1",
+                "2.8.0",
+                "2.7.4",
+                "2.7.3",
+                "2.7.2",
+                "2.7.1",
+                "2.7.0",
+                "2.6.5",
+                "2.6.4",
+                "2.6.3",
+                "2.6.2",
+                "2.6.1",
+                "2.6.0",
+                "2.5.3",
+                "2.5.2",
+                "2.5.1",
+                "2.5.0",
+                "2.4.4",
+                "2.4.3",
+            ],
+        },
+        requires_python={},
+        requires_dist={
+            "tensorflow": {
+                "2.13.1": ["keras<2.14,>=2.13.1", "numpy<=1.24.3,>=1.22"],
+                "2.13.0": ["keras<2.14,>=2.13.1", "numpy<=1.24.3,>=1.22"],
+                "2.12.1": ["keras<2.13,>=2.12.0", "numpy<1.24,>=1.22"],
+                "2.12.0": ["keras<2.13,>=2.12.0", "numpy<1.24,>=1.22"],
+                "2.11.1": ["keras<2.12,>=2.11.0", "numpy<1.24,>=1.20"],
+                "2.10.1": ["keras<2.11,>=2.10.0", "numpy<1.24,>=1.20"],
+            }
+        },
+        conflict_notes=[],
+        package_conflict_matrix={},
+        python_intersection=[],
+        python_intersection_valid=True,
+        conflict_precheck_failed=False,
+    )
+
+    bundles = generate_candidate_bundles(
+        pack,
+        beam_width=12,
+        max_bundles=10,
+        version_cap_per_package=20,
+        preferred_versions_by_package={
+            "gym": ["0.25.2"],
+            "keras": ["2.4.3", "2.4.2", "2.4.1", "2.4.0", "2.3.1", "2.3.0"],
+        },
+    )
+
+    assert bundles
+    assert any(
+        any(dep.name == "gym" and dep.version == "0.25.2" for dep in bundle)
+        and any(dep.name == "keras" and dep.version in {"2.4.3", "2.3.1"} for dep in bundle)
+        for bundle in bundles
+    )
+
+
 def test_retrieve_pypi_metadata_uses_benchmark_platform_override(tmp_path: Path) -> None:
     class RecordingStore:
         def __init__(self) -> None:
@@ -713,6 +839,9 @@ def test_source_signal_summary_detects_legacy_keras_and_gym_signals(tmp_path: Pa
     assert "keras_legacy_model_output" in rendered
     assert "gym_legacy_step_signature" in rendered
     assert "gym_legacy_reset_signature" in rendered
+    assert "legacy_standalone_keras_family_candidate" in rendered
+    assert "legacy_standalone_keras_tensorflow_family_candidate" in rendered
+    assert "legacy_standalone_keras_gym_family_candidate" in rendered
 
 
 def test_retrieve_pypi_metadata_asks_model_for_legacy_keras_gym_family_hints(
@@ -736,6 +865,9 @@ def test_retrieve_pypi_metadata_asks_model_for_legacy_keras_gym_family_hints(
             assert "keras_legacy_model_output" in variables["source_signals"]
             assert "gym_legacy_step_signature" in variables["source_signals"]
             assert "gym_legacy_reset_signature" in variables["source_signals"]
+            assert "legacy_standalone_keras_family_candidate" in variables["source_signals"]
+            assert "legacy_standalone_keras_tensorflow_family_candidate" in variables["source_signals"]
+            assert "legacy_standalone_keras_gym_family_candidate" in variables["source_signals"]
             return (
                 '{"compatibility_hints":['
                 '{"package":"gym","preferred_specifier":"<0.26.0","reason":"legacy gym api"},'
@@ -933,6 +1065,16 @@ def test_research_prompts_emphasize_coherent_legacy_families(tmp_path: Path) -> 
         rag_context="{}",
         max_plan_count=2,
     )
+    source_compatibility_prompt = workflow._format_prompt(
+        "source_compatibility.txt",
+        target_python="3.8",
+        allowed_packages="gym\nkeras\nnumpy\ntensorflow",
+        version_space='{"packages":[]}',
+        validation_options='[{"profile":"docker_cmd","command":"","reason":"exact"}]',
+        default_validation_profile="docker_cmd",
+        source_signals='[{"signal":"legacy_standalone_keras_family_candidate","evidence":"legacy keras api"},{"signal":"legacy_standalone_keras_gym_family_candidate","evidence":"legacy gym api"}]',
+        raw_file="import gym\nimport keras\nimport tensorflow as tf\nimport numpy as np\n",
+    )
 
     assert "keep related packages internally coherent" in candidate_prompt
     assert "legacy standalone Keras / legacy Gym snippets" in candidate_prompt
@@ -944,6 +1086,35 @@ def test_research_prompts_emphasize_coherent_legacy_families(tmp_path: Path) -> 
     assert "Conflict notes:" in repair_prompt
     assert "tensorflow 2.13.1 depends on keras<2.14 and >=2.13.1" in repair_prompt
     assert "tensorflow constrains keras" in repair_prompt
+    assert "Only infer TF1-only families such as `tensorflow<2.0.0` when explicit TF1-era signals are present" in source_compatibility_prompt
+    assert "include a coupled NumPy hint" in source_compatibility_prompt
+    assert "nearest older family that actually appears in the supplied versions" in source_compatibility_prompt
+
+
+def test_preferred_bundle_versions_falls_back_to_nearest_visible_family_when_hint_matches_nothing(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    workflow = ResolutionWorkflow(settings, pypi_store=FakePyPIStore())
+    case_root = tmp_path / "case-preferred-bundle-fallback"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import tensorflow as tf\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-preferred-bundle-fallback", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["source_files"] = {"snippet.py": snippet.read_text(encoding="utf-8")}
+    state["llm_source_compatibility_hints"] = [
+        {"package": "tensorflow", "preferred_specifier": "<2.0.0", "reason": "legacy family requested"},
+    ]
+    state["version_options"] = [
+        PackageVersionOptions(
+            package="tensorflow",
+            versions=["2.13.1", "2.13.0", "2.12.1", "2.12.0", "2.11.1", "2.11.0", "2.10.1", "2.10.0", "2.4.4", "2.4.3"],
+        )
+    ]
+
+    assert workflow._preferred_bundle_versions(state) == {
+        "tensorflow": ["2.11.1", "2.11.0", "2.10.1", "2.10.0", "2.4.4", "2.4.3"]
+    }
 
 
 def test_repair_prompt_research_passes_conflict_notes_to_prompt_runner(tmp_path: Path) -> None:
@@ -1004,6 +1175,316 @@ def test_repair_prompt_research_passes_conflict_notes_to_prompt_runner(tmp_path:
 
     assert updated["repair_model_concluded_impossible"] is True
     assert updated["repair_plan_unavailable_reason"] == "model_not_applicable"
+
+
+def test_runtime_profile_repair_research_can_switch_profiles_without_changing_dependencies(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "repair"
+            assert template == "runtime_profile_repair.txt"
+            assert "Illegal instruction" in variables["run_log_excerpt"]
+            assert "import_specs" in variables["validation_options"]
+            return (
+                '{"repair_applicable":true,"plans":[{"rank":1,"reason":"avoid importing tensorflow binary",'
+                '"runtime_profile":"import_specs","dependencies":[]}]}'
+            )
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+    case_root = tmp_path / "case-runtime-profile-only-repair"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import tensorflow as tf\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-runtime-profile-only-repair", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-runtime-profile-only-repair")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["pending_runtime_profile_retry"] = True
+    state["retry_decision"] = classify_retry_decision("EnvironmentError")
+    state["runtime_profile_retry_fallback_decision"] = classify_retry_decision("EnvironmentError")
+    state["target_python"] = "3.8"
+    state["inferred_packages"] = ["tensorflow", "keras", "numpy"]
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="tensorflow", version="2.13.1"),
+        ResolvedDependency(name="keras", version="2.13.1"),
+        ResolvedDependency(name="numpy", version="1.24.2"),
+    ]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=1,
+            dependencies=["tensorflow==2.13.1", "keras==2.13.1", "numpy==1.24.2"],
+            image_tag="img-1",
+            build_succeeded=True,
+            run_succeeded=False,
+            exit_code=132,
+            error_category="EnvironmentError",
+            error_details="Illegal instruction",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_01"),
+            runtime_profile="import_statements",
+        )
+    ]
+    state["version_options"] = [
+        PackageVersionOptions(package="tensorflow", versions=["2.13.1"]),
+        PackageVersionOptions(package="keras", versions=["2.13.1"]),
+        PackageVersionOptions(package="numpy", versions=["1.24.2"]),
+    ]
+    state["validation_options"] = [
+        {"profile": "import_statements", "command": "python snippet.py", "reason": "import statements"},
+        {"profile": "import_specs", "command": "python - <<'PY'\nprint('specs')\nPY", "reason": "safe spec probe"},
+    ]
+    state["default_validation_profile"] = "import_statements"
+    state["current_runtime_profile"] = "import_statements"
+    state["current_validation_command"] = "python snippet.py"
+    state["last_error_details"] = "Illegal instruction"
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="EnvironmentError",
+        message="Illegal instruction",
+        build_succeeded=True,
+        run_succeeded=False,
+        exit_code=132,
+        build_log="build ok",
+        run_log="Illegal instruction",
+        image_tag="img-1",
+        dependency_retryable=True,
+    )
+
+    updated = workflow.runtime_profile_repair_research(state)
+
+    assert updated["pending_runtime_profile_retry"] is False
+    assert updated["retry_decision"] is None
+    assert updated["candidate_plan_strategy"] == "llm-runtime-profile-repair"
+    assert updated["candidate_plans"]
+    assert updated["candidate_plans"][0].runtime_profile == "import_specs"
+    assert [dependency.pin() for dependency in updated["candidate_plans"][0].dependencies] == [
+        "keras==2.13.1",
+        "numpy==1.24.2",
+        "tensorflow==2.13.1",
+    ]
+    assert route_after_research_classification(updated, settings) == "select_next_candidate_plan"
+
+
+def test_case_00e9638c0efad1adac878522cf172484_prefers_runtime_profile_repair_over_dependency_churn(
+    tmp_path: Path,
+) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    activity_events: list[tuple[str, int, str, str]] = []
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "repair"
+            assert template == "runtime_profile_repair.txt"
+            assert "gym==0.26.1" in variables["previous_plan"]
+            assert "keras==2.13.1" in variables["previous_plan"]
+            assert "numpy==1.24.2" in variables["previous_plan"]
+            assert "tensorflow==2.13.1" in variables["previous_plan"]
+            assert "Illegal instruction" in variables["run_log_excerpt"]
+            assert "import_specs" in variables["validation_options"]
+            return (
+                '{"repair_applicable":true,"plans":[{"rank":1,"reason":"preserve exact environment and switch to spec-only validation",'
+                '"runtime_profile":"import_specs","dependencies":[]}]}'
+            )
+
+    workflow = ResolutionWorkflow(
+        settings,
+        prompt_runner=PromptRunner(),
+        activity_callback=lambda case_id, attempt, kind, detail: activity_events.append((case_id, attempt, kind, detail)),
+    )
+    case_root = tmp_path / "00e9638c0efad1adac878522cf172484"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text(
+        "from keras.layers import Dense, merge\n"
+        "from keras.models import Model\n"
+        "import gym\n"
+        "env = gym.make('CartPole-v0')\n"
+        "obs = env.reset()\n",
+        encoding="utf-8",
+    )
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(
+            case_id="00e9638c0efad1adac878522cf172484",
+            root_dir=case_root,
+            snippet_path=snippet,
+            case_source="all-gists",
+        )
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-00e963")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["current_attempt"] = 4
+    state["target_python"] = "3.8"
+    state["inferred_packages"] = ["gym", "keras", "numpy", "tensorflow"]
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="gym", version="0.26.1"),
+        ResolvedDependency(name="keras", version="2.13.1"),
+        ResolvedDependency(name="numpy", version="1.24.2"),
+        ResolvedDependency(name="tensorflow", version="2.13.1"),
+    ]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=3,
+            dependencies=[
+                "gym==0.26.1",
+                "keras==2.13.1",
+                "numpy==1.24.2",
+                "tensorflow==2.13.1",
+            ],
+            image_tag="img-3",
+            build_succeeded=True,
+            run_succeeded=False,
+            exit_code=132,
+            error_category="UnknownError",
+            error_details="Illegal instruction",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_03"),
+            runtime_profile="import_statements",
+        )
+    ]
+    state["version_options"] = [
+        PackageVersionOptions(package="gym", versions=["0.26.1"]),
+        PackageVersionOptions(package="keras", versions=["2.13.1"]),
+        PackageVersionOptions(package="numpy", versions=["1.24.2"]),
+        PackageVersionOptions(package="tensorflow", versions=["2.13.1"]),
+    ]
+    state["validation_options"] = [
+        {"profile": "import_statements", "command": "python snippet.py", "reason": "import statements"},
+        {"profile": "import_specs", "command": "python - <<'PY'\nprint('specs')\nPY", "reason": "safe spec probe"},
+    ]
+    state["default_validation_profile"] = "import_statements"
+    state["current_runtime_profile"] = "import_statements"
+    state["current_validation_command"] = "python snippet.py"
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="UnknownError",
+        message="Execution failed.",
+        build_succeeded=True,
+        run_succeeded=False,
+        exit_code=132,
+        build_log="build ok",
+        run_log="Illegal instruction",
+        image_tag="img-4",
+    )
+
+    state = workflow.classify_outcome(state)
+
+    assert state["pending_runtime_profile_retry"] is True
+    assert state["retry_decision"].reason == "runtime-profile-repair-first"
+    assert route_after_research_classification(state, settings) == "runtime_profile_repair_research"
+
+    updated = workflow.runtime_profile_repair_research(state)
+
+    assert updated["candidate_plan_strategy"] == "llm-runtime-profile-repair"
+    assert updated["candidate_plans"][0].runtime_profile == "import_specs"
+    assert [dependency.pin() for dependency in updated["candidate_plans"][0].dependencies] == [
+        "gym==0.26.1",
+        "keras==2.13.1",
+        "numpy==1.24.2",
+        "tensorflow==2.13.1",
+    ]
+    assert route_after_research_classification(updated, settings) == "select_next_candidate_plan"
+    assert any(kind == "runtime_profile_repair_planned" for _, _, kind, _ in activity_events)
+    assert any(kind == "runtime_profile_repair_ready" for _, _, kind, _ in activity_events)
+
+
+def test_runtime_profile_repair_research_restores_retry_routing_when_no_plan_is_available(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "repair"
+            assert template == "runtime_profile_repair.txt"
+            return '{"repair_applicable": false, "plans": []}'
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+    case_root = tmp_path / "case-runtime-profile-no-plan"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import tensorflow as tf\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-runtime-profile-no-plan", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-runtime-profile-no-plan")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["pending_runtime_profile_retry"] = True
+    state["target_python"] = "3.8"
+    state["inferred_packages"] = ["tensorflow", "keras", "numpy"]
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="tensorflow", version="2.13.1"),
+        ResolvedDependency(name="keras", version="2.13.1"),
+        ResolvedDependency(name="numpy", version="1.24.2"),
+    ]
+    state["version_options"] = [
+        PackageVersionOptions(package="tensorflow", versions=["2.13.1"]),
+        PackageVersionOptions(package="keras", versions=["2.13.1"]),
+        PackageVersionOptions(package="numpy", versions=["1.24.2"]),
+    ]
+    state["validation_options"] = [
+        {"profile": "import_statements", "command": "python snippet.py", "reason": "import statements"},
+        {"profile": "import_specs", "command": "python - <<'PY'\nprint('specs')\nPY", "reason": "safe spec probe"},
+    ]
+    state["default_validation_profile"] = "import_statements"
+    state["current_runtime_profile"] = "import_statements"
+    state["current_validation_command"] = "python snippet.py"
+    state["last_error_details"] = "Illegal instruction"
+    original_retry_decision = classify_retry_decision("EnvironmentError")
+    state["retry_decision"] = classify_retry_decision("EnvironmentError")
+    state["runtime_profile_retry_fallback_decision"] = original_retry_decision
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="EnvironmentError",
+        message="Illegal instruction",
+        build_succeeded=True,
+        run_succeeded=False,
+        exit_code=132,
+        build_log="build ok",
+        run_log="Illegal instruction",
+        image_tag="img-1",
+        dependency_retryable=True,
+    )
+    state["remaining_candidate_plans"] = [
+        CandidatePlan(
+            rank=1,
+            reason="fallback",
+            dependencies=[
+                CandidateDependency(name="tensorflow", version="2.13.1"),
+                CandidateDependency(name="keras", version="2.13.1"),
+                CandidateDependency(name="numpy", version="1.24.2"),
+            ],
+            runtime_profile="import_statements",
+        )
+    ]
+
+    updated = workflow.runtime_profile_repair_research(state)
+
+    assert updated["candidate_plans"] == []
+    assert updated["remaining_candidate_plans"] == []
+    assert updated["runtime_profile_retry_fallback_decision"] is None
+    assert updated["retry_decision"] == original_retry_decision
+    assert route_after_research_classification(updated, settings) == "repair_prompt_c_research"
 
 
 def test_retrieve_version_specific_metadata_filters_versions_using_enriched_requires_python(tmp_path: Path) -> None:
@@ -1348,6 +1829,132 @@ def test_repair_prompt_research_discards_already_attempted_plans(tmp_path: Path)
     assert updated["repair_plan_unavailable_reason"] == "no_novel_plans"
 
 
+def test_case_019fd5c706e0bc94879f_discards_repeated_rx_1_5_9_twisted_19_10_0_repair_plan(
+    tmp_path: Path,
+) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.prompts_dir = Path(__file__).resolve().parents[2] / "src" / "agentic_python_dependency" / "prompts"
+
+    class PromptRunner:
+        @staticmethod
+        def stage_model(stage: str) -> str:
+            return stage
+
+        @staticmethod
+        def invoke_template(stage: str, template: str, variables: dict[str, str]) -> str:
+            assert stage == "repair"
+            assert template == "symbol_compatibility_repair.txt"
+            assert "ImportError: cannot import name Disposable" in variables["error_details"]
+            assert '"symbol": "Disposable"' in variables["repeated_missing_symbol_failures"]
+            assert '"rx": [' in variables["repeated_missing_symbol_failures"]
+            assert '"1.6.1"' in variables["repeated_missing_symbol_failures"]
+            assert '"1.6.0"' in variables["repeated_missing_symbol_failures"]
+            assert '"1.5.9"' in variables["repeated_missing_symbol_failures"]
+            assert '"untried_families": {' in variables["symbol_compatibility_repair_candidates"]
+            assert '"1.2": [' in variables["symbol_compatibility_repair_candidates"]
+            assert '"1.2.4"' in variables["symbol_compatibility_repair_candidates"]
+            return (
+                '{"repair_applicable": true, "plans": ['
+                '{"rank": 1, "reason": "jump to older visible family with wheel", '
+                '"runtime_profile": "import_statements", '
+                '"dependencies": [{"name": "rx", "version": "1.2.4"}]}]}'
+            )
+
+    workflow = ResolutionWorkflow(settings, prompt_runner=PromptRunner())
+    case_root = tmp_path / "019fd5c706e0bc94879f"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text(
+        "from rx.disposables import Disposable\n"
+        "import twisted\n"
+        "print(Disposable)\n",
+        encoding="utf-8",
+    )
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(
+            case_id="019fd5c706e0bc94879f",
+            root_dir=case_root,
+            snippet_path=snippet,
+            case_source="all-gists",
+        )
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-019fd")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["target_python"] = "2.7.18"
+    state["current_attempt"] = 4
+    state["inferred_packages"] = ["rx", "twisted"]
+    state["version_options"] = [
+        PackageVersionOptions(
+            package="rx",
+            versions=["1.6.1", "1.6.0", "1.5.9", "1.5.8", "1.2.6", "1.2.5", "1.2.4"],
+        ),
+        PackageVersionOptions(package="twisted", versions=["19.10.0"]),
+    ]
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="rx", version="1.5.9"),
+        ResolvedDependency(name="twisted", version="19.10.0"),
+    ]
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=2,
+            dependencies=["rx==1.6.1", "twisted==19.10.0"],
+            image_tag="img-2",
+            build_succeeded=True,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ImportError",
+            error_details="cannot import name Disposable",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_02"),
+        ),
+        AttemptRecord(
+            attempt_number=3,
+            dependencies=["rx==1.6.0", "twisted==19.10.0"],
+            image_tag="img-3",
+            build_succeeded=True,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ImportError",
+            error_details="cannot import name Disposable",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_03"),
+        ),
+        AttemptRecord(
+            attempt_number=4,
+            dependencies=["rx==1.5.9", "twisted==19.10.0"],
+            image_tag="img-4",
+            build_succeeded=True,
+            run_succeeded=False,
+            exit_code=1,
+            error_category="ImportError",
+            error_details="cannot import name Disposable",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_04"),
+        )
+    ]
+    state["last_error_details"] = "ImportError: cannot import name Disposable"
+
+    updated = workflow.repair_prompt_c_research(state)
+
+    assert [dependency.pin() for dependency in updated["candidate_plans"][0].dependencies] == [
+        "rx==1.2.4",
+        "twisted==19.10.0",
+    ]
+    assert [dependency.pin() for dependency in updated["remaining_candidate_plans"][0].dependencies] == [
+        "rx==1.2.4",
+        "twisted==19.10.0",
+    ]
+    assert updated["repair_model_concluded_impossible"] is False
+    assert updated["repair_plan_unavailable_reason"] == ""
+    assert updated["structured_outputs"]["repair"]["plans"][0]["dependencies"] == [
+        {"name": "rx", "version": "1.2.4"},
+        {"name": "twisted", "version": "19.10.0"},
+    ]
+
+
 def test_repair_prompt_research_activates_deferred_python_fallback_after_python3_repairs_are_exhausted(
     tmp_path: Path,
 ) -> None:
@@ -1493,6 +2100,72 @@ def test_classify_retry_decision_defaults_unknown_errors_to_retryable() -> None:
     assert decision.severity == "repair_retryable"
     assert decision.candidate_fallback_allowed is True
     assert decision.repair_allowed is True
+
+
+def test_classify_outcome_routes_illegal_instruction_to_runtime_profile_repair(tmp_path: Path) -> None:
+    settings = Settings.from_env(project_root=tmp_path, preset_override="research")
+    settings.research_features = ("smart_repair_routing",)
+    activity_events: list[tuple[str, int, str, str]] = []
+    workflow = ResolutionWorkflow(
+        settings,
+        activity_callback=lambda case_id, attempt, kind, detail: activity_events.append((case_id, attempt, kind, detail)),
+    )
+
+    case_root = tmp_path / "case-runtime-profile-repair"
+    case_root.mkdir()
+    snippet = case_root / "snippet.py"
+    snippet.write_text("import tensorflow as tf\n", encoding="utf-8")
+    state = workflow.initial_state_for_case(
+        BenchmarkCase(case_id="case-runtime-profile-repair", root_dir=case_root, snippet_path=snippet, case_source="all-gists")
+    )
+    state["artifact_dir"] = str(tmp_path / "artifacts-runtime-profile-repair")
+    Path(state["artifact_dir"]).mkdir(parents=True, exist_ok=True)
+    state["current_attempt"] = 1
+    state["selected_dependencies"] = [
+        ResolvedDependency(name="tensorflow", version="2.13.1"),
+        ResolvedDependency(name="keras", version="2.13.1"),
+        ResolvedDependency(name="numpy", version="1.24.2"),
+    ]
+    state["validation_options"] = [
+        {"profile": "import_statements", "command": "python snippet.py", "reason": "import statements"},
+        {"profile": "import_specs", "command": "python - <<'PY'\nprint('specs')\nPY", "reason": "safe spec probe"},
+    ]
+    state["default_validation_profile"] = "import_statements"
+    state["current_runtime_profile"] = "import_statements"
+    state["current_validation_command"] = "python snippet.py"
+    state["attempt_records"] = [
+        AttemptRecord(
+            attempt_number=1,
+            dependencies=["tensorflow==2.13.1", "keras==2.13.1", "numpy==1.24.2"],
+            image_tag="img-1",
+            build_succeeded=True,
+            run_succeeded=False,
+            exit_code=132,
+            error_category="ExecutionFailed",
+            error_details="",
+            validation_command="python snippet.py",
+            wall_clock_seconds=1.0,
+            artifact_dir=str(case_root / "attempt_01"),
+        )
+    ]
+    state["last_execution"] = ExecutionOutcome(
+        success=False,
+        category="ExecutionFailed",
+        message="Execution failed.",
+        build_succeeded=True,
+        run_succeeded=False,
+        exit_code=132,
+        build_log="build ok",
+        run_log="Illegal instruction",
+        image_tag="img-1",
+    )
+
+    updated = workflow.classify_outcome(state)
+
+    assert updated["pending_runtime_profile_retry"] is True
+    assert updated["retry_decision"].reason == "runtime-profile-repair-first"
+    assert route_after_research_classification(updated, settings) == "runtime_profile_repair_research"
+    assert any(kind == "runtime_profile_repair_planned" for _, _, kind, _ in activity_events)
 
 
 def test_classify_outcome_uses_build_log_guided_followup_after_native_retry_is_exhausted(tmp_path: Path) -> None:

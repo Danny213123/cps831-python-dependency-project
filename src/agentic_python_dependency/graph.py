@@ -36,6 +36,7 @@ from agentic_python_dependency.state import (
     PackageVersionOptions,
     RepairMemorySummary,
     RepairStrategyRecord,
+    RetryDecision,
     ResolutionState,
     ResolvedDependency,
 )
@@ -349,6 +350,8 @@ def route_after_research_classification(state: ResolutionState, settings: Settin
         return "finalize_result"
     if state.get("pending_python_fallback"):
         return "replan_after_python_fallback"
+    if state.get("pending_runtime_profile_retry"):
+        return "runtime_profile_repair_research"
     if state.get("pending_native_retry"):
         return "retry_current_plan"
     if decision is None:
@@ -643,6 +646,8 @@ class ResolutionWorkflow:
         "conflict_notes": "[]",
         "source_compatibility_hints": "[]",
         "source_signals": "[]",
+        "repeated_missing_symbol_failures": "[]",
+        "symbol_compatibility_repair_candidates": "[]",
         "validation_options": "[]",
         "default_validation_profile": "",
         "repair_memory": "{}",
@@ -693,6 +698,69 @@ Build log excerpt:
 Run log excerpt:
 {run_log_excerpt}
 """
+    _DEFAULT_RUNTIME_PROFILE_REPAIR_TEMPLATE = """You are deciding whether a failed benchmark validation should be repaired by changing the runtime profile instead of changing dependencies.
+
+Return strict JSON only using this schema:
+{{
+  "repair_applicable": true,
+  "plans": [
+    {{
+      "rank": 1,
+      "reason": "short reason",
+      "runtime_profile": "import_specs",
+      "dependencies": []
+    }}
+  ]
+}}
+
+Rules:
+- Use only allowed runtime profiles and allowed package versions already present in the supplied evidence.
+- Prefer keeping the dependency plan unchanged when the build succeeded and the run failed in the validation wrapper.
+- If the run log suggests a hardware-sensitive binary import failure such as `Illegal instruction`, AVX, or CPU-feature mismatch, prefer a safer non-importing validation profile such as `import_specs` when available.
+- You may return a runtime-profile-only repair with an empty `dependencies` list; omitted packages will be preserved from the previous plan.
+- Only change dependencies if the run failure strongly indicates that the installed package versions themselves are still wrong.
+- When source compatibility hints are present, do not move away from those version families unless the supplied evidence clearly requires it.
+- No markdown, no commentary, no text outside JSON.
+
+Target Python:
+{target_python}
+
+Current runtime profile:
+{current_runtime_profile}
+
+Allowed packages:
+{allowed_packages}
+
+Version space:
+{version_space}
+
+Allowed validation profiles:
+{validation_options}
+
+Default validation profile:
+{default_validation_profile}
+
+Source compatibility hints:
+{source_compatibility_hints}
+
+Conflict notes:
+{conflict_notes}
+
+Previous plan:
+{previous_plan}
+
+Attempted plans:
+{attempted_plans}
+
+Error details:
+{error_details}
+
+Build log excerpt:
+{build_log_excerpt}
+
+Run log excerpt:
+{run_log_excerpt}
+"""
 
     def __init__(
         self,
@@ -724,6 +792,8 @@ Run log excerpt:
                 continue
             if field_name in self._OPTIONAL_PROMPT_VARIABLE_DEFAULTS:
                 resolved_variables[field_name] = self._OPTIONAL_PROMPT_VARIABLE_DEFAULTS[field_name]
+            else:
+                resolved_variables[field_name] = ""
         return template.format(**resolved_variables)
 
     def _trace_log_paths(self, state: ResolutionState) -> list[Path]:
@@ -1022,24 +1092,58 @@ Run log excerpt:
         for token, signal, evidence in token_signals:
             if token in lowered:
                 add_signal(signal, evidence)
+        has_tensorflow_import = bool(
+            re.search(r"^\s*(?:from\s+tensorflow\b|import\s+tensorflow\b)", source_text, re.MULTILINE)
+        )
         if re.search(r"\bxrange\s*\(", source_text):
             add_signal("python2_xrange", "xrange() usage")
-        if re.search(r"^\s*from\s+keras\.layers\s+import\b.*\bmerge\b", source_text, re.MULTILINE):
+        has_keras_layers_merge = bool(
+            re.search(r"^\s*from\s+keras\.layers\s+import\b.*\bmerge\b", source_text, re.MULTILINE)
+        )
+        if has_keras_layers_merge:
             add_signal("keras_layers_merge_import", "from keras.layers import ... merge")
-        if re.search(r"^\s*(?:from\s+keras(?:\.|\b)|import\s+keras\b)", source_text, re.MULTILINE):
+        has_standalone_keras = bool(
+            re.search(r"^\s*(?:from\s+keras(?:\.|\b)|import\s+keras\b)", source_text, re.MULTILINE)
+        )
+        if has_standalone_keras:
             add_signal("standalone_keras_api", "imports standalone keras package")
-        if re.search(r"\bmodel\s*\([^)]*\binput\s*=", source_text, re.IGNORECASE):
+        has_legacy_model_input = bool(re.search(r"\bmodel\s*\([^)]*\binput\s*=", source_text, re.IGNORECASE))
+        if has_legacy_model_input:
             add_signal("keras_legacy_model_input", "Model(input=...) usage")
-        if re.search(r"\bmodel\s*\([^)]*\boutput\s*=", source_text, re.IGNORECASE):
+        has_legacy_model_output = bool(re.search(r"\bmodel\s*\([^)]*\boutput\s*=", source_text, re.IGNORECASE))
+        if has_legacy_model_output:
             add_signal("keras_legacy_model_output", "Model(output=...) usage")
-        if re.search(
+        has_legacy_gym_step = bool(
+            re.search(
             r"^\s*[^=\n,]+,\s*[^=\n,]+,\s*[^=\n,]+,\s*[^=\n,]+\s*=\s*.*\.step\(",
             source_text,
             re.MULTILINE,
-        ):
+            )
+        )
+        if has_legacy_gym_step:
             add_signal("gym_legacy_step_signature", "four-value env.step(...) unpack")
-        if re.search(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*.*\.reset\(\)\s*$", source_text, re.MULTILINE):
+        has_legacy_gym_reset = bool(
+            re.search(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*.*\.reset\(\)\s*$", source_text, re.MULTILINE)
+        )
+        if has_legacy_gym_reset:
             add_signal("gym_legacy_reset_signature", "single-value env.reset() assignment")
+        if has_standalone_keras and (has_keras_layers_merge or has_legacy_model_input or has_legacy_model_output):
+            add_signal(
+                "legacy_standalone_keras_family_candidate",
+                "standalone keras with legacy Model()/merge API usage",
+            )
+        if has_tensorflow_import and has_standalone_keras and (
+            has_keras_layers_merge or has_legacy_model_input or has_legacy_model_output
+        ):
+            add_signal(
+                "legacy_standalone_keras_tensorflow_family_candidate",
+                "tensorflow import paired with standalone legacy keras API usage",
+            )
+        if has_standalone_keras and (has_legacy_gym_step or has_legacy_gym_reset):
+            add_signal(
+                "legacy_standalone_keras_gym_family_candidate",
+                "standalone keras paired with legacy gym reset/step usage",
+            )
         rendered = json.dumps(signals, indent=2)
         return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
 
@@ -1474,6 +1578,48 @@ Run log excerpt:
             return options[0]
         return {"profile": state.get("current_runtime_profile", "docker_cmd"), "command": state.get("current_validation_command", ""), "reason": "current"}
 
+    @staticmethod
+    def _runtime_profile_option(state: ResolutionState, profile: str) -> dict[str, str] | None:
+        for option in state.get("validation_options", []):
+            if option.get("profile") == profile:
+                return option
+        return None
+
+    @staticmethod
+    def _is_runtime_profile_hardware_failure(error_details: str) -> bool:
+        return bool(
+            re.search(
+                r"Illegal instruction|compiled to use AVX instructions|AVX instructions, but these aren't available",
+                error_details,
+                re.IGNORECASE,
+            )
+        )
+
+    def _should_prompt_runtime_profile_repair(
+        self,
+        state: ResolutionState,
+        execution: ExecutionOutcome,
+        classified: ExecutionOutcome,
+    ) -> bool:
+        if not self._is_research() or not self._uses_full_apd():
+            return False
+        if state["current_attempt"] >= self.settings.max_attempts:
+            return False
+        if not execution.build_succeeded or execution.run_succeeded:
+            return False
+        if not state.get("selected_dependencies"):
+            return False
+        if str(state.get("current_runtime_profile", "") or "").strip() == "import_specs":
+            return False
+        if self._runtime_profile_option(state, "import_specs") is None:
+            return False
+        normalized_dependencies = {
+            normalize_package_name(dependency.name) for dependency in state.get("selected_dependencies", [])
+        }
+        if not normalized_dependencies & {"tensorflow", "torch"}:
+            return False
+        return self._is_runtime_profile_hardware_failure(classified.message or execution.run_log or "")
+
     def _apply_validation_profile(self, state: ResolutionState, runtime_profile: str | None = None) -> None:
         if state.get("mode") != "gistable":
             return
@@ -1624,6 +1770,130 @@ Run log excerpt:
         rendered = json.dumps(payload, indent=2)
         return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
 
+    @staticmethod
+    def _missing_symbol_signature(error_details: str) -> tuple[str, str] | None:
+        patterns = [
+            (r"cannot import name ['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", "cannot_import_name"),
+            (r"has no attribute ['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", "missing_attribute"),
+        ]
+        for pattern, kind in patterns:
+            match = re.search(pattern, error_details, re.IGNORECASE)
+            if match:
+                return kind, match.group(1)
+        return None
+
+    def _repeated_missing_symbol_failures(self, state: ResolutionState) -> list[dict[str, Any]]:
+        grouped: dict[tuple[str, str], dict[str, Any]] = {}
+        for attempt in state.get("attempt_records", []):
+            if not attempt.error_details:
+                continue
+            signature = self._missing_symbol_signature(attempt.error_details)
+            if signature is None:
+                continue
+            kind, symbol = signature
+            entry = grouped.setdefault(
+                signature,
+                {
+                    "kind": kind,
+                    "symbol": symbol,
+                    "attempts": [],
+                    "runtime_profiles": [],
+                    "dependency_versions": {},
+                    "example_error": self._activity_excerpt(attempt.error_details, limit=200),
+                },
+            )
+            if attempt.attempt_number not in entry["attempts"]:
+                entry["attempts"].append(attempt.attempt_number)
+            runtime_profile = str(attempt.runtime_profile or "").strip()
+            if runtime_profile and runtime_profile not in entry["runtime_profiles"]:
+                entry["runtime_profiles"].append(runtime_profile)
+            for dependency in attempt.dependencies:
+                if "==" not in dependency:
+                    continue
+                name, version = dependency.split("==", 1)
+                normalized_name = normalize_package_name(name)
+                versions = entry["dependency_versions"].setdefault(normalized_name, [])
+                if version not in versions:
+                    versions.append(version)
+        return [
+            entry
+            for entry in grouped.values()
+            if len(entry["attempts"]) >= 2
+        ]
+
+    def _repeated_missing_symbol_summary(self, state: ResolutionState, *, limit: int = 2000) -> str:
+        payload = self._repeated_missing_symbol_failures(state)
+        if not payload:
+            return "[]"
+        rendered = json.dumps(payload, indent=2)
+        return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
+
+    @staticmethod
+    def _version_family(version: str) -> str:
+        parts = version.split(".")
+        if len(parts) >= 2:
+            return ".".join(parts[:2])
+        return version
+
+    def _symbol_compatibility_repair_candidates_summary(
+        self,
+        state: ResolutionState,
+        *,
+        limit: int = 2000,
+    ) -> str:
+        repeated_failures = self._repeated_missing_symbol_failures(state)
+        if not repeated_failures:
+            return "[]"
+        version_options = {
+            normalize_package_name(option.package): list(option.versions)
+            for option in state.get("version_options", [])
+        }
+        payload: list[dict[str, Any]] = []
+        for failure in repeated_failures:
+            package_entries: list[dict[str, Any]] = []
+            dependency_versions = failure.get("dependency_versions", {})
+            if not isinstance(dependency_versions, dict):
+                continue
+            for package_name, tried_versions in dependency_versions.items():
+                if not isinstance(tried_versions, list):
+                    continue
+                available_versions = version_options.get(package_name, [])
+                if not available_versions:
+                    continue
+                tried_families = {
+                    self._version_family(str(version))
+                    for version in tried_versions
+                    if str(version).strip()
+                }
+                untried_families: dict[str, list[str]] = {}
+                for version in available_versions:
+                    family = self._version_family(version)
+                    if family in tried_families:
+                        continue
+                    untried_families.setdefault(family, []).append(version)
+                if not untried_families:
+                    continue
+                package_entries.append(
+                    {
+                        "package": package_name,
+                        "tried_versions": tried_versions,
+                        "tried_families": sorted(tried_families),
+                        "untried_families": untried_families,
+                    }
+                )
+            if package_entries:
+                payload.append(
+                    {
+                        "kind": failure.get("kind", ""),
+                        "symbol": failure.get("symbol", ""),
+                        "packages": package_entries,
+                    }
+                )
+        if not payload:
+            return "[]"
+        rendered = json.dumps(payload, indent=2)
+        return rendered if len(rendered) <= limit else rendered[: limit - 3] + "..."
+
     def _preferred_bundle_versions(self, state: ResolutionState) -> dict[str, list[str]]:
         preferences = self._source_version_preferences(state)
         if not preferences:
@@ -1646,25 +1916,31 @@ Run log excerpt:
                         matching_versions.append(version)
                 except InvalidVersion:
                     continue
+            if not matching_versions and option.versions:
+                tail_window = min(6, len(option.versions))
+                matching_versions = list(option.versions[-tail_window:])
             if matching_versions:
                 preferred_versions[option.package] = matching_versions
         return preferred_versions
 
     @staticmethod
-    def _candidate_plan_signature(plan: CandidatePlan) -> tuple[tuple[str, str], ...]:
-        return tuple(
-            sorted((normalize_package_name(dependency.name), dependency.version) for dependency in plan.dependencies)
+    def _candidate_plan_signature(plan: CandidatePlan) -> tuple[str, tuple[tuple[str, str], ...]]:
+        return (
+            str(plan.runtime_profile or "").strip(),
+            tuple(
+                sorted((normalize_package_name(dependency.name), dependency.version) for dependency in plan.dependencies)
+            ),
         )
 
     @staticmethod
-    def _attempt_record_signature(attempt: AttemptRecord) -> tuple[tuple[str, str], ...]:
+    def _attempt_record_signature(attempt: AttemptRecord) -> tuple[str, tuple[tuple[str, str], ...]]:
         signature: list[tuple[str, str]] = []
         for dependency in attempt.dependencies:
             if "==" not in dependency:
                 continue
             name, version = dependency.split("==", 1)
             signature.append((normalize_package_name(name), version))
-        return tuple(sorted(signature))
+        return (str(attempt.runtime_profile or "").strip(), tuple(sorted(signature)))
 
     def _filter_novel_candidate_plans(
         self,
@@ -1677,7 +1953,7 @@ Run log excerpt:
             if attempt.dependencies
         }
         retained: list[CandidatePlan] = []
-        seen_signatures: set[tuple[tuple[str, str], ...]] = set()
+        seen_signatures: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
         for plan in plans:
             signature = self._candidate_plan_signature(plan)
             if not signature or signature in attempted_signatures or signature in seen_signatures:
@@ -1716,7 +1992,7 @@ Run log excerpt:
         max_plan_count: int,
     ) -> tuple[list[CandidatePlan], str]:
         retained: list[CandidatePlan] = []
-        seen_signatures: set[tuple[tuple[str, str], ...]] = set()
+        seen_signatures: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
 
         for plan in ranked_plans:
             signature = self._candidate_plan_signature(plan)
@@ -2494,6 +2770,7 @@ Run log excerpt:
             constraint_pack=None,
             repair_memory_summary=None,
             retry_decision=None,
+            runtime_profile_retry_fallback_decision=None,
             strategy_history=[],
             feedback_memory_hits=0,
             version_conflict_notes=[],
@@ -2507,6 +2784,7 @@ Run log excerpt:
             deferred_target_python="",
             python_fallback_used=False,
             pending_native_retry=False,
+            pending_runtime_profile_retry=False,
             pending_python_fallback=False,
             classifier_origin="",
             validation_options=[],
@@ -2571,6 +2849,7 @@ Run log excerpt:
             constraint_pack=None,
             repair_memory_summary=None,
             retry_decision=None,
+            runtime_profile_retry_fallback_decision=None,
             strategy_history=[],
             feedback_memory_hits=0,
             version_conflict_notes=[],
@@ -2584,6 +2863,7 @@ Run log excerpt:
             deferred_target_python="",
             python_fallback_used=False,
             pending_native_retry=False,
+            pending_runtime_profile_retry=False,
             pending_python_fallback=False,
             classifier_origin="",
             validation_options=[],
@@ -2685,6 +2965,23 @@ Run log excerpt:
                 return self.finalize_result(current)
             if next_step == "retry_current_plan":
                 continue
+            if next_step == "runtime_profile_repair_research":
+                current = self.runtime_profile_repair_research(current)
+                post_runtime_repair = route_after_research_classification(current, self.settings)
+                if post_runtime_repair == "finalize_result":
+                    return self.finalize_result(current)
+                if post_runtime_repair == "retry_current_plan":
+                    continue
+                if post_runtime_repair == "select_next_candidate_plan":
+                    current = self.select_next_candidate_plan(current)
+                    if not current.get("selected_candidate_plan"):
+                        return self.finalize_result(current)
+                    continue
+                if post_runtime_repair == "replan_after_python_fallback":
+                    current = self.replan_after_python_fallback(current)
+                    if not current.get("selected_candidate_plan"):
+                        return self.finalize_result(current)
+                    continue
             if next_step == "replan_after_python_fallback":
                 current = self.replan_after_python_fallback(current)
                 if not current.get("selected_candidate_plan"):
@@ -2784,6 +3081,7 @@ Run log excerpt:
         graph.add_node("materialize_execution_context", self.materialize_execution_context)
         graph.add_node("execute_candidate", self.execute_candidate)
         graph.add_node("classify_outcome", self.classify_outcome)
+        graph.add_node("runtime_profile_repair_research", self.runtime_profile_repair_research)
         graph.add_node("replan_after_python_fallback", self.replan_after_python_fallback)
         graph.add_node("build_repair_memory_summary", self.build_repair_memory_summary)
         graph.add_node("repair_prompt_c_research", self.repair_prompt_c_research)
@@ -2827,6 +3125,19 @@ Run log excerpt:
             lambda state: route_after_research_classification(state, self.settings),
             {
                 "retry_current_plan": "materialize_execution_context",
+                "runtime_profile_repair_research": "runtime_profile_repair_research",
+                "replan_after_python_fallback": "replan_after_python_fallback",
+                "select_next_candidate_plan": "select_next_candidate_plan",
+                "repair_prompt_c_research": "build_repair_memory_summary",
+                "finalize_result": "finalize_result",
+            },
+        )
+        graph.add_conditional_edges(
+            "runtime_profile_repair_research",
+            lambda state: route_after_research_classification(state, self.settings),
+            {
+                "retry_current_plan": "materialize_execution_context",
+                "runtime_profile_repair_research": "runtime_profile_repair_research",
                 "replan_after_python_fallback": "replan_after_python_fallback",
                 "select_next_candidate_plan": "select_next_candidate_plan",
                 "repair_prompt_c_research": "build_repair_memory_summary",
@@ -3193,6 +3504,11 @@ Run log excerpt:
     def build_rag_context(self, state: ResolutionState) -> ResolutionState:
         if not self._is_research():
             return state
+        self._emit_activity(
+            state,
+            kind="planning_stage_started",
+            detail="Building research RAG context.",
+        )
         pypi_evidence = state.get("pypi_evidence", {})
         repo_evidence = state.get("repo_evidence", {})
         rag_context = build_research_rag_context(
@@ -3202,6 +3518,11 @@ Run log excerpt:
         )
         state["rag_context"] = rag_context
         self._write_json_artifact(state, "rag-context.json", rag_context)
+        self._emit_activity(
+            state,
+            kind="planning_stage_finished",
+            detail="Research RAG context built.",
+        )
         return state
 
     def infer_packages_prompt_a(self, state: ResolutionState) -> ResolutionState:
@@ -3639,6 +3960,14 @@ Run log excerpt:
             or self._research_feature_enabled("dynamic_aliases")
         ):
             return state
+        self._emit_activity(
+            state,
+            kind="planning_stage_started",
+            detail=(
+                "Enriching release metadata for "
+                f"{len(state.get('version_options', []))} package(s)."
+            ),
+        )
         updated_options: list[PackageVersionOptions] = []
         top_k = self._constraint_top_k(state.get("target_python", "3.12"))
         target_python = state.get("target_python", "3.12")
@@ -3733,6 +4062,14 @@ Run log excerpt:
             pypi_evidence["metadata_enrichment"] = metadata_enrichment
             state["pypi_evidence"] = pypi_evidence
             self._write_json_artifact(state, "pypi-evidence.json", pypi_evidence)
+        self._emit_activity(
+            state,
+            kind="planning_stage_finished",
+            detail=(
+                "Release metadata enrichment finished for "
+                f"{len(updated_options)} package(s)."
+            ),
+        )
         return state
 
     def build_constraint_pack(self, state: ResolutionState) -> ResolutionState:
@@ -3747,6 +4084,11 @@ Run log excerpt:
             state["version_conflict_notes"] = []
             state["python_constraint_intersection"] = []
             return state
+        self._emit_activity(
+            state,
+            kind="planning_stage_started",
+            detail="Building constraint pack from version options.",
+        )
         pack = build_constraint_pack(
             state.get("version_options", []),
             target_python=state.get("target_python", "3.12"),
@@ -3770,12 +4112,25 @@ Run log excerpt:
                 for note in pack.conflict_notes
             ],
         )
+        self._emit_activity(
+            state,
+            kind="planning_stage_finished",
+            detail=(
+                "Constraint pack built with "
+                f"{len(pack.conflict_notes)} conflict note(s)."
+            ),
+        )
         return state
 
     def requires_python_intersection_check(self, state: ResolutionState) -> ResolutionState:
         pack = state.get("constraint_pack")
         if pack is None or not self._research_feature_enabled("python_constraint_intersection"):
             return state
+        self._emit_activity(
+            state,
+            kind="planning_stage_started",
+            detail="Checking Python version intersection across candidate packages.",
+        )
         self._write_json_artifact(
             state,
             "python-constraints.json",
@@ -3798,6 +4153,14 @@ Run log excerpt:
                 retry_severity="terminal",
             )
             state["retry_decision"] = classify_retry_decision("ConstraintConflictError")
+        self._emit_activity(
+            state,
+            kind="planning_stage_finished",
+            detail=(
+                "Python constraint intersection check finished: "
+                f"{'valid' if pack.python_intersection_valid and not pack.conflict_precheck_failed else 'blocked'}."
+            ),
+        )
         return state
 
     def load_feedback_memory_summary(self, state: ResolutionState) -> ResolutionState:
@@ -3986,6 +4349,11 @@ Run log excerpt:
         if pack is None:
             state["structured_outputs"]["candidate_bundles"] = []
             return state
+        self._emit_activity(
+            state,
+            kind="planning_stage_started",
+            detail="Generating candidate dependency bundles.",
+        )
         bundles = generate_candidate_bundles(
             pack,
             version_cap_per_package=self._constraint_top_k(state.get("target_python", "3.12")),
@@ -4017,6 +4385,11 @@ Run log excerpt:
             state["repair_skipped_reason"] = "no_conflict_free_candidate_bundle"
         state["structured_outputs"]["candidate_bundles"] = payload
         self._write_json_artifact(state, "candidate-bundles.json", payload)
+        self._emit_activity(
+            state,
+            kind="planning_stage_finished",
+            detail=f"Generated {len(payload)} candidate bundle(s).",
+        )
         return state
 
     def negotiate_version_bundles(self, state: ResolutionState) -> ResolutionState:
@@ -4029,6 +4402,11 @@ Run log excerpt:
             state["candidate_plans"] = []
             state["remaining_candidate_plans"] = []
             return state
+        self._emit_activity(
+            state,
+            kind="planning_stage_started",
+            detail=f"Negotiating across {len(bundles)} candidate bundle(s).",
+        )
         allowed_versions = self._allowed_versions_map(state.get("version_options", []))
         allowed_packages = self._research_allowed_packages(state)
         required_packages = set(allowed_versions)
@@ -4123,11 +4501,24 @@ Run log excerpt:
                 "candidate_plan_strategy": "",
             }
             self._write_json_artifact(state, "version-negotiation.json", state["structured_outputs"]["version_negotiation"])
+        self._emit_activity(
+            state,
+            kind="planning_stage_finished",
+            detail=(
+                "Version bundle negotiation finished with "
+                f"{len(state.get('candidate_plans', []))} retained plan(s)."
+            ),
+        )
         return state
 
     def generate_candidate_plans(self, state: ResolutionState) -> ResolutionState:
         if not self._is_research():
             return state
+        self._emit_activity(
+            state,
+            kind="planning_stage_started",
+            detail="Generating candidate install plans.",
+        )
 
         default_plans = self._default_research_plans(state)
         if (
@@ -4158,6 +4549,11 @@ Run log excerpt:
             state["structured_outputs"]["candidate_plans"] = self._candidate_plan_payload(default_plans)
             state["candidate_plan_strategy"] = "deterministic-fallback"
             self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(default_plans))
+            self._emit_activity(
+                state,
+                kind="planning_stage_finished",
+                detail=f"Generated {len(default_plans)} candidate plan(s).",
+            )
             return state
 
         if not options:
@@ -4165,6 +4561,11 @@ Run log excerpt:
             state["remaining_candidate_plans"] = list(default_plans)
             state["candidate_plan_strategy"] = "deterministic-fallback" if default_plans else ""
             self._write_json_artifact(state, "candidate-plans.json", self._candidate_plan_payload(default_plans))
+            self._emit_activity(
+                state,
+                kind="planning_stage_finished",
+                detail=f"Generated {len(default_plans)} candidate plan(s).",
+            )
             return state
 
         allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
@@ -4257,6 +4658,11 @@ Run log excerpt:
         if not state.get("dependency_reason"):
             state["dependency_reason"] = "llm_version_selection"
         state["version_selection_source"] = "research_candidate_plans"
+        self._emit_activity(
+            state,
+            kind="planning_stage_finished",
+            detail=f"Generated {len(plans)} candidate plan(s).",
+        )
         return state
 
     def select_next_candidate_plan(self, state: ResolutionState) -> ResolutionState:
@@ -4302,6 +4708,135 @@ Run log excerpt:
         )
         return state
 
+    def runtime_profile_repair_research(self, state: ResolutionState) -> ResolutionState:
+        if not self._is_research() or not state.get("pending_runtime_profile_retry"):
+            return state
+        state["pending_runtime_profile_retry"] = False
+        allowed_packages = sorted(state.get("inferred_packages", []), key=str.lower)
+        allowed_package_set = self._research_allowed_packages(state)
+        allowed_versions = self._allowed_versions_map(state.get("version_options", []))
+        required_packages = set(allowed_versions)
+        previous_plan = "\n".join(dep.pin() for dep in state.get("selected_dependencies", []))
+        attempted_plans = "\n".join(
+            ", ".join(attempt.dependencies)
+            for attempt in state.get("attempt_records", [])
+            if attempt.dependencies
+        )
+        validation_options_summary = self._validation_options_summary(state)
+        source_compatibility_hints = self._source_compatibility_hint_summary(state)
+        conflict_notes_summary = self._conflict_note_summary(state)
+        allowed_runtime_profiles = {
+            option.get("profile", "")
+            for option in state.get("validation_options", [])
+            if option.get("profile")
+        }
+        build_log_excerpt = execution_build_excerpt = str(state.get("last_execution").build_log if state.get("last_execution") else "")[:2500]
+        run_log_excerpt = execution_run_excerpt = str(state.get("last_execution").run_log if state.get("last_execution") else "")[:2500]
+        prompt_text = self._format_prompt(
+            "runtime_profile_repair.txt",
+            target_python=state.get("target_python", ""),
+            current_runtime_profile=state.get("current_runtime_profile", ""),
+            allowed_packages="\n".join(allowed_packages),
+            version_space=self._planning_version_space_summary(state),
+            validation_options=validation_options_summary,
+            default_validation_profile=state.get("default_validation_profile", ""),
+            source_compatibility_hints=source_compatibility_hints,
+            conflict_notes=conflict_notes_summary,
+            previous_plan=previous_plan,
+            attempted_plans=attempted_plans,
+            error_details=state.get("last_error_details", ""),
+            build_log_excerpt=build_log_excerpt,
+            run_log_excerpt=run_log_excerpt,
+        )
+        self._trace_request(state, "repair", prompt_text)
+        raw_output = self.prompt_runner.invoke_template(
+            "repair",
+            "runtime_profile_repair.txt",
+            {
+                "target_python": state.get("target_python", ""),
+                "current_runtime_profile": state.get("current_runtime_profile", ""),
+                "allowed_packages": "\n".join(allowed_packages),
+                "version_space": self._planning_version_space_summary(state),
+                "validation_options": validation_options_summary,
+                "default_validation_profile": state.get("default_validation_profile", ""),
+                "source_compatibility_hints": source_compatibility_hints,
+                "conflict_notes": conflict_notes_summary,
+                "previous_plan": previous_plan,
+                "attempted_plans": attempted_plans,
+                "error_details": state.get("last_error_details", ""),
+                "build_log_excerpt": execution_build_excerpt,
+                "run_log_excerpt": execution_run_excerpt,
+            },
+        )
+        self._trace_response(state, "repair", raw_output)
+        state["prompt_history"]["prompt_c"].append(prompt_text)
+        state["model_outputs"]["repair"].append(
+            {"attempt": state["current_attempt"], "output": raw_output, "source": "runtime_profile_repair"}
+        )
+        state.setdefault("structured_outputs", {})["runtime_profile_repair_raw"] = raw_output
+        try:
+            repair_applicable, plans = parse_repair_plan_payload(
+                raw_output,
+                allowed_packages=allowed_package_set,
+                allowed_versions=allowed_versions,
+                required_packages=required_packages,
+                allowed_runtime_profiles=allowed_runtime_profiles or None,
+                previous_plan=[
+                    CandidateDependency(name=dependency.name, version=dependency.version)
+                    for dependency in state.get("selected_dependencies", [])
+                ],
+            )
+        except StructuredOutputError:
+            cleaned_output = self._adjudicate_json(
+                state,
+                "runtime_profile_repair",
+                raw_output,
+                '{"repair_applicable":true,"plans":[{"rank":1,"reason":"switch validation profile","runtime_profile":"import_specs","dependencies":[]}]}',
+            )
+            try:
+                repair_applicable, plans = parse_repair_plan_payload(
+                    cleaned_output,
+                    allowed_packages=allowed_package_set,
+                    allowed_versions=allowed_versions,
+                    required_packages=required_packages,
+                    allowed_runtime_profiles=allowed_runtime_profiles or None,
+                    previous_plan=[
+                        CandidateDependency(name=dependency.name, version=dependency.version)
+                        for dependency in state.get("selected_dependencies", [])
+                    ],
+                )
+            except StructuredOutputError:
+                state["structured_prompt_failures"] = state.get("structured_prompt_failures", 0) + 1
+                repair_applicable, plans = False, []
+        if plans:
+            plans = self._filter_novel_candidate_plans(state, plans)
+        state["structured_outputs"]["runtime_profile_repair"] = {
+            "repair_applicable": repair_applicable,
+            "plans": self._candidate_plan_payload(plans),
+        }
+        if not repair_applicable or not plans:
+            state["retry_decision"] = state.get("runtime_profile_retry_fallback_decision")
+            state["runtime_profile_retry_fallback_decision"] = None
+            state["candidate_plans"] = []
+            state["remaining_candidate_plans"] = []
+            self._emit_activity(
+                state,
+                kind="runtime_profile_repair_unavailable",
+                detail="Runtime-profile repair did not yield a novel plan; continuing with normal retry routing.",
+            )
+            return state
+        state["retry_decision"] = None
+        state["runtime_profile_retry_fallback_decision"] = None
+        state["candidate_plans"] = plans
+        state["remaining_candidate_plans"] = list(plans)
+        state["candidate_plan_strategy"] = "llm-runtime-profile-repair"
+        self._emit_activity(
+            state,
+            kind="runtime_profile_repair_ready",
+            detail=f"Runtime-profile repair proposed {len(plans)} plan(s); selecting rank {plans[0].rank} next.",
+        )
+        return state
+
     def repair_prompt_c_research(self, state: ResolutionState) -> ResolutionState:
         if not self._is_research():
             return state
@@ -4328,12 +4863,21 @@ Run log excerpt:
         validation_options_summary = self._validation_options_summary(state)
         source_compatibility_hints = self._source_compatibility_hint_summary(state)
         conflict_notes_summary = self._conflict_note_summary(state)
+        repeated_missing_symbol_failures = self._repeated_missing_symbol_summary(state)
+        symbol_compatibility_repair_candidates = self._symbol_compatibility_repair_candidates_summary(state)
         allowed_runtime_profiles = {
             option.get("profile", "")
             for option in state.get("validation_options", [])
             if option.get("profile")
         }
-        repair_template = "repair_attempt_v2.txt" if self._research_feature_enabled("repair_memory") else "repair_attempt.txt"
+        use_symbol_compatibility_repair = (
+            repeated_missing_symbol_failures != "[]"
+            and self._missing_symbol_signature(state.get("last_error_details", "")) is not None
+        )
+        if use_symbol_compatibility_repair:
+            repair_template = "symbol_compatibility_repair.txt"
+        else:
+            repair_template = "repair_attempt_v2.txt" if self._research_feature_enabled("repair_memory") else "repair_attempt.txt"
         feedback_summary = (
             summarize_feedback_memory(self.settings.workspace_memory_dir)
             if self._research_feature_enabled("repair_feedback_loop")
@@ -4352,6 +4896,8 @@ Run log excerpt:
             default_validation_profile=state.get("default_validation_profile", ""),
             source_compatibility_hints=source_compatibility_hints,
             conflict_notes=conflict_notes_summary,
+            repeated_missing_symbol_failures=repeated_missing_symbol_failures,
+            symbol_compatibility_repair_candidates=symbol_compatibility_repair_candidates,
             max_plan_count=min(2, self.settings.candidate_plan_count),
             repair_memory=json.dumps(asdict(state.get("repair_memory_summary") or RepairMemorySummary()), indent=2)[:2500],
             feedback_summary=json.dumps(feedback_summary, indent=2)[:2500],
@@ -4372,6 +4918,8 @@ Run log excerpt:
                 "default_validation_profile": state.get("default_validation_profile", ""),
                 "source_compatibility_hints": source_compatibility_hints,
                 "conflict_notes": conflict_notes_summary,
+                "repeated_missing_symbol_failures": repeated_missing_symbol_failures,
+                "symbol_compatibility_repair_candidates": symbol_compatibility_repair_candidates,
                 "max_plan_count": min(2, self.settings.candidate_plan_count),
                 "repair_memory": json.dumps(asdict(state.get("repair_memory_summary") or RepairMemorySummary()), indent=2)[:2500],
                 "feedback_summary": json.dumps(feedback_summary, indent=2)[:2500],
@@ -4559,6 +5107,7 @@ Run log excerpt:
     def materialize_execution_context(self, state: ResolutionState) -> ResolutionState:
         state["current_attempt"] += 1
         state["pending_native_retry"] = False
+        state["pending_runtime_profile_retry"] = False
         state["pending_python_fallback"] = False
         artifact_dir = Path(state["artifact_dir"])
         attempt_dir = artifact_dir / f"attempt_{state['current_attempt']:02d}"
@@ -4654,6 +5203,7 @@ Run log excerpt:
                 validation_command=state.get("current_validation_command") or None,
                 wall_clock_seconds=result.wall_clock_seconds,
                 artifact_dir=str(attempt_dir),
+                runtime_profile=str(state.get("current_runtime_profile", "") or ""),
                 started_at=attempt_started_at,
                 finished_at=attempt_finished_at,
                 build_wall_clock_seconds=result.build_wall_clock_seconds,
@@ -4675,7 +5225,9 @@ Run log excerpt:
             run_succeeded=execution.run_succeeded,
         )
         state["pending_native_retry"] = False
+        state["pending_runtime_profile_retry"] = False
         state["pending_python_fallback"] = False
+        state["runtime_profile_retry_fallback_decision"] = None
         state["system_dependency_hints"] = list(state.get("system_dependency_hints", []))
         state["bootstrap_dependencies"] = list(state.get("bootstrap_dependencies", []))
         state["bootstrap_packages_attempted"] = list(state.get("bootstrap_packages_attempted", []))
@@ -4732,6 +5284,25 @@ Run log excerpt:
                 retry_decision.repair_allowed = False
                 retry_decision.candidate_fallback_allowed = False
                 retry_decision.reason = "reserved-deferred-python-fallback"
+                retry_decision.native_retry_budget = 0
+                retry_decision.repair_retry_budget = 0
+        elif self._should_prompt_runtime_profile_repair(state, execution, classified):
+            state["pending_runtime_profile_retry"] = True
+            classified.dependency_retryable = True
+            classified.retry_severity = "limited_retryable"
+            self._emit_activity(
+                state,
+                kind="runtime_profile_repair_planned",
+                detail=(
+                    "Build succeeded but runtime validation failed with a hardware-sensitive import signature; "
+                    "asking the repair model whether to switch validation profile before changing dependencies."
+                ),
+            )
+            if retry_decision is not None:
+                state["runtime_profile_retry_fallback_decision"] = RetryDecision(**asdict(retry_decision))
+                retry_decision.repair_allowed = False
+                retry_decision.candidate_fallback_allowed = False
+                retry_decision.reason = "runtime-profile-repair-first"
                 retry_decision.native_retry_budget = 0
                 retry_decision.repair_retry_budget = 0
         else:
@@ -4835,6 +5406,7 @@ Run log excerpt:
                     "native_retry_budget": retry_decision.native_retry_budget if retry_decision is not None else 0,
                     "reason": retry_decision.reason if retry_decision is not None else "legacy-retry-routing",
                     "pending_native_retry": state.get("pending_native_retry", False),
+                    "pending_runtime_profile_retry": state.get("pending_runtime_profile_retry", False),
                     "pending_python_fallback": state.get("pending_python_fallback", False),
                     "classifier_origin": classified.classifier_origin,
                     "system_dependency_hints": list(state.get("system_dependency_hints", [])),

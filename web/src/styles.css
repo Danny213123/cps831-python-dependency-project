@@ -333,10 +333,20 @@ button {
 .case-table-head,
 .case-summary {
   display: grid;
-  grid-template-columns: 48px minmax(150px, 190px) 74px 54px 64px 64px minmax(150px, 210px) minmax(230px, 1fr);
+  grid-template-columns:
+    48px
+    minmax(150px, 190px)
+    74px
+    54px
+    64px
+    64px
+    70px
+    76px
+    minmax(150px, 210px)
+    minmax(210px, 1fr);
   gap: 12px;
   align-items: center;
-  min-width: 1120px;
+  min-width: 1290px;
 }
 
 .case-table-head {
@@ -351,7 +361,7 @@ button {
 }
 
 .case-row {
-  min-width: 1120px;
+  min-width: 1290px;
   border-bottom: 1px solid rgba(122, 127, 138, 0.28);
 }
 

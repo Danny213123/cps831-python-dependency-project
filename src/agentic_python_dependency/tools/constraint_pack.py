@@ -143,57 +143,71 @@ def generate_candidate_bundles(
     version_cap_per_package: int | None = None,
     preferred_versions_by_package: dict[str, list[str]] | None = None,
 ) -> list[list[CandidateDependency]]:
-    packages = list(constraint_pack.candidate_versions)
-    ordered_versions_by_package: dict[str, list[str]] = {}
-    for package in packages:
-        versions = list(constraint_pack.candidate_versions.get(package, []))
-        preferred_versions = [
-            version
-            for version in (preferred_versions_by_package or {}).get(package, [])
-            if version in versions
-        ]
-        if preferred_versions:
-            preferred_set = set(preferred_versions)
-            versions = preferred_versions + [version for version in versions if version not in preferred_set]
-        ordered_versions_by_package[package] = versions
-    version_priority = {
-        package: {version: index for index, version in enumerate(ordered_versions_by_package.get(package, []))}
-        for package in packages
-    }
-    beams: list[list[CandidateDependency]] = [[]]
-    for package in packages:
-        next_beams: list[list[CandidateDependency]] = []
-        versions = ordered_versions_by_package.get(package, [])
-        if version_cap_per_package is not None and version_cap_per_package > 0:
-            versions = versions[:version_cap_per_package]
-        for beam in beams:
-            for version in versions:
-                candidate = [*beam, CandidateDependency(name=package, version=version)]
-                if _bundle_satisfies_requires_dist(candidate, constraint_pack):
-                    next_beams.append(candidate)
-        # Preserve the semantic ordering already computed for each package's
-        # candidate version list while keeping some diversity across packages.
-        # Pure lexicographic ordering freezes earlier packages to their newest
-        # versions and can eliminate every viable bundle before later
-        # compatibility constraints are applied.
-        next_beams.sort(
-            key=lambda candidate: tuple(
-                [
-                    sum(
-                        version_priority.get(dep.name, {}).get(dep.version, len(version_priority.get(dep.name, {})))
-                        for dep in candidate
-                    ),
-                    *(
-                        version_priority.get(dep.name, {}).get(dep.version, len(version_priority.get(dep.name, {})))
-                        for dep in candidate
-                    ),
-                ]
+    def _run_bundle_search(
+        *,
+        search_beam_width: int,
+        search_version_cap: int | None,
+    ) -> list[list[CandidateDependency]]:
+        packages = list(constraint_pack.candidate_versions)
+        ordered_versions_by_package: dict[str, list[str]] = {}
+        for package in packages:
+            versions = list(constraint_pack.candidate_versions.get(package, []))
+            preferred_versions = [
+                version
+                for version in (preferred_versions_by_package or {}).get(package, [])
+                if version in versions
+            ]
+            if preferred_versions:
+                preferred_set = set(preferred_versions)
+                versions = preferred_versions + [version for version in versions if version not in preferred_set]
+            ordered_versions_by_package[package] = versions
+        version_priority = {
+            package: {version: index for index, version in enumerate(ordered_versions_by_package.get(package, []))}
+            for package in packages
+        }
+        beams: list[list[CandidateDependency]] = [[]]
+        for package in packages:
+            next_beams: list[list[CandidateDependency]] = []
+            versions = ordered_versions_by_package.get(package, [])
+            if search_version_cap is not None and search_version_cap > 0:
+                versions = versions[:search_version_cap]
+            for beam in beams:
+                for version in versions:
+                    candidate = [*beam, CandidateDependency(name=package, version=version)]
+                    if _bundle_satisfies_requires_dist(candidate, constraint_pack):
+                        next_beams.append(candidate)
+            next_beams.sort(
+                key=lambda candidate: tuple(
+                    [
+                        sum(
+                            version_priority.get(dep.name, {}).get(dep.version, len(version_priority.get(dep.name, {})))
+                            for dep in candidate
+                        ),
+                        *(
+                            version_priority.get(dep.name, {}).get(dep.version, len(version_priority.get(dep.name, {})))
+                            for dep in candidate
+                        ),
+                    ]
+                )
             )
-        )
-        beams = next_beams[:beam_width]
-        if not beams:
-            break
-    return beams[:max_bundles]
+            beams = next_beams[:search_beam_width]
+            if not beams:
+                break
+        return beams[:max_bundles]
+
+    bundles = _run_bundle_search(search_beam_width=beam_width, search_version_cap=version_cap_per_package)
+    if bundles or not preferred_versions_by_package:
+        return bundles
+    expanded_beam_width = max(beam_width * 8, 96)
+    expanded_version_cap = (
+        max(version_cap_per_package * 2, 40)
+        if version_cap_per_package is not None and version_cap_per_package > 0
+        else None
+    )
+    return _run_bundle_search(
+        search_beam_width=expanded_beam_width,
+        search_version_cap=expanded_version_cap,
+    )
 
 
 def constraint_pack_to_dict(pack: ConstraintPack) -> dict[str, Any]:

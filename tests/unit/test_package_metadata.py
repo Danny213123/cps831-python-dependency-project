@@ -156,3 +156,29 @@ def test_parse_release_metadata_deletes_stale_raw_payload_when_parsed_cache_is_f
 
     assert metadata["requires_python"] == ">=3.10"
     assert not raw_path.exists()
+
+
+def test_parse_release_metadata_skips_oversized_release_artifacts(tmp_path: Path) -> None:
+    store = PackageMetadataStore(tmp_path)
+    release_files = [
+        {
+            "url": "https://example.invalid/huge.whl",
+            "packagetype": "bdist_wheel",
+            "filename": "huge.whl",
+            "size": 500 * 1024 * 1024,
+        }
+    ]
+
+    calls: list[str] = []
+
+    def _download(url: str) -> bytes:
+        calls.append(url)
+        raise AssertionError("oversized artifacts should not be downloaded")
+
+    store._download_bytes = _download  # type: ignore[method-assign]
+
+    metadata = store.parse_release_metadata("torch", "2.4.1", release_files=release_files)
+
+    assert calls == []
+    assert metadata["top_level_modules"] == ["torch"]
+    assert metadata["requires_dist"] == []

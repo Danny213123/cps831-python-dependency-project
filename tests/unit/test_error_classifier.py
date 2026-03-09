@@ -242,3 +242,16 @@ def test_classify_error_detects_service_connection_refusal_as_environment_error(
 
     assert outcome.category == "EnvironmentError"
     assert outcome.dependency_retryable is False
+
+
+def test_classify_error_detects_illegal_instruction_as_environment_error() -> None:
+    outcome = classify_error(
+        "",
+        "Illegal instruction",
+        132,
+        build_succeeded=True,
+        run_succeeded=False,
+    )
+
+    assert outcome.category == "EnvironmentError"
+    assert outcome.dependency_retryable is False

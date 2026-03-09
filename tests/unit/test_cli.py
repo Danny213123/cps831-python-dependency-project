@@ -1,7 +1,9 @@
 import json
 import time
+import urllib.error
 import warnings
 from pathlib import Path
+
 import pytest
 
 from agentic_python_dependency.cli import (
@@ -128,6 +130,21 @@ def test_collect_case_bundle_files_omits_result_json(tmp_path: Path) -> None:
     assert [item["path"] for item in files] == ["activity.log"]
 
 
+def test_collect_case_bundle_files_truncates_and_filters_remote_dashboard_payload(tmp_path: Path) -> None:
+    case_dir = tmp_path / "case-1"
+    attempt_dir = case_dir / "attempt_01"
+    attempt_dir.mkdir(parents=True)
+    (case_dir / "activity.log").write_text("event", encoding="utf-8")
+    (attempt_dir / "build.log").write_text("x" * 64, encoding="utf-8")
+    (attempt_dir / "run.log").write_text("run output", encoding="utf-8")
+    (case_dir / "model_outputs.json").write_text("{}", encoding="utf-8")
+
+    files = _collect_case_bundle_files(case_dir, max_bytes=16, total_max_bytes=40)
+
+    assert [item["path"] for item in files] == ["activity.log", "attempt_01/build.log", "attempt_01/run.log"]
+    assert files[1]["content"].endswith("[truncated by APDR central dashboard sync]\n")
+
+
 def test_benchmark_run_parser_accepts_new_moe_model_profiles() -> None:
     parser = build_parser()
 
@@ -219,6 +236,29 @@ def test_top_level_full_parser_accepts_jobs() -> None:
 
     assert args.command == "full"
     assert args.jobs == 3
+
+
+def test_network_dashboard_sink_warns_once_on_insufficient_storage(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fake_urlopen(request, timeout=0):  # type: ignore[no-untyped-def]
+        raise urllib.error.HTTPError(
+            request.full_url,
+            507,
+            "Insufficient Storage",
+            hdrs=None,
+            fp=None,
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    sink = NetworkDashboardSink("http://127.0.0.1:8765", source_label="windows-box")
+    sink.sync_run_state({"run_id": "run123", "status": "running"})
+    sink.sync_run_state({"run_id": "run123", "status": "running"})
+
+    captured = capsys.readouterr()
+    assert captured.err.count("central dashboard storage is full") == 1
 
 
 def test_top_level_solve_parser_accepts_path() -> None:
@@ -330,6 +370,49 @@ def test_build_runtime_comparison_row_includes_official_values() -> None:
     assert row["official_passed"] == "False"
     assert row["official_duration"] == "14.48"
     assert row["official_csv_sources"] == "pyego_results.csv"
+
+
+def test_build_runtime_comparison_row_includes_pyego_and_readpy_matches() -> None:
+    result = {
+        "case_id": "abc123",
+        "success": False,
+        "final_error_category": "ModuleNotFoundError",
+        "attempts": 1,
+        "wall_clock_seconds": 7.5,
+    }
+
+    row = build_runtime_comparison_row(
+        result,
+        {},
+        case_number=3,
+        pyego_lookup={
+            "abc123": {
+                "official_result": "ModuleNotFound",
+                "official_passed": "False",
+                "official_duration": "14.48",
+                "official_python_modules": "requests",
+                "official_file": "",
+                "official_csv_sources": "pyego_results.csv",
+            }
+        },
+        readpy_lookup={
+            "abc123": {
+                "official_result": "OtherPass",
+                "official_passed": "True",
+                "official_duration": "20.0",
+                "official_python_modules": "requests",
+                "official_file": "",
+                "official_csv_sources": "readpy_results_total.csv",
+            }
+        },
+    )
+
+    assert row["pyego_match"] == "PASS"
+    assert row["pyego_result"] == "ModuleNotFound"
+    assert row["pyego_csv_sources"] == "pyego_results.csv"
+    assert row["readpy_match"] == "FAIL"
+    assert row["readpy_result"] == "OtherPass"
+    assert row["readpy_csv_sources"] == "readpy_results_total.csv"
 
 
 def test_build_runtime_comparison_row_marks_result_mismatches_as_fail() -> None:
@@ -757,6 +840,8 @@ def test_run_case_batch_passes_pllm_match_to_observer(tmp_path: Path, monkeypatc
             }
         },
     )
+    monkeypatch.setattr("agentic_python_dependency.cli.load_pyego_csv_lookup", lambda _settings: {})
+    monkeypatch.setattr("agentic_python_dependency.cli.load_readpy_csv_lookup", lambda _settings: {})
     monkeypatch.setattr("agentic_python_dependency.cli.OllamaPromptRunner", DummyPromptRunner)
     monkeypatch.setattr("agentic_python_dependency.cli.ResolutionWorkflow", FakeWorkflow)
     monkeypatch.setattr("agentic_python_dependency.cli.summarize_run", fake_summarize_run)
@@ -1004,6 +1089,8 @@ def test_run_case_batch_restores_saved_runtime_config_before_resume_validation(t
             "attempts": 1,
             "wall_clock_seconds": 1.0,
             "result_matches_csv": "PASS",
+            "pyego_match": "",
+            "readpy_match": "",
         }
     ]
     warnings_path = run_dir / "warnings.log"

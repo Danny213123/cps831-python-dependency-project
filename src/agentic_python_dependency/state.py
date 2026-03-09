@@ -151,6 +151,7 @@ class AttemptRecord:
     validation_command: str | None
     wall_clock_seconds: float
     artifact_dir: str
+    runtime_profile: str = ""
     started_at: str = ""
     finished_at: str = ""
     build_wall_clock_seconds: float = 0.0
@@ -279,6 +280,7 @@ class ResolutionState(TypedDict, total=False):
     generated_requirements: str
     prepared_execution_context: Any
     pending_native_retry: bool
+    pending_runtime_profile_retry: bool
     case_started_at: str
     case_finished_at: str
     last_execution: ExecutionOutcome
@@ -312,6 +314,7 @@ class ResolutionState(TypedDict, total=False):
     constraint_pack: ConstraintPack | None
     repair_memory_summary: RepairMemorySummary | None
     retry_decision: RetryDecision | None
+    runtime_profile_retry_fallback_decision: RetryDecision | None
     strategy_history: list[RepairStrategyRecord]
     feedback_memory_hits: int
     version_conflict_notes: list[ConflictNote]

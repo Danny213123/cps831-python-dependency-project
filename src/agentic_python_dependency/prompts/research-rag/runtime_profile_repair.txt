@@ -1,0 +1,62 @@
+You are deciding whether a failed benchmark validation should be repaired by changing the runtime profile instead of changing dependencies.
+
+Return strict JSON only using this schema:
+{{
+  "repair_applicable": true,
+  "plans": [
+    {{
+      "rank": 1,
+      "reason": "short reason",
+      "runtime_profile": "import_specs",
+      "dependencies": []
+    }}
+  ]
+}}
+
+Rules:
+- Use only allowed runtime profiles and allowed package versions already present in the supplied evidence.
+- Prefer keeping the dependency plan unchanged when the build succeeded and the run failed in the validation wrapper.
+- If the run log suggests a hardware-sensitive binary import failure such as `Illegal instruction`, AVX, or CPU-feature mismatch, prefer a safer non-importing validation profile such as `import_specs` when available.
+- You may return a runtime-profile-only repair with an empty `dependencies` list; omitted packages will be preserved from the previous plan.
+- Only change dependencies if the run failure strongly indicates that the installed package versions themselves are still wrong.
+- When source compatibility hints are present, do not move away from those version families unless the supplied evidence clearly requires it.
+- No markdown, no commentary, no text outside JSON.
+
+Target Python:
+{target_python}
+
+Current runtime profile:
+{current_runtime_profile}
+
+Allowed packages:
+{allowed_packages}
+
+Version space:
+{version_space}
+
+Allowed validation profiles:
+{validation_options}
+
+Default validation profile:
+{default_validation_profile}
+
+Source compatibility hints:
+{source_compatibility_hints}
+
+Conflict notes:
+{conflict_notes}
+
+Previous plan:
+{previous_plan}
+
+Attempted plans:
+{attempted_plans}
+
+Error details:
+{error_details}
+
+Build log excerpt:
+{build_log_excerpt}
+
+Run log excerpt:
+{run_log_excerpt}

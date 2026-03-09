@@ -1,8 +1,12 @@
+import errno
 import json
 from pathlib import Path
 
+import pytest
+
 from agentic_python_dependency.config import Settings
 from agentic_python_dependency.web_dashboard import (
+    DashboardStorageError,
     get_case_detail,
     get_home_payload,
     get_run_detail,
@@ -122,8 +126,8 @@ def test_get_run_detail_merges_case_runtime_rows(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     (run_dir / "run-vs-csv.csv").write_text(
-        "case_id,result_matches_csv,official_result,official_passed,official_python_modules\n"
-        "case-1,PASS,OtherPass,True,requests\n",
+        "case_id,result_matches_csv,official_result,official_passed,official_python_modules,pyego_match,pyego_result,pyego_passed,readpy_match,readpy_result,readpy_passed\n"
+        "case-1,PASS,OtherPass,True,requests,FAIL,ImportError,False,PASS,OtherPass,True\n",
         encoding="utf-8",
     )
     (case_dir / "result.json").write_text(
@@ -158,6 +162,8 @@ def test_get_run_detail_merges_case_runtime_rows(tmp_path: Path) -> None:
     assert payload["run"]["hardware"]["memory"] == "48.0 GiB"
     assert payload["activeCases"] == ["case-2"]
     assert payload["cases"][0]["pllmMatch"] == "MATCH"
+    assert payload["cases"][0]["pyegoMatch"] == "MISS"
+    assert payload["cases"][0]["readpyMatch"] == "MATCH"
     assert payload["cases"][0]["dependencyPreview"] == "requests==2.32.3, urllib3==2.2.2"
 
 
@@ -168,7 +174,8 @@ def test_get_case_detail_groups_attempt_activity_and_files(tmp_path: Path) -> No
     attempt_dir = case_dir / "attempt_01"
     attempt_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "run-vs-csv.csv").write_text(
-        "case_id,result_matches_csv,official_result,official_passed\ncase-1,FAIL,ImportError,False\n",
+        "case_id,result_matches_csv,official_result,official_passed,pyego_match,pyego_result,pyego_passed,readpy_match,readpy_result,readpy_passed\n"
+        "case-1,FAIL,ImportError,False,PASS,ImportError,False,FAIL,OtherPass,True\n",
         encoding="utf-8",
     )
     (case_dir / "activity.log").write_text(
@@ -216,6 +223,10 @@ def test_get_case_detail_groups_attempt_activity_and_files(tmp_path: Path) -> No
 
     assert payload is not None
     assert payload["case"]["pllmMatch"] == "MISS"
+    assert payload["case"]["pyegoMatch"] == "MATCH"
+    assert payload["case"]["readpyMatch"] == "MISS"
+    assert payload["official"]["pyego_result"] == "ImportError"
+    assert payload["official"]["readpy_result"] == "OtherPass"
     assert payload["attempts"][0]["llmFailureAnalysis"].startswith("Runtime failure.")
     assert payload["attempts"][0]["llmFailureAnalysisModel"] == "mistral-nemo:12b"
     assert payload["attempts"][0]["activity"][0]["kind"] == "docker_build_start"
@@ -296,3 +307,18 @@ def test_remote_ingested_runs_are_listed_and_readable(tmp_path: Path) -> None:
     assert case_detail is not None
     assert case_detail["source"]["sourceType"] == "remote"
     assert case_detail["attempts"][0]["files"][0]["path"] == "attempt_01/build.log"
+
+
+def test_ingest_network_run_state_raises_storage_error_on_no_space(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = make_settings(tmp_path)
+
+    def fail_write_text(self: Path, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(Path, "write_text", fail_write_text)
+
+    with pytest.raises(DashboardStorageError):
+        ingest_network_run_state(settings, "windows-box", "run999", {"run_id": "run999"})

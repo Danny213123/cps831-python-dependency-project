@@ -40,9 +40,25 @@ def test_invoke_template_backfills_optional_prompt_variables(tmp_path: Path) -> 
     settings = make_settings(tmp_path)
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir(parents=True, exist_ok=True)
-    (prompt_dir / "example.txt").write_text("Hints:{source_compatibility_hints} Conflicts:{conflict_notes}", encoding="utf-8")
+    (prompt_dir / "example.txt").write_text(
+        "Hints:{source_compatibility_hints} Conflicts:{conflict_notes} Missing:{repeated_missing_symbol_failures} Candidates:{symbol_compatibility_repair_candidates}",
+        encoding="utf-8",
+    )
     runner = OllamaPromptRunner(settings, prompt_dir)
-    runner._write_cache("repair", "Hints:[] Conflicts:[]", "cached-response")
+    runner._write_cache("repair", "Hints:[] Conflicts:[] Missing:[] Candidates:[]", "cached-response")
+
+    response = runner.invoke_template("repair", "example.txt", {})
+
+    assert response == "cached-response"
+
+
+def test_invoke_template_falls_back_to_empty_string_for_unknown_prompt_variables(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    prompt_dir = tmp_path / "prompts"
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    (prompt_dir / "example.txt").write_text("Known:{conflict_notes} Unknown:{brand_new_field}", encoding="utf-8")
+    runner = OllamaPromptRunner(settings, prompt_dir)
+    runner._write_cache("repair", "Known:[] Unknown:", "cached-response")
 
     response = runner.invoke_template("repair", "example.txt", {})
 

@@ -204,6 +204,21 @@ class DockerExecutor:
             temp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
             temp_path.replace(self._cache_manifest_path)
 
+    def _remove_cache_entry(self, cache_key: str) -> None:
+        if not cache_key:
+            return
+        with self._CACHE_LOCK:
+            payload = self._load_cache_manifest()
+            entries = dict(payload.get("entries", {}))
+            if cache_key not in entries:
+                return
+            entries.pop(cache_key, None)
+            payload["entries"] = entries
+            self._cache_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = self._cache_manifest_path.with_suffix(".tmp")
+            temp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+            temp_path.replace(self._cache_manifest_path)
+
     @staticmethod
     def _docker_image_exists(image_tag: str, env: dict[str, str]) -> bool:
         probe = subprocess.run(
@@ -815,12 +830,19 @@ class DockerExecutor:
                     check=False,
                 )
 
-        if not self.settings.keep_images and not context.environment_cache_key:
+        if not self.settings.keep_images:
             subprocess.run(
                 ["docker", "image", "rm", "-f", context.image_tag],
                 capture_output=True,
                 env=env,
                 check=False,
+            )
+            if context.environment_cache_key:
+                self._remove_cache_entry(context.environment_cache_key)
+            self._emit_activity(
+                context,
+                kind="docker_image_cleanup",
+                detail=f"Removed docker image {context.image_tag} after attempt {context.attempt_number}.",
             )
 
         return DockerExecutionResult(

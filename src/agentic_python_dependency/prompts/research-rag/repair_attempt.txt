@@ -41,6 +41,7 @@ Rules:
 - Do not return a plan whose normalized dependency set plus `runtime_profile` is identical to an attempted plan unless the supplied evidence introduces a genuinely new compatibility signal.
 - Cross-package compatibility: Before changing any package version, check its `requires_dist` in the version space to ensure the proposed version's constraints are satisfied by every other package in the plan. If changing package A would impose a constraint that conflicts with another package already in the plan, either also update the constrained package to a compatible version or choose a different version of A.
 - Removed-module errors: If the error is `ModuleNotFoundError` or `ImportError` for a submodule of an already installed top-level package, do not assume a downgrade will help. Only downgrade when the supplied version space, RAG context, or source compatibility hints provide evidence that the missing submodule or API existed in an older release line. If the same submodule-missing error recurs across multiple attempted plans within the plausible families supported by the evidence, return {{"repair_applicable": false, "plans": []}}.
+- Repeated missing-symbol errors: If the same missing symbol or API (for example `cannot import name X` or `has no attribute X`) recurs across multiple attempted plans, treat that as evidence that adjacent one-step version nudges are not helping. Do not propose another nearby version in the same package family unless the supplied evidence explicitly indicates that the missing symbol exists there. Either propose a larger evidence-supported jump or return {{"repair_applicable": false, "plans": []}}.
 - Do not return markdown, code fences, or commentary.
 
 Target Python:
@@ -72,6 +73,9 @@ Previous attempted plans:
 
 Error details:
 {error_details}
+
+Repeated missing-symbol failures:
+{repeated_missing_symbol_failures}
 
 RAG context:
 {rag_context}

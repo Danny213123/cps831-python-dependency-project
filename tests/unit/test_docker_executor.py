@@ -339,6 +339,7 @@ def test_execute_mounts_workspace_for_cacheable_generated_context(monkeypatch, t
 def test_execute_reuses_cached_image_and_skips_build(monkeypatch, tmp_path: Path) -> None:
     settings = Settings.from_env(project_root=tmp_path)
     executor = DockerExecutor(settings)
+    executor._store_cache_entry("cache-key", "apdr-env-test", mode="generated")
     context = PreparedExecutionContext(
         context_dir=tmp_path,
         dockerfile_path=tmp_path / "Dockerfile.generated",
@@ -356,6 +357,8 @@ def test_execute_reuses_cached_image_and_skips_build(monkeypatch, tmp_path: Path
             return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
         if command[:2] == ["docker", "run"]:
             return subprocess.CompletedProcess(command, 0, stdout="ok\n", stderr="")
+        if command[:3] == ["docker", "image", "rm"]:
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
         raise AssertionError(f"Unexpected command: {command}")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -366,6 +369,8 @@ def test_execute_reuses_cached_image_and_skips_build(monkeypatch, tmp_path: Path
     assert result.build_skipped is True
     assert result.image_cache_hit is True
     assert not any(command[:2] == ["docker", "build"] for command in calls)
+    assert ["docker", "image", "rm", "-f", "apdr-env-test"] in calls
+    assert executor._load_cache_manifest()["entries"] == {}
 
 
 def test_execute_honors_requested_docker_platform(monkeypatch, tmp_path: Path) -> None:
@@ -547,6 +552,7 @@ def test_execute_emits_activity_events(monkeypatch, tmp_path: Path) -> None:
         "docker_build_finish",
         "docker_run_start",
         "docker_run_finish",
+        "docker_image_cleanup",
     ]
     assert all(event[0] == "case-7" for event in activity_events)
     assert all(event[1] == 2 for event in activity_events)

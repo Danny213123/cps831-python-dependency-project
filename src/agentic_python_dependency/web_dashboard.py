@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import errno
 import json
 import mimetypes
 import re
@@ -16,6 +17,10 @@ from typing import Any
 from urllib.parse import quote, unquote, urlparse
 
 from agentic_python_dependency.config import Settings
+
+
+class DashboardStorageError(RuntimeError):
+    pass
 
 
 def _repo_root() -> Path:
@@ -102,6 +107,33 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _raise_storage_error(exc: OSError) -> None:
+    if exc.errno == errno.ENOSPC:
+        raise DashboardStorageError("No space left on device while storing dashboard data.") from exc
+    raise exc
+
+
+def _ensure_dir(path: Path) -> None:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        _raise_storage_error(exc)
+
+
+def _write_json_file(path: Path, payload: dict[str, Any]) -> None:
+    try:
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except OSError as exc:
+        _raise_storage_error(exc)
+
+
+def _write_text_file(path: Path, content: str) -> None:
+    try:
+        path.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        _raise_storage_error(exc)
+
+
 def _read_runtime_row_lookup(run_dir: Path) -> dict[str, dict[str, str]]:
     path = run_dir / "run-vs-csv.csv"
     if not path.exists():
@@ -132,6 +164,10 @@ def _pllm_match(value: str) -> str:
     if normalized == "FAIL":
         return "MISS"
     return "-"
+
+
+def _baseline_match(runtime_row: dict[str, str], result: dict[str, Any], key: str) -> str:
+    return _pllm_match(runtime_row.get(key, "") or result.get(key, ""))
 
 
 def _safe_float(value: object, default: float = 0.0) -> float:
@@ -184,7 +220,9 @@ def _case_summary_payload(result: dict[str, Any], runtime_row: dict[str, str] | 
         "targetPython": str(result.get("target_python", "") or ""),
         "runtimeProfile": str(result.get("runtime_profile", "") or ""),
         "seconds": _safe_float(result.get("wall_clock_seconds", 0.0)),
-        "pllmMatch": _pllm_match(runtime_row.get("result_matches_csv", "")),
+        "pllmMatch": _baseline_match(runtime_row, result, "result_matches_csv"),
+        "pyegoMatch": _baseline_match(runtime_row, result, "pyego_match"),
+        "readpyMatch": _baseline_match(runtime_row, result, "readpy_match"),
         "dependencies": deps,
         "dependencyPreview": _format_dependency_preview(deps),
         "dockerBuildSeconds": _safe_float(result.get("docker_build_seconds_total", 0.0)),
@@ -200,6 +238,27 @@ def _case_summary_payload(result: dict[str, Any], runtime_row: dict[str, str] | 
         "finishedAt": str(result.get("finished_at", "") or ""),
         "sortTimestamp": _latest_timestamp(result.get("finished_at"), result.get("started_at")),
     }
+
+
+def _baseline_detail_payload(result: dict[str, Any], runtime_row: dict[str, str] | None = None) -> dict[str, str]:
+    runtime_row = runtime_row or {}
+    payload = {str(key): str(value or "") for key, value in runtime_row.items()}
+    for key in (
+        "result_matches_csv",
+        "pyego_match",
+        "readpy_match",
+        "official_result",
+        "official_passed",
+        "official_python_modules",
+        "pyego_result",
+        "pyego_passed",
+        "pyego_python_modules",
+        "readpy_result",
+        "readpy_passed",
+        "readpy_python_modules",
+    ):
+        payload[key] = str(payload.get(key, "") or result.get(key, "") or "")
+    return payload
 
 
 def _parse_activity_log(path: Path) -> list[dict[str, Any]]:
@@ -245,14 +304,14 @@ def _file_entry(run_id: str, case_id: str, relative_path: str, *, label: str | N
 
 def ingest_network_run_state(settings: Settings, source_id: str, run_id: str, payload: dict[str, Any]) -> Path:
     run_dir = _network_runs_root(settings) / _safe_component(source_id) / _safe_component(run_id)
-    run_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dir(run_dir)
     stored = dict(payload)
     stored["source_type"] = "remote"
     stored["source_id"] = source_id
     stored["source_label"] = str(payload.get("source_label", "") or source_id)
     if not stored.get("run_id"):
         stored["run_id"] = run_id
-    (run_dir / "run-state.json").write_text(json.dumps(stored, indent=2), encoding="utf-8")
+    _write_json_file(run_dir / "run-state.json", stored)
     return run_dir
 
 
@@ -265,10 +324,10 @@ def ingest_network_case_bundle(
 ) -> Path:
     run_dir = _network_runs_root(settings) / _safe_component(source_id) / _safe_component(run_id)
     case_dir = run_dir / _safe_component(case_id)
-    case_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dir(case_dir)
     result = payload.get("result", {})
     if isinstance(result, dict) and result:
-        (case_dir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+        _write_json_file(case_dir / "result.json", result)
     for item in payload.get("files", []):
         if not isinstance(item, dict):
             continue
@@ -280,8 +339,8 @@ def ingest_network_case_bundle(
             target.relative_to(case_dir.resolve())
         except ValueError:
             continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(str(item.get("content", "") or ""), encoding="utf-8")
+        _ensure_dir(target.parent)
+        _write_text_file(target, str(item.get("content", "") or ""))
     return case_dir
 
 
@@ -548,7 +607,7 @@ def get_case_detail(settings: Settings, run_id: str, case_id: str) -> dict[str, 
         "attempts": attempts,
         "activity": activity_events,
         "files": top_files,
-        "official": runtime_row,
+        "official": _baseline_detail_payload(result, runtime_row),
     }
     return payload
 
@@ -815,6 +874,20 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         return payload if isinstance(payload, dict) else None
 
     def _handle_api_post(self, path: str) -> None:
+        try:
+            self._handle_api_post_inner(path)
+        except DashboardStorageError as exc:
+            self._send_json(
+                {"ok": False, "error": "insufficient_storage", "detail": str(exc)},
+                status=HTTPStatus.INSUFFICIENT_STORAGE,
+            )
+        except OSError as exc:
+            self._send_json(
+                {"ok": False, "error": "io_error", "detail": str(exc)},
+                status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+
+    def _handle_api_post_inner(self, path: str) -> None:
         segments = [segment for segment in path.split("/") if segment]
         if len(segments) >= 6 and segments[1] == "ingest" and segments[2] == "runs":
             source_id = _safe_component(unquote(segments[3]))

@@ -305,6 +305,8 @@ class TerminalBenchmarkDashboard:
         wall_clock_seconds = float(result.get("wall_clock_seconds", 0.0) or 0.0)
         error = "Success" if success else str(result.get("final_error_category", "failure") or "failure")
         result_matches_csv = str(result.get("result_matches_csv", "") or "").strip().upper()
+        pyego_match = str(result.get("pyego_match", "") or "").strip().upper()
+        readpy_match = str(result.get("readpy_match", "") or "").strip().upper()
         dependencies = result.get("dependencies", [])
         if isinstance(dependencies, list):
             dependency_preview = ", ".join(str(item) for item in dependencies[:3] if item)
@@ -320,6 +322,8 @@ class TerminalBenchmarkDashboard:
             "target_python": target_python,
             "seconds": wall_clock_seconds,
             "pllm_match": "MATCH" if result_matches_csv == "PASS" else ("MISS" if result_matches_csv == "FAIL" else "-"),
+            "pyego_match": "MATCH" if pyego_match == "PASS" else ("MISS" if pyego_match == "FAIL" else "-"),
+            "readpy_match": "MATCH" if readpy_match == "PASS" else ("MISS" if readpy_match == "FAIL" else "-"),
             "dependencies": dependency_preview or "-",
         }
 
@@ -603,9 +607,20 @@ class TerminalBenchmarkDashboard:
         py_width = 6
         attempts_width = 4
         seconds_width = 7
-        match_width = 5
+        match_width = 6
         error_width = 18
-        fixed_width = status_width + case_width + py_width + attempts_width + seconds_width + match_width + error_width + 14
+        fixed_width = (
+            status_width
+            + case_width
+            + py_width
+            + attempts_width
+            + seconds_width
+            + match_width
+            + match_width
+            + match_width
+            + error_width
+            + 18
+        )
         deps_width = max(20, width - fixed_width)
         header = (
             f"{_fit_table_cell('STAT', status_width)}  "
@@ -614,6 +629,8 @@ class TerminalBenchmarkDashboard:
             f"{_fit_table_cell('TRY', attempts_width)}  "
             f"{_fit_table_cell('SEC', seconds_width)}  "
             f"{_fit_table_cell('PLLM', match_width)}  "
+            f"{_fit_table_cell('PYEGO', match_width)}  "
+            f"{_fit_table_cell('READPY', match_width)}  "
             f"{_fit_table_cell('RESULT', error_width)}  "
             f"{_fit_table_cell('DEPENDENCIES', deps_width)}"
         )
@@ -636,6 +653,18 @@ class TerminalBenchmarkDashboard:
             seconds = float(row.get("seconds", 0.0) or 0.0)
             match_text = str(row.get("pllm_match", "-") or "-")
             match_style = "class:accent" if match_text == "MATCH" else ("class:bad" if match_text == "MISS" else "class:muted")
+            pyego_match_text = str(row.get("pyego_match", "-") or "-")
+            pyego_match_style = (
+                "class:accent"
+                if pyego_match_text == "MATCH"
+                else ("class:bad" if pyego_match_text == "MISS" else "class:muted")
+            )
+            readpy_match_text = str(row.get("readpy_match", "-") or "-")
+            readpy_match_style = (
+                "class:accent"
+                if readpy_match_text == "MATCH"
+                else ("class:bad" if readpy_match_text == "MISS" else "class:muted")
+            )
             fragments.extend(
                 [
                     (status_style, _fit_table_cell(status_text, status_width)),
@@ -649,6 +678,10 @@ class TerminalBenchmarkDashboard:
                     ("class:value", _fit_table_cell(f"{seconds:.1f}", seconds_width)),
                     ("", "  "),
                     (match_style, _fit_table_cell(match_text, match_width)),
+                    ("", "  "),
+                    (pyego_match_style, _fit_table_cell(pyego_match_text, match_width)),
+                    ("", "  "),
+                    (readpy_match_style, _fit_table_cell(readpy_match_text, match_width)),
                     ("", "  "),
                     ("class:value", _fit_table_cell(str(row.get("error", "")), error_width)),
                     ("", "  "),

@@ -156,7 +156,10 @@ RUN_TERMINAL_PATTERNS = [
         re.compile(
             r"ServerSelectionTimeoutError|Connection refused|"
             r"ConnectionError|NoCredentialsError|APIError|urllib2?\.\w+Error|HTTPError|"
-            r"DatabaseError|OperationalError",
+            r"DatabaseError|OperationalError|"
+            r"Illegal instruction|"
+            r"compiled to use AVX instructions|"
+            r"AVX instructions, but these aren't available",
             re.IGNORECASE,
         ),
         "EnvironmentError",

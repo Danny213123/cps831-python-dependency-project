@@ -7,6 +7,27 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-03-09
+
+### Added
+
+- Added benchmark comparison columns for `PyEGo` and `ReadPy` alongside the existing PLLM match status in both the terminal dashboard and the web dashboard.
+- Added prompt-specialized repair flows for runtime-profile-only repairs and repeated missing-symbol failures, including exact regression coverage for the recurring `00e963...`, `019fd...`, `04c2...`, and `045c...` benchmark cases.
+- Added richer planning-stage activity markers and post-adjudication visibility so long-running research-planning phases no longer appear silently frozen in the benchmark UI.
+
+### Changed
+
+- Updated benchmark comparison loading so APDR can read PLLM, PyEGo, and ReadPy baseline CSVs and surface all three match states in `run-vs-csv.csv`, terminal tables, and web case detail.
+- Updated research prompt context for Pythonista/Python-2 snippets, legacy Keras/Gym/TensorFlow families, Torch-family selection, and repeated missing-symbol repairs so the model has stronger non-deterministic steering on difficult benchmark cases.
+- Updated dashboard/network ingest behavior to tolerate central-storage exhaustion and to surface more complete case/run metadata without taking down the web server.
+
+### Fixed
+
+- Fixed deferred Python fallback regressions so gist benchmark cases like `00a17...` now switch to the recorded Python 2 fallback even when repair proposes novel-but-still-dead Python 3 plans on the last retry.
+- Fixed research prompt rendering and routing crashes caused by newly added optional prompt variables such as `conflict_notes` and `repeated_missing_symbol_failures`.
+- Fixed post-adjudication stalls caused by oversized package metadata downloads during research planning and improved the visibility of those phases in the dashboard.
+- Fixed remote dashboard sync and storage handling so disk-full conditions no longer crash the web process and large remote case bundles are truncated safely.
+
 ## [2.3.3] - 2026-03-08
 
 ### Fixed

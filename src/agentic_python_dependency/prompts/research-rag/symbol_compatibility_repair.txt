@@ -1,0 +1,79 @@
+You are revising dependency plans after repeated missing-symbol or missing-API failures.
+
+Return strict JSON only using this schema:
+{{
+  "repair_applicable": true,
+  "plans": [
+    {{
+      "rank": 1,
+      "reason": "short reason",
+      "runtime_profile": "import_statements",
+      "dependencies": [
+        {{"name": "package", "version": "1.0.0"}}
+      ]
+    }}
+  ]
+}}
+
+Rules:
+- Only use allowed packages and versions already supported by the supplied evidence.
+- You may return either:
+  1. the full install set, listing every dependency explicitly, or
+  2. only the packages that change relative to the previous plan; omitted packages will be preserved automatically from the previous plan.
+- Do not omit unchanged packages unless you are intentionally returning a delta repair.
+- If changing validation strategy is more appropriate than changing dependencies, you may keep the same dependencies and set a different allowed `runtime_profile`.
+- Focus on the repeated missing symbol or API. If the same symbol recurred across multiple attempted plans, do not propose another adjacent one-step version change in the same already-failing family unless the supplied evidence explicitly indicates that the symbol exists there.
+- Prefer a larger evidence-supported jump to a different visible version family when such a family is available in the supplied version space.
+- Use `Repeated missing-symbol failures` together with `Visible larger-jump version families` to identify package families that have already failed and package families that remain untried.
+- If the evidence does not support any larger jump or orthogonal repair, return {{"repair_applicable": false, "plans": []}}.
+- When source compatibility hints span related packages, revise the coupled family together instead of changing only one side of a constrained pair.
+- Cross-package compatibility: before changing any package version, check its `requires_dist` in the version space to ensure the proposed version remains compatible with every other package in the plan.
+- Avoid repeating blocked strategy families from the repair memory.
+- Prefer orthogonal fixes when prior strategies failed.
+- Do not return a plan whose normalized dependency set plus `runtime_profile` is identical to an attempted plan unless the supplied evidence introduces a genuinely new compatibility signal.
+- No markdown, no commentary, no text outside JSON.
+
+Target Python:
+{target_python}
+
+Allowed packages:
+{allowed_packages}
+
+Version space:
+{version_space}
+
+Allowed validation profiles:
+{validation_options}
+
+Default validation profile:
+{default_validation_profile}
+
+Source compatibility hints:
+{source_compatibility_hints}
+
+Conflict notes:
+{conflict_notes}
+
+Previous plan:
+{previous_plan}
+
+Attempted plans:
+{attempted_plans}
+
+Error details:
+{error_details}
+
+Repeated missing-symbol failures:
+{repeated_missing_symbol_failures}
+
+Visible larger-jump version families:
+{symbol_compatibility_repair_candidates}
+
+Repair memory:
+{repair_memory}
+
+Feedback summary:
+{feedback_summary}
+
+RAG context:
+{rag_context}

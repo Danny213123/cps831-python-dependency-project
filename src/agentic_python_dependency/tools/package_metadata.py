@@ -52,6 +52,20 @@ def _parse_requires_python(text: str) -> str:
     return str(parsed.get("Requires-Python") or "").strip()
 
 
+def _file_size_bytes(file_meta: dict[str, Any]) -> int | None:
+    raw_size = file_meta.get("size")
+    if isinstance(raw_size, int):
+        return raw_size
+    if isinstance(raw_size, float):
+        return int(raw_size)
+    if isinstance(raw_size, str):
+        try:
+            return int(raw_size.strip())
+        except ValueError:
+            return None
+    return None
+
+
 class PackageMetadataStore:
     def __init__(self, cache_dir: Path, *, keep_raw: bool | None = None):
         self.cache_dir = cache_dir
@@ -62,6 +76,12 @@ class PackageMetadataStore:
             if keep_raw is not None
             else os.environ.get("APDR_PACKAGE_METADATA_KEEP_RAW", "").strip().lower() in {"1", "true", "yes", "on"}
         )
+        raw_limit = os.environ.get("APDR_PACKAGE_METADATA_MAX_DOWNLOAD_MB", "").strip()
+        try:
+            max_download_mb = int(raw_limit) if raw_limit else 25
+        except ValueError:
+            max_download_mb = 25
+        self.max_download_bytes = max(0, max_download_mb) * 1024 * 1024
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.parsed_dir.mkdir(parents=True, exist_ok=True)
 
@@ -95,11 +115,15 @@ class PackageMetadataStore:
             key=lambda item: (
                 item.get("packagetype") != "bdist_wheel",
                 "py3" not in str(item.get("filename", "")).lower(),
+                _file_size_bytes(item) or 0,
             ),
         )
         for file_meta in preferred:
             url = str(file_meta.get("url", "")).strip()
             if not url:
+                continue
+            size = _file_size_bytes(file_meta)
+            if self.max_download_bytes and size is not None and size > self.max_download_bytes:
                 continue
             try:
                 payload = self._download_bytes(url)

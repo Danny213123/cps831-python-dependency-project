@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import csv
+import fnmatch
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -56,6 +57,22 @@ RUNTIME_COMPARISON_COLUMNS = [
     "official_python_modules",
     "official_file",
     "official_csv_sources",
+    "pyego_in_csv",
+    "pyego_result",
+    "pyego_match",
+    "pyego_passed",
+    "pyego_duration",
+    "pyego_python_modules",
+    "pyego_file",
+    "pyego_csv_sources",
+    "readpy_in_csv",
+    "readpy_result",
+    "readpy_match",
+    "readpy_passed",
+    "readpy_duration",
+    "readpy_python_modules",
+    "readpy_file",
+    "readpy_csv_sources",
 ]
 
 RUNTIME_COMPARISON_MD_COLUMNS = [
@@ -70,6 +87,12 @@ RUNTIME_COMPARISON_MD_COLUMNS = [
     "official_passed",
     "official_duration",
     "official_csv_sources",
+    "pyego_match",
+    "pyego_result",
+    "pyego_passed",
+    "readpy_match",
+    "readpy_result",
+    "readpy_passed",
 ]
 
 GIST_MATCH_COLUMNS = ["gistid", "matches"]
@@ -572,20 +595,52 @@ def _dashboard_source_id(value: str) -> str:
     return cleaned.strip("._") or "unknown"
 
 
-def _collect_case_bundle_files(case_dir: Path, *, max_bytes: int = 2_000_000) -> list[dict[str, str]]:
+_NETWORK_DASHBOARD_FILE_PATTERNS = (
+    "activity.log",
+    "attempt_*/build.log",
+    "attempt_*/run.log",
+    "attempt_*/Dockerfile.generated",
+    "candidate-plans.json",
+    "strategy-history.json",
+)
+
+
+def _network_dashboard_should_include_file(relative_path: str) -> bool:
+    candidate = relative_path.replace("\\", "/")
+    return any(fnmatch.fnmatch(candidate, pattern) for pattern in _NETWORK_DASHBOARD_FILE_PATTERNS)
+
+
+def _collect_case_bundle_files(
+    case_dir: Path,
+    *,
+    max_bytes: int = 250_000,
+    total_max_bytes: int = 1_000_000,
+) -> list[dict[str, str]]:
     files: list[dict[str, str]] = []
+    remaining_bytes = max(0, total_max_bytes)
     if not case_dir.exists():
         return files
     for path in sorted(case_dir.rglob("*")):
         if not path.is_file():
             continue
         relative = path.relative_to(case_dir).as_posix()
-        if relative == "result.json":
+        if relative == "result.json" or not _network_dashboard_should_include_file(relative):
             continue
         try:
-            if path.stat().st_size > max_bytes:
+            budget = min(max_bytes, remaining_bytes)
+            if budget <= 0:
+                break
+            with path.open("rb") as handle:
+                raw = handle.read(budget + 1)
+            truncated = len(raw) > budget
+            if truncated:
+                raw = raw[:budget]
+            content = raw.decode("utf-8", errors="replace")
+            if truncated:
+                content += "\n\n[truncated by APDR central dashboard sync]\n"
+            remaining_bytes -= len(raw)
+            if not content:
                 continue
-            content = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         files.append({"path": relative, "content": content})
@@ -610,6 +665,17 @@ class NetworkDashboardSink:
         try:
             with urllib.request.urlopen(request, timeout=self.timeout):
                 return
+        except urllib.error.HTTPError as exc:
+            if not self._warned:
+                if exc.code == 507:
+                    print(
+                        "[WARN] remote dashboard sync failed: central dashboard storage is full",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(f"[WARN] remote dashboard sync failed: HTTP {exc.code}", file=sys.stderr)
+                self._warned = True
+            return
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             if not self._warned:
                 print(f"[WARN] remote dashboard sync failed: {exc}", file=sys.stderr)
@@ -1464,9 +1530,29 @@ def _official_lookup_value(row: dict[str, str], *keys: str) -> str:
     return ""
 
 
-def load_official_csv_lookup(settings: Settings) -> dict[str, dict[str, str]]:
+def _existing_csv_candidates(*paths: Path) -> tuple[Path, ...]:
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        resolved = path.expanduser().resolve()
+        if resolved in seen or not resolved.exists():
+            continue
+        seen.add(resolved)
+        deduped.append(resolved)
+    return tuple(deduped)
+
+
+def _baseline_result_csv_candidates(settings: Settings, filename: str) -> tuple[Path, ...]:
+    candidates = [settings.project_root / "data" / "benchmarks" / "gistable" / "competition" / filename]
+    repo_root = Path(__file__).resolve().parents[2]
+    if settings.project_root.resolve() == repo_root.resolve():
+        candidates.append(Path.home() / "Downloads" / filename)
+    return _existing_csv_candidates(*candidates)
+
+
+def _load_result_csv_lookup(csv_paths: tuple[Path, ...]) -> dict[str, dict[str, str]]:
     lookup: dict[str, dict[str, str]] = {}
-    for csv_path in settings.competition_result_csvs:
+    for csv_path in csv_paths:
         if not csv_path.exists():
             continue
         try:
@@ -1515,11 +1601,27 @@ def load_official_csv_lookup(settings: Settings) -> dict[str, dict[str, str]]:
     return normalized
 
 
+def load_official_csv_lookup(settings: Settings) -> dict[str, dict[str, str]]:
+    return _load_result_csv_lookup(settings.competition_result_csvs)
+
+
+def load_pyego_csv_lookup(settings: Settings) -> dict[str, dict[str, str]]:
+    candidates = _baseline_result_csv_candidates(settings, "pyego_results.csv")
+    return _load_result_csv_lookup(candidates)
+
+
+def load_readpy_csv_lookup(settings: Settings) -> dict[str, dict[str, str]]:
+    candidates = _baseline_result_csv_candidates(settings, "readpy_results_total.csv")
+    return _load_result_csv_lookup(candidates)
+
+
 def build_runtime_comparison_row(
     result: dict[str, object],
     official_lookup: dict[str, dict[str, str]],
     *,
     case_number: int,
+    pyego_lookup: dict[str, dict[str, str]] | None = None,
+    readpy_lookup: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, object]:
     case_id = str(result.get("case_id", "") or "")
     success = bool(result.get("success", False))
@@ -1545,6 +1647,8 @@ def build_runtime_comparison_row(
         "official_file": official.get("official_file", ""),
         "official_csv_sources": official.get("official_csv_sources", ""),
     }
+    row.update(_baseline_match_fields(result, pyego_lookup or {}, case_id=case_id, prefix="pyego"))
+    row.update(_baseline_match_fields(result, readpy_lookup or {}, case_id=case_id, prefix="readpy"))
     official_passed = _parse_official_passed_flag(row.get("official_passed", ""))
     if official_passed is not None:
         row["result_matches_csv"] = "PASS" if success == official_passed else "FAIL"
@@ -1593,6 +1697,41 @@ def _run_result_label_for_official(row: dict[str, object]) -> str:
     }:
         return category
     return "otherfailure"
+
+
+def _baseline_match_fields(
+    result: dict[str, object],
+    baseline_lookup: dict[str, dict[str, str]],
+    *,
+    case_id: str,
+    prefix: str,
+) -> dict[str, object]:
+    baseline = baseline_lookup.get(case_id, {})
+    fields: dict[str, object] = {
+        f"{prefix}_in_csv": bool(baseline),
+        f"{prefix}_result": baseline.get("official_result", ""),
+        f"{prefix}_match": "",
+        f"{prefix}_passed": baseline.get("official_passed", ""),
+        f"{prefix}_duration": baseline.get("official_duration", ""),
+        f"{prefix}_python_modules": baseline.get("official_python_modules", ""),
+        f"{prefix}_file": baseline.get("official_file", ""),
+        f"{prefix}_csv_sources": baseline.get("official_csv_sources", ""),
+    }
+    baseline_passed = _parse_official_passed_flag(fields.get(f"{prefix}_passed", ""))
+    if baseline_passed is not None:
+        fields[f"{prefix}_match"] = "PASS" if bool(result.get("success", False)) == baseline_passed else "FAIL"
+        return fields
+    baseline_result = _normalize_result_label(fields.get(f"{prefix}_result", ""))
+    if baseline_result:
+        comparison_row = {
+            "run_success": bool(result.get("success", False)),
+            "run_final_error_category": str(
+                result.get("final_error_category", "Success" if bool(result.get("success", False)) else "UnknownError")
+                or ""
+            ),
+        }
+        fields[f"{prefix}_match"] = "PASS" if _run_result_label_for_official(comparison_row) == baseline_result else "FAIL"
+    return fields
 
 
 def gist_match_row_from_runtime_row(row: dict[str, object]) -> dict[str, object]:
@@ -2001,12 +2140,20 @@ def run_case_batch(
     pending_case_ids = [case_id for case_id in case_ids if case_id not in completed_case_id_set]
     completed_results = load_existing_case_results(run_dir, completed_case_ids)
     official_lookup = load_official_csv_lookup(settings)
+    pyego_lookup = load_pyego_csv_lookup(settings)
+    readpy_lookup = load_readpy_csv_lookup(settings)
     runtime_table_csv_path = run_dir / "run-vs-csv.csv"
     runtime_table_md_path = run_dir / "run-vs-csv.md"
     gist_match_csv_path = run_dir / "gistid-matches.csv"
     gist_match_detailed_csv_path = run_dir / "gistid-matches-detailed.csv"
     runtime_rows = [
-        build_runtime_comparison_row(result, official_lookup, case_number=index)
+        build_runtime_comparison_row(
+            result,
+            official_lookup,
+            case_number=index,
+            pyego_lookup=pyego_lookup,
+            readpy_lookup=readpy_lookup,
+        )
         for index, result in enumerate(completed_results, start=1)
     ]
     runtime_row_by_case_id = {
@@ -2031,6 +2178,8 @@ def run_case_batch(
         enriched_result = dict(result)
         row = runtime_row_by_case_id.get(str(result.get("case_id", "") or ""), {})
         enriched_result["result_matches_csv"] = row.get("result_matches_csv", "")
+        enriched_result["pyego_match"] = row.get("pyego_match", "")
+        enriched_result["readpy_match"] = row.get("readpy_match", "")
         preloaded_completed_results.append(enriched_result)
     if not case_ids:
         summary = summarize_run(
@@ -2143,9 +2292,13 @@ def run_case_batch(
                         result,
                         official_lookup,
                         case_number=len(runtime_rows) + 1,
+                        pyego_lookup=pyego_lookup,
+                        readpy_lookup=readpy_lookup,
                     )
                     enriched_result = dict(result)
                     enriched_result["result_matches_csv"] = row.get("result_matches_csv", "")
+                    enriched_result["pyego_match"] = row.get("pyego_match", "")
+                    enriched_result["readpy_match"] = row.get("readpy_match", "")
                     progress_observer.advance(enriched_result)
                     runtime_rows.append(row)
                     _append_runtime_comparison_row(runtime_table_csv_path, runtime_table_md_path, row)
@@ -2174,9 +2327,13 @@ def run_case_batch(
                             result,
                             official_lookup,
                             case_number=len(runtime_rows) + 1,
+                            pyego_lookup=pyego_lookup,
+                            readpy_lookup=readpy_lookup,
                         )
                         enriched_result = dict(result)
                         enriched_result["result_matches_csv"] = row.get("result_matches_csv", "")
+                        enriched_result["pyego_match"] = row.get("pyego_match", "")
+                        enriched_result["readpy_match"] = row.get("readpy_match", "")
                         progress_observer.advance(enriched_result)
                         runtime_rows.append(row)
                         _append_runtime_comparison_row(runtime_table_csv_path, runtime_table_md_path, row)

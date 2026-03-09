@@ -20,6 +20,10 @@ Rules:
 - Treat observed source signals as objective hints, but infer compatibility yourself instead of blindly echoing them.
 - When the source implies a coupled dependency family, return compatible hints for each related package that likely needs to move together instead of emitting only one isolated hint.
 - Legacy standalone Keras signals such as `from keras.layers import ... merge`, `Model(input=..., output=...)`, and old Gym reset/step signatures often imply an older coherent family across `keras`, `tensorflow`, `numpy`, and `gym`.
+- If standalone legacy Keras signals are present without explicit TF1-only signals, prefer the nearest older TensorFlow family visible in the supplied version space instead of inventing an unavailable `tensorflow<2.0.0` hint.
+- Only infer TF1-only families such as `tensorflow<2.0.0` when explicit TF1-era signals are present in the observed source signals, such as `tensorflow_contrib_api`, `tensorflow_contrib_alias_api`, `tensorflow_models_module`, `tensorflow_app_flags`, `tensorflow_flags_alias`, `tensorflow_interactive_session`, or `python2_xrange`.
+- For legacy standalone Keras and legacy Gym snippets on Python 3.8, include a coupled NumPy hint when NumPy is allowed; the visible compatible family is often around `numpy<=1.19.5` with an older TensorFlow line such as `<=2.4.4`.
+- If the hinted family is older than the visible version space, choose the nearest older family that actually appears in the supplied versions instead of returning a specifier that matches nothing.
 - Prefer no hint over a weak hint.
 - If the current default validation profile already looks right, omit `default_runtime_profile` or leave it empty.
 - No markdown, no commentary, no text outside JSON.

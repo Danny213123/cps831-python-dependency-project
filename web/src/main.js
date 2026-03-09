@@ -412,6 +412,8 @@ function renderCaseDetails(container, payload) {
     ["Attempts", String(summary.attempts)],
     ["Runtime profile", summary.runtimeProfile || "-"],
     ["PLLM", summary.pllmMatch || "-"],
+    ["PyEGo", summary.pyegoMatch || "-"],
+    ["ReadPy", summary.readpyMatch || "-"],
     ["Classifier", summary.classifierOrigin || "-"],
     ["Root cause", summary.rootCauseBucket || "-"],
     ["Fallback", summary.pythonFallbackUsed ? "used" : "no"],
@@ -419,6 +421,10 @@ function renderCaseDetails(container, payload) {
     ["Official result", official.official_result || "-"],
     ["Official passed", official.official_passed || "-"],
     ["Official modules", official.official_python_modules || "-"],
+    ["PyEGo result", official.pyego_result || "-"],
+    ["PyEGo passed", official.pyego_passed || "-"],
+    ["ReadPy result", official.readpy_result || "-"],
+    ["ReadPy passed", official.readpy_passed || "-"],
     ["Dependencies", dependencyPreview(result.dependencies || [])],
   ]);
 
@@ -521,6 +527,12 @@ function renderCases() {
     const pllm = node.querySelector(".case-pllm");
     pllm.textContent = item.pllmMatch || "-";
     pllm.classList.add(caseMatchClass(item.pllmMatch));
+    const pyego = node.querySelector(".case-pyego");
+    pyego.textContent = item.pyegoMatch || "-";
+    pyego.classList.add(caseMatchClass(item.pyegoMatch));
+    const readpy = node.querySelector(".case-readpy");
+    readpy.textContent = item.readpyMatch || "-";
+    readpy.classList.add(caseMatchClass(item.readpyMatch));
     node.querySelector(".case-result").textContent = item.result;
     node.querySelector(".case-dependencies").textContent = item.dependencyPreview;
     if (state.openCaseIds.has(item.caseId)) {

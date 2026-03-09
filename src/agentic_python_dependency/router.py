@@ -18,6 +18,8 @@ _OPTIONAL_PROMPT_VARIABLE_DEFAULTS: dict[str, Any] = {
     "conflict_notes": "[]",
     "source_compatibility_hints": "[]",
     "source_signals": "[]",
+    "repeated_missing_symbol_failures": "[]",
+    "symbol_compatibility_repair_candidates": "[]",
     "validation_options": "[]",
     "default_validation_profile": "",
     "repair_memory": "{}",
@@ -269,6 +271,8 @@ class OllamaPromptRunner:
                 continue
             if field_name in _OPTIONAL_PROMPT_VARIABLE_DEFAULTS:
                 resolved_variables[field_name] = _OPTIONAL_PROMPT_VARIABLE_DEFAULTS[field_name]
+            else:
+                resolved_variables[field_name] = ""
         rendered_prompt = prompt_text.format(**resolved_variables)
         cached = self._read_cache(stage, rendered_prompt)
         if cached is not None:
